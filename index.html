@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.v5.css?v=87" />
+  <link rel="stylesheet" href="style.v5.css?v=100" />
 <script src="https://beacon.cdn.qq.com/sdk/4.5.9/beacon_web.min.js"></script>
 <script>
 (function(){
@@ -81,17 +81,26 @@
           <button class="seg-item active" data-bg="white">白底</button>
         </div>
         <div class="help-text tight">白底/浅色图选「黑底」让白色主体更突出；深色图选「白底」避免深色同系。背景会随主体一起保留，不会被吃掉颜色。</div>
-        <div class="help-text tight" style="margin-top:10px;">背景会随主体一起保留，不会被吃掉颜色。</div>
         <div class="toggle-row" style="margin-top:14px;">
           <span class="toggle-name">自动去背景</span>
           <label class="switch"><input id="toggle-removebg" type="checkbox" /><span class="knob"></span></label>
         </div>
         <div class="help-text tight">默认关：整张图都拼豆，白色主体也正常标色号。仅当原图是纯色背景、想抠掉背景时才打开。</div>
+        <div class="toggle-row" style="margin-top:14px;">
+          <span class="toggle-name">提亮一档</span>
+          <label class="switch"><input id="toggle-brighten" type="checkbox" /><span class="knob"></span></label>
+        </div>
+        <div class="help-text tight">把每个色号替换成同色系里更亮一档的真实色号，适合原图偏暗、想整体提亮的场景。关闭则用原始配色。</div>
     </section>
 
     <section class="block primary">
       <div class="block-label">拼豆板规格</div>
       <div class="board-list" id="board-pills">
+        <button class="board-card" data-board="48">
+          <div class="board-card-title">48×48 迷你板</div>
+          <div class="board-card-size">13×13cm</div>
+          <div class="board-card-use">迷你挂件、小图标、徽章</div>
+        </button>
         <button class="board-card" data-board="52">
           <div class="board-card-title">52×52 标准基础板</div>
           <div class="board-card-size">14×14cm</div>
@@ -186,6 +195,7 @@
             <button class="seg-item" data-view="original">原图</button>
           </div>
           <button id="btn-mirror" class="tool-btn" title="镜像翻转（左右）：预览 / 图纸同步翻转">⇋ 镜像</button>
+          <button id="btn-edit" class="tool-btn" title="编辑模式：点选或框选格子换色">✎ 编辑</button>
           <!-- 放大预览暂缓：按钮和弹窗均移除，功能代码保留在 app.js 中，下周恢复 -->
         </div>
         <div class="zoom">
@@ -259,10 +269,10 @@
       </div>
 
       <div class="modal-row">
-        <span class="modal-row-name">导出格式<small class="help-inline">高清 PNG 手机可直接查看（推荐）</small></span>
+        <span class="modal-row-name">导出格式<small class="help-inline">SVG 无限放大不模糊（发别人推荐）；PNG 超高清位图</small></span>
         <div class="seg seg-sm" id="format-seg">
           <button class="seg-item" data-format="svg">矢量 SVG</button>
-          <button class="seg-item active" data-format="png">高清 PNG</button>
+          <button class="seg-item active" data-format="png">超高清 PNG</button>
         </div>
       </div>
 
@@ -286,8 +296,19 @@
     </div>
   </div>
 
+  <!-- v100: 编辑调色板弹窗（221色全色板，点选替换选中格子） -->
+  <div id="edit-palette-modal" class="modal-backdrop" hidden>
+    <div class="modal-card" style="max-width:520px;">
+      <div class="modal-head" style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #ECE6E0;">
+        <span style="font-size:18px;font-weight:700;color:#211E2B;">选择颜色替换</span>
+        <button id="edit-pal-close" style="background:none;border:none;font-size:24px;color:#999;cursor:pointer;line-height:1;">×</button>
+      </div>
+      <div id="edit-pal-grid" style="padding:16px 20px;max-height:60vh;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:8px;"></div>
+    </div>
+  </div>
+
   <!-- 品牌色卡弹窗已下线（白块 bug 待修，下周开放）；放大预览弹窗也已移除（暂缓）；使用说明弹窗已移除（用户不需要） -->
 
-  <script src="app.v5.js?v=87"></script>
+  <script src="app.v5.js?v=100"></script>
 </body>
 </html>
