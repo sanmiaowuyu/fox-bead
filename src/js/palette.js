@@ -1,0 +1,281 @@
+/* ---------- 1. 官方 Mard 221 色库（A~M 九系，按用户实物豆标准色卡） ---------- */
+/* 数据来自 pixelbead.art / pindou.online / pixel-beads.com 三源交叉核对一致 */
+const MARD_PALETTE = [
+  { id:'A1', name:'黄橙系', hex:'#FAF4C8' },
+  { id:'A2', name:'黄橙系', hex:'#FFFFD5' },
+  { id:'A3', name:'黄橙系', hex:'#FEFF8B' },
+  { id:'A4', name:'黄橙系', hex:'#FBED56' },
+  { id:'A5', name:'黄橙系', hex:'#F4D738' },
+  { id:'A6', name:'黄橙系', hex:'#FEAC4C' },
+  { id:'A7', name:'黄橙系', hex:'#FE8B4C' },
+  { id:'A8', name:'黄橙系', hex:'#FFDA45' },
+  { id:'A9', name:'黄橙系', hex:'#FF995B' },
+  { id:'A10', name:'黄橙系', hex:'#F77C31' },
+  { id:'A11', name:'黄橙系', hex:'#FFDD99' },
+  { id:'A12', name:'黄橙系', hex:'#FE9F72' },
+  { id:'A13', name:'黄橙系', hex:'#FFC365' },
+  { id:'A14', name:'黄橙系', hex:'#FD543D' },
+  { id:'A15', name:'黄橙系', hex:'#FFF365' },
+  { id:'A16', name:'黄橙系', hex:'#FFFF9F' },
+  { id:'A17', name:'黄橙系', hex:'#FFE36E' },
+  { id:'A18', name:'黄橙系', hex:'#FEBE7D' },
+  { id:'A19', name:'黄橙系', hex:'#FD7C72' },
+  { id:'A20', name:'黄橙系', hex:'#FFD568' },
+  { id:'A21', name:'黄橙系', hex:'#FFE395' },
+  { id:'A22', name:'黄橙系', hex:'#F4F57D' },
+  { id:'A23', name:'黄橙系', hex:'#E6C9B7' },
+  { id:'A24', name:'黄橙系', hex:'#F7F8A2' },
+  { id:'A25', name:'黄橙系', hex:'#FFD67D' },
+  { id:'A26', name:'黄橙系', hex:'#FFC830' },
+  { id:'B1', name:'绿色系', hex:'#E6EE31' },
+  { id:'B2', name:'绿色系', hex:'#63F347' },
+  { id:'B3', name:'绿色系', hex:'#9EF780' },
+  { id:'B4', name:'绿色系', hex:'#5DE035' },
+  { id:'B5', name:'绿色系', hex:'#35E352' },
+  { id:'B6', name:'绿色系', hex:'#65E2A6' },
+  { id:'B7', name:'绿色系', hex:'#3DAF80' },
+  { id:'B8', name:'绿色系', hex:'#1C9C4F' },
+  { id:'B9', name:'绿色系', hex:'#27523A' },
+  { id:'B10', name:'绿色系', hex:'#95D3C2' },
+  { id:'B11', name:'绿色系', hex:'#5D722A' },
+  { id:'B12', name:'绿色系', hex:'#166F41' },
+  { id:'B13', name:'绿色系', hex:'#CAEB7B' },
+  { id:'B14', name:'绿色系', hex:'#ADE946' },
+  { id:'B15', name:'绿色系', hex:'#2E5132' },
+  { id:'B16', name:'绿色系', hex:'#C5ED9C' },
+  { id:'B17', name:'绿色系', hex:'#9BB13A' },
+  { id:'B18', name:'绿色系', hex:'#E6EE49' },
+  { id:'B19', name:'绿色系', hex:'#24B88C' },
+  { id:'B20', name:'绿色系', hex:'#C2F0CC' },
+  { id:'B21', name:'绿色系', hex:'#156A6B' },
+  { id:'B22', name:'绿色系', hex:'#0B3C43' },
+  { id:'B23', name:'绿色系', hex:'#303A21' },
+  { id:'B24', name:'绿色系', hex:'#EEFCA5' },
+  { id:'B25', name:'绿色系', hex:'#4E846D' },
+  { id:'B26', name:'绿色系', hex:'#8D7A35' },
+  { id:'B27', name:'绿色系', hex:'#CCE1AF' },
+  { id:'B28', name:'绿色系', hex:'#9EE5B9' },
+  { id:'B29', name:'绿色系', hex:'#C5E254' },
+  { id:'B30', name:'绿色系', hex:'#E2FCB1' },
+  { id:'B31', name:'绿色系', hex:'#B0E792' },
+  { id:'B32', name:'绿色系', hex:'#9CAB5A' },
+  { id:'C1', name:'蓝青系', hex:'#E8FFE7' },
+  { id:'C2', name:'蓝青系', hex:'#A9F9FC' },
+  { id:'C3', name:'蓝青系', hex:'#A0E2FB' },
+  { id:'C4', name:'蓝青系', hex:'#41CCFF' },
+  { id:'C5', name:'蓝青系', hex:'#01ACEB' },
+  { id:'C6', name:'蓝青系', hex:'#50AAF0' },
+  { id:'C7', name:'蓝青系', hex:'#3677D2' },
+  { id:'C8', name:'蓝青系', hex:'#0F54C0' },
+  { id:'C9', name:'蓝青系', hex:'#324BCA' },
+  { id:'C10', name:'蓝青系', hex:'#3EBCE2' },
+  { id:'C11', name:'蓝青系', hex:'#28DDDE' },
+  { id:'C12', name:'蓝青系', hex:'#1C334D' },
+  { id:'C13', name:'蓝青系', hex:'#CDE8FF' },
+  { id:'C14', name:'蓝青系', hex:'#D5FDFF' },
+  { id:'C15', name:'蓝青系', hex:'#22C4C6' },
+  { id:'C16', name:'蓝青系', hex:'#1557A8' },
+  { id:'C17', name:'蓝青系', hex:'#04D1F6' },
+  { id:'C18', name:'蓝青系', hex:'#1D3344' },
+  { id:'C19', name:'蓝青系', hex:'#1887A2' },
+  { id:'C20', name:'蓝青系', hex:'#176DAF' },
+  { id:'C21', name:'蓝青系', hex:'#BEDDFF' },
+  { id:'C22', name:'蓝青系', hex:'#67B4BE' },
+  { id:'C23', name:'蓝青系', hex:'#C8E2FF' },
+  { id:'C24', name:'蓝青系', hex:'#7CC4FF' },
+  { id:'C25', name:'蓝青系', hex:'#A9E5E5' },
+  { id:'C26', name:'蓝青系', hex:'#3CAED8' },
+  { id:'C27', name:'蓝青系', hex:'#D3DFFA' },
+  { id:'C28', name:'蓝青系', hex:'#BBCFED' },
+  { id:'C29', name:'蓝青系', hex:'#34488E' },
+  { id:'D1', name:'蓝紫系', hex:'#AEB4F2' },
+  { id:'D2', name:'蓝紫系', hex:'#858EDD' },
+  { id:'D3', name:'蓝紫系', hex:'#2F54AF' },
+  { id:'D4', name:'蓝紫系', hex:'#182A84' },
+  { id:'D5', name:'蓝紫系', hex:'#B843C5' },
+  { id:'D6', name:'蓝紫系', hex:'#AC7BDE' },
+  { id:'D7', name:'蓝紫系', hex:'#8854B3' },
+  { id:'D8', name:'蓝紫系', hex:'#E2D3FF' },
+  { id:'D9', name:'蓝紫系', hex:'#D5B9F8' },
+  { id:'D10', name:'蓝紫系', hex:'#361851' },
+  { id:'D11', name:'蓝紫系', hex:'#B9BAE1' },
+  { id:'D12', name:'蓝紫系', hex:'#DE9AD4' },
+  { id:'D13', name:'蓝紫系', hex:'#B90095' },
+  { id:'D14', name:'蓝紫系', hex:'#8B279B' },
+  { id:'D15', name:'蓝紫系', hex:'#2F1F90' },
+  { id:'D16', name:'蓝紫系', hex:'#E3E1EE' },
+  { id:'D17', name:'蓝紫系', hex:'#C4D4F6' },
+  { id:'D18', name:'蓝紫系', hex:'#A45EC7' },
+  { id:'D19', name:'蓝紫系', hex:'#D8C3D7' },
+  { id:'D20', name:'蓝紫系', hex:'#9C32B2' },
+  { id:'D21', name:'蓝紫系', hex:'#9A009B' },
+  { id:'D22', name:'蓝紫系', hex:'#333A95' },
+  { id:'D23', name:'蓝紫系', hex:'#EBDAFC' },
+  { id:'D24', name:'蓝紫系', hex:'#7786E5' },
+  { id:'D25', name:'蓝紫系', hex:'#494FC7' },
+  { id:'D26', name:'蓝紫系', hex:'#DFC2F8' },
+  { id:'E1', name:'粉玫系', hex:'#FDD3CC' },
+  { id:'E2', name:'粉玫系', hex:'#FEC0DF' },
+  { id:'E3', name:'粉玫系', hex:'#FFB7E7' },
+  { id:'E4', name:'粉玫系', hex:'#E8649E' },
+  { id:'E5', name:'粉玫系', hex:'#F551A2' },
+  { id:'E6', name:'粉玫系', hex:'#F13D74' },
+  { id:'E7', name:'粉玫系', hex:'#C63478' },
+  { id:'E8', name:'粉玫系', hex:'#FFDBE9' },
+  { id:'E9', name:'粉玫系', hex:'#E970CC' },
+  { id:'E10', name:'粉玫系', hex:'#D33793' },
+  { id:'E11', name:'粉玫系', hex:'#FCDDD2' },
+  { id:'E12', name:'粉玫系', hex:'#F78FC3' },
+  { id:'E13', name:'粉玫系', hex:'#B5006D' },
+  { id:'E14', name:'粉玫系', hex:'#FFD1BA' },
+  { id:'E15', name:'粉玫系', hex:'#F8C7C9' },
+  { id:'E16', name:'粉玫系', hex:'#FFF3EB' },
+  { id:'E17', name:'粉玫系', hex:'#FFE2EA' },
+  { id:'E18', name:'粉玫系', hex:'#FFC7DB' },
+  { id:'E19', name:'粉玫系', hex:'#FEBAD5' },
+  { id:'E20', name:'粉玫系', hex:'#D8C7D1' },
+  { id:'E21', name:'粉玫系', hex:'#BD9DA1' },
+  { id:'E22', name:'粉玫系', hex:'#B785A1' },
+  { id:'E23', name:'粉玫系', hex:'#937A8D' },
+  { id:'E24', name:'粉玫系', hex:'#E1BCE8' },
+  { id:'F1', name:'红色系', hex:'#FD957B' },
+  { id:'F2', name:'红色系', hex:'#FC3D46' },
+  { id:'F3', name:'红色系', hex:'#F74941' },
+  { id:'F4', name:'红色系', hex:'#FC283C' },
+  { id:'F5', name:'红色系', hex:'#E7002F' },
+  { id:'F6', name:'红色系', hex:'#943630' },
+  { id:'F7', name:'红色系', hex:'#971937' },
+  { id:'F8', name:'红色系', hex:'#BC0028' },
+  { id:'F9', name:'红色系', hex:'#E2677A' },
+  { id:'F10', name:'红色系', hex:'#8A4526' },
+  { id:'F11', name:'红色系', hex:'#5A2121' },
+  { id:'F12', name:'红色系', hex:'#FD4E6A' },
+  { id:'F13', name:'红色系', hex:'#F35744' },
+  { id:'F14', name:'红色系', hex:'#FFA9AD' },
+  { id:'F15', name:'红色系', hex:'#D30022' },
+  { id:'F16', name:'红色系', hex:'#FEC2A6' },
+  { id:'F17', name:'红色系', hex:'#E69C79' },
+  { id:'F18', name:'红色系', hex:'#D37C46' },
+  { id:'F19', name:'红色系', hex:'#C1444A' },
+  { id:'F20', name:'红色系', hex:'#CD9391' },
+  { id:'F21', name:'红色系', hex:'#F7B4C6' },
+  { id:'F22', name:'红色系', hex:'#FDC0D0' },
+  { id:'F23', name:'红色系', hex:'#F67E66' },
+  { id:'F24', name:'红色系', hex:'#E698AA' },
+  { id:'F25', name:'红色系', hex:'#E54B4F' },
+  { id:'G1', name:'棕肤系', hex:'#FFE2CE' },
+  { id:'G2', name:'棕肤系', hex:'#FFC4AA' },
+  { id:'G3', name:'棕肤系', hex:'#F4C3A5' },
+  { id:'G4', name:'棕肤系', hex:'#E1B383' },
+  { id:'G5', name:'棕肤系', hex:'#EDB045' },
+  { id:'G6', name:'棕肤系', hex:'#E99C17' },
+  { id:'G7', name:'棕肤系', hex:'#9D5B3E' },
+  { id:'G8', name:'棕肤系', hex:'#753832' },
+  { id:'G9', name:'棕肤系', hex:'#E6B483' },
+  { id:'G10', name:'棕肤系', hex:'#D98C39' },
+  { id:'G11', name:'棕肤系', hex:'#E0C593' },
+  { id:'G12', name:'棕肤系', hex:'#FFC890' },
+  { id:'G13', name:'棕肤系', hex:'#B7714A' },
+  { id:'G14', name:'棕肤系', hex:'#8D614C' },
+  { id:'G15', name:'棕肤系', hex:'#FCF9E0' },
+  { id:'G16', name:'棕肤系', hex:'#F2D9BA' },
+  { id:'G17', name:'棕肤系', hex:'#78524B' },
+  { id:'G18', name:'棕肤系', hex:'#FFE4CC' },
+  { id:'G19', name:'棕肤系', hex:'#E07935' },
+  { id:'G20', name:'棕肤系', hex:'#A94023' },
+  { id:'G21', name:'棕肤系', hex:'#B88558' },
+  { id:'H1', name:'黑白系', hex:'#FDFBFF' },
+  { id:'H2', name:'黑白系', hex:'#FEFFFF' },
+  { id:'H3', name:'黑白系', hex:'#B6B1BA' },
+  { id:'H4', name:'黑白系', hex:'#89858C' },
+  { id:'H5', name:'黑白系', hex:'#48464E' },
+  { id:'H6', name:'黑白系', hex:'#2F2B2F' },
+  { id:'H7', name:'黑白系', hex:'#000000' },
+  { id:'H8', name:'黑白系', hex:'#E7D6DB' },
+  { id:'H9', name:'黑白系', hex:'#EDEDED' },
+  { id:'H10', name:'黑白系', hex:'#EEE9EA' },
+  { id:'H11', name:'黑白系', hex:'#CECDD5' },
+  { id:'H12', name:'黑白系', hex:'#FFF5ED' },
+  { id:'H13', name:'黑白系', hex:'#F5ECD2' },
+  { id:'H14', name:'黑白系', hex:'#CFD7D3' },
+  { id:'H15', name:'黑白系', hex:'#98A6A8' },
+  { id:'H16', name:'黑白系', hex:'#1D1414' },
+  { id:'H17', name:'黑白系', hex:'#F1EDED' },
+  { id:'H18', name:'黑白系', hex:'#FFFDF0' },
+  { id:'H19', name:'黑白系', hex:'#F6EFE2' },
+  { id:'H20', name:'黑白系', hex:'#949FA3' },
+  { id:'H21', name:'黑白系', hex:'#FFFBE1' },
+  { id:'H22', name:'黑白系', hex:'#CACAD4' },
+  { id:'H23', name:'黑白系', hex:'#9A9D94' },
+  { id:'M1', name:'大地系', hex:'#BCC6B8' },
+  { id:'M2', name:'大地系', hex:'#8AA386' },
+  { id:'M3', name:'大地系', hex:'#697D80' },
+  { id:'M4', name:'大地系', hex:'#E3D2BC' },
+  { id:'M5', name:'大地系', hex:'#D0CCAA' },
+  { id:'M6', name:'大地系', hex:'#B0A782' },
+  { id:'M7', name:'大地系', hex:'#B4A497' },
+  { id:'M8', name:'大地系', hex:'#B38281' },
+  { id:'M9', name:'大地系', hex:'#A58767' },
+  { id:'M10', name:'大地系', hex:'#C5B2BC' },
+  { id:'M11', name:'大地系', hex:'#9F7594' },
+  { id:'M12', name:'大地系', hex:'#644749' },
+  { id:'M13', name:'大地系', hex:'#D19066' },
+  { id:'M14', name:'大地系', hex:'#C77362' },
+  { id:'M15', name:'大地系', hex:'#757D78' },
+];
+function fromEntries(entries) { const obj = {}; for (let i = 0; i < entries.length; i++) { obj[entries[i][0]] = entries[i][1]; } return obj; }
+
+/* v101: 多品牌已下线，只做 Mard（用户 2026-07-29 拍板）。BRANDS/ACTIVE_BRAND 保留最小结构供导出文件名/分享图取品牌名 */
+const BRANDS = {
+  mard:   { key:'mard',   label:'Mard',   approx:false, palette: MARD_PALETTE },
+};
+const ACTIVE_BRAND = 'mard';
+const PALETTE = MARD_PALETTE;
+const PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
+const PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+const LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// 背景填充专用：最接近纯黑 / 纯白的调色板色号
+let BG_BLACK_ID = null, BG_WHITE_ID = null;
+function updateBgIds() {
+  let bestB = null, bestBD = Infinity, bestW = null, bestWD = Infinity;
+  for (const c of PALETTE_LAB) {
+    const r = parseInt(c.hex.slice(1, 3), 16), g = parseInt(c.hex.slice(3, 5), 16), b = parseInt(c.hex.slice(5, 7), 16);
+    const dk = r * r + g * g + b * b;
+    const wt = (255 - r) * (255 - r) + (255 - g) * (255 - g) + (255 - b) * (255 - b);
+    if (dk < bestBD) { bestBD = dk; bestB = c.id; }
+    if (wt < bestWD) { bestWD = wt; bestW = c.id; }
+  }
+  BG_BLACK_ID = bestB; BG_WHITE_ID = bestW;
+}
+updateBgIds();
+// 提亮映射表：每个色号 → 同系列（同首字母）里亮度高一档的真实色号
+// 每系按 Oklab L 升序排列（暗→亮），每个色号指向下一个更亮的；最亮的保持自身不变
+let BRIGHTEN_MAP = {};
+function buildBrightenMap() {
+  BRIGHTEN_MAP = {};
+  const series = {};
+  for (const c of PALETTE_LAB) {
+    const m = c.id.match(/^([A-Za-z]+)/);
+    if (!m) continue;
+    const letter = m[1];
+    if (!series[letter]) series[letter] = [];
+    series[letter].push(c);
+  }
+  for (const letter in series) {
+    const colors = series[letter].sort(function(a, b) { return a.lab.L - b.lab.L; });
+    for (var i = 0; i < colors.length; i++) {
+      BRIGHTEN_MAP[colors[i].id] = (i + 1 < colors.length) ? colors[i + 1].id : colors[i].id;
+    }
+  }
+}
+buildBrightenMap();
+// v101: setBrand 已删除（多品牌下线，固定 Mard）
+function updateBrandUI() {
+  const tag = document.getElementById('brand-tag'); if (tag) tag.textContent = 'Mard';
+}
+
+function syncMirrorUI() {
+  const btn = document.getElementById('btn-mirror');
+  if (btn) btn.classList.toggle('active', !!state.mirror);
+}
+

@@ -1,0 +1,6 @@
+# 构建产物（由 build.js 生成）
+index.html
+
+# 临时文件
+*.tmp
+_check*.js
