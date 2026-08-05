@@ -5,14 +5,14 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>狐狸爱拼豆 ｜ i 喵绘工坊 · 一键生成拼豆图纸</title>
   <link rel="icon" type="image/x-icon" href="favicon.ico" />
   <link rel="icon" type="image/png" sizes="64x64" href="favicon_64.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.v5.css?v=100" />
+  <link rel="stylesheet" href="style.v5.css?v=117" />
 <script src="https://beacon.cdn.qq.com/sdk/4.5.9/beacon_web.min.js"></script>
 <script>
 (function(){
@@ -41,8 +41,8 @@
     <div class="brand">
       <img class="brand-logo-img" src="logo_circle.jpg" alt="狐狸爱拼豆 ｜ i 喵绘工坊" />
       <div class="brand-text">
-        <div class="brand-name">狐狸爱拼豆 ｜ i 喵绘工坊</div>
-        <div class="brand-sub">图片一键生成拼豆图纸 · 支持 Mard 等多品牌色库</div>
+        <div class="brand-name">狐狸爱拼豆 ｜ i 喵绘工坊 <span class="ver-badge" id="ver-badge"></span></div>
+        <div class="brand-sub">图片一键生成拼豆图纸 · Mard 官方色库</div>
       </div>
     </div>
     <div class="top-right">
@@ -64,6 +64,33 @@
           <div class="upload-hint" id="upload-hint">支持 JPG / PNG / WebP · 建议 ≥ 480×480 像素</div>
         </label>
         <input id="file-input" type="file" accept="image/*" hidden />
+      </section>
+
+      <section class="block primary">
+        <div class="block-label">拼豆板规格</div>
+        <div class="board-list" id="board-pills">
+          <button class="board-card" data-board="48">
+            <div class="board-card-title">48×48 迷你板</div>
+            <div class="board-card-size">13×13cm</div>
+            <div class="board-card-use">迷你挂件、小图标、徽章</div>
+          </button>
+          <button class="board-card" data-board="52">
+            <div class="board-card-title">52×52 标准基础板</div>
+            <div class="board-card-size">14×14cm</div>
+            <div class="board-card-use">钥匙扣、头像、小卡通、挂件</div>
+          </button>
+          <button class="board-card" data-board="78">
+            <div class="board-card-title">78×78 中板</div>
+            <div class="board-card-size">21×21cm</div>
+            <div class="board-card-use">半身人物、中等场景、杯垫</div>
+          </button>
+          <button class="board-card active" data-board="104">
+            <div class="board-card-title">104×104 超大板</div>
+            <div class="board-card-size">28×28cm</div>
+            <div class="board-card-use">全身角色、大幅海报、九宫格拼图</div>
+          </button>
+        </div>
+        <div class="help-text tight">按 2.6mm 小豆主流板子快速选择。小尺寸适合简单图案，大尺寸能还原更多细节。</div>
       </section>
 
       <section class="block primary">
@@ -91,33 +118,6 @@
           <label class="switch"><input id="toggle-brighten" type="checkbox" /><span class="knob"></span></label>
         </div>
         <div class="help-text tight">把每个色号替换成同色系里更亮一档的真实色号，适合原图偏暗、想整体提亮的场景。关闭则用原始配色。</div>
-    </section>
-
-    <section class="block primary">
-      <div class="block-label">拼豆板规格</div>
-      <div class="board-list" id="board-pills">
-        <button class="board-card" data-board="48">
-          <div class="board-card-title">48×48 迷你板</div>
-          <div class="board-card-size">13×13cm</div>
-          <div class="board-card-use">迷你挂件、小图标、徽章</div>
-        </button>
-        <button class="board-card" data-board="52">
-          <div class="board-card-title">52×52 标准基础板</div>
-          <div class="board-card-size">14×14cm</div>
-          <div class="board-card-use">钥匙扣、头像、小卡通、挂件</div>
-        </button>
-        <button class="board-card" data-board="78">
-          <div class="board-card-title">78×78 中板</div>
-          <div class="board-card-size">21×21cm</div>
-          <div class="board-card-use">半身人物、中等场景、杯垫</div>
-        </button>
-        <button class="board-card active" data-board="104">
-          <div class="board-card-title">104×104 超大板</div>
-          <div class="board-card-size">28×28cm</div>
-          <div class="board-card-use">全身角色、大幅海报、九宫格拼图</div>
-        </button>
-      </div>
-      <div class="help-text tight">按 2.6mm 小豆主流板子快速选择。小尺寸适合简单图案，大尺寸能还原更多细节。</div>
     </section>
 
     <section class="block collapsible collapsed">
@@ -156,13 +156,8 @@
         <div class="block-label">色彩与处理</div>
         <div class="block-body">
         <div class="field">
-          <span class="field-name">品牌色板</span>
-          <div class="pills brand-pills" id="brand-pills">
-            <button class="pill active" data-brand="mard">Mard</button>
-            <button class="pill" data-brand="hama">Hama</button>
-            <button class="pill" data-brand="perler">Perler</button>
-          </div>
-          <div class="help-text tight" id="brand-help">当前：Mard 共 291 色（完整官方色库）。切换品牌会按该品牌色号重新映射。</div>
+          <span class="field-name">色板</span>
+          <div class="help-text tight" id="brand-help">Mard 官方色库 共 221 色，图片自动映射到 Mard 色号。</div>
         </div>
         <div class="slider-row">
           <div class="slider-top">
@@ -296,19 +291,36 @@
     </div>
   </div>
 
-  <!-- v100: 编辑调色板弹窗（221色全色板，点选替换选中格子） -->
-  <div id="edit-palette-modal" class="modal-backdrop" hidden>
-    <div class="modal-card" style="max-width:520px;">
-      <div class="modal-head" style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #ECE6E0;">
-        <span style="font-size:18px;font-weight:700;color:#211E2B;">选择颜色替换</span>
-        <button id="edit-pal-close" style="background:none;border:none;font-size:24px;color:#999;cursor:pointer;line-height:1;">×</button>
+  <!-- v103: 编辑大图面板按用户草图调整——左色板+右大图，右下角确认按钮，去掉放大预览窗和缩放 -->
+  <div id="edit-overlay" class="edit-overlay" hidden>
+    <div class="edit-head">
+      <span class="edit-title">✎ 编辑模式</span>
+      <span class="edit-tip">点选 / 框选格子 → 左侧点色号换色</span>
+      <span class="edit-sel" id="edit-selinfo">未选中</span>
+    </div>
+    <div class="edit-body">
+      <aside class="edit-colors">
+        <div class="edit-colors-head">色号区域 · Mard 221</div>
+        <div class="edit-colors-grid" id="edit-colors-grid"></div>
+      </aside>
+      <div class="edit-canvas-viewport" id="edit-canvas-viewport">
+        <div class="edit-canvas-stage" id="edit-canvas-stage">
+          <canvas id="edit-canvas"></canvas>
+          <canvas id="edit-overlay-canvas"></canvas>
+        </div>
+        <div class="edit-view-hint" id="edit-view-hint">100% · 滚轮缩放 · 右键/空格拖拽平移 · 双击选格/拖拽框选</div>
+        <button id="edit-selectmode-btn" class="edit-selectmode-btn" title="开启后：单指/左键拖拽=框选一片区域；关闭后：单指/左键拖拽=平移画面">框选模式：关</button>
+        <button id="edit-reset-btn" class="edit-reset-btn" title="复位视图（居中适应）">复位视图</button>
+        <div class="edit-actions">
+          <button id="edit-clear" class="edit-btn" title="清除当前选区（重新选择）">清除</button>
+          <button id="edit-exit" class="edit-btn primary">确认</button>
+        </div>
       </div>
-      <div id="edit-pal-grid" style="padding:16px 20px;max-height:60vh;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(54px,1fr));gap:8px;"></div>
     </div>
   </div>
 
   <!-- 品牌色卡弹窗已下线（白块 bug 待修，下周开放）；放大预览弹窗也已移除（暂缓）；使用说明弹窗已移除（用户不需要） -->
 
-  <script src="app.v5.js?v=100"></script>
+  <script src="app.v5.js?v=117"></script>
 </body>
 </html>
