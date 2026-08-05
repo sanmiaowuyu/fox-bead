@@ -11,7 +11,7 @@
   <link rel="icon" type="image/png" sizes="64x64" href="favicon_64.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;600;700&family=Dancing+Script:wght@600;700&family=Ma+Shan+Zheng&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.v5.css" />
 <script src="https://beacon.cdn.qq.com/sdk/4.5.9/beacon_web.min.js"></script>
 <script>
@@ -74,6 +74,11 @@
           <button class="seg-item active" data-mode="pixel">像素</button>
         </div>
         <div class="mode-desc" id="mode-desc">像素原图：像马赛克一样一格一格拼，颜色最接近原图，适合大多数图片。</div>
+        <div class="toggle-row" style="margin-top: 14px;">
+          <span class="toggle-name">自动去背景</span>
+          <label class="switch"><input id="toggle-remove-bg" type="checkbox" checked /><span class="knob"></span></label>
+        </div>
+        <div class="help-text tight">白底/浅色背景默认会自动清空，避免空白处印满色号；关闭后仍清除与边缘连通的明显背景，但会保留主体内部可能存在的孤立浅色杂点。适合白底或浅色背景的照片。</div>
       </section>
 
       <section class="block collapsible collapsed">
@@ -88,19 +93,6 @@
           <div class="slider-scale"><span>10</span><span>120</span></div>
           <div class="help-text">决定拼豆的精细度：数值越大图案越清晰，需要的豆子也越多。如 100×100 = 10000 颗。</div>
         </div>
-        <div class="field">
-          <div class="field-line">
-            <span class="field-name">拼板规格<small class="help-inline">每块板每边孔数</small></span>
-            <input id="board-size" class="num-input" type="number" min="1" max="200" value="29" />
-            <span class="field-unit">孔</span>
-          </div>
-          <div class="help-text tight">你手上是 Mard 标准大方板 29×29 孔（14.8×14.8cm）。工具会据此算出需要几块板，并在图纸上画出分区线。</div>
-        </div>
-        <div class="toggle-row">
-          <span class="toggle-name">拼板分区线</span>
-          <label class="switch"><input id="toggle-boards" type="checkbox" checked /><span class="knob"></span></label>
-        </div>
-        <div class="help-text tight">在预览上叠加每板分界线，拼的时候一块板对一区，绝不会拼错位置。</div>
         <div class="toggle-row">
           <span class="toggle-name">显示坐标数字</span>
           <label class="switch"><input id="toggle-coords" type="checkbox" checked /><span class="knob"></span></label>
@@ -119,18 +111,6 @@
         <button id="btn-sample" class="btn-outline full">载入示例图片</button>
         <div class="help-text tight">没有图？点这里载入内置示例，先看看生成效果。</div>
         </div>
-      </section>
-
-      <section class="block primary">
-        <div class="block-label">图纸签名</div>
-        <div class="field sign-field">
-          <input id="sign-input" class="sign-input" type="text" value="mxm" maxlength="20" placeholder="如 mxm" />
-          <div class="seg seg-sm" id="signfont-seg">
-            <button class="seg-item active" data-font="dancing">花体英文</button>
-            <button class="seg-item" data-font="mashan">毛笔中文</button>
-          </div>
-        </div>
-        <div class="help-text tight">默认签名会印在画布预览和下载图纸的右下角，可随意修改。</div>
       </section>
 
       <section class="block collapsible collapsed">
@@ -159,19 +139,9 @@
           <div class="slider-scale"><span>0</span><span>100</span></div>
           <div class="help-text tight">自动合并被孤立的杂色小点：数值越高，画面越纯净，但细节可能丢失。</div>
         </div>
-        <div class="toggle-row">
-          <span class="toggle-name">自动去背景</span>
-          <label class="switch"><input id="toggle-remove-bg" type="checkbox" checked /><span class="knob"></span></label>
-        </div>
-        <div class="help-text tight">上传后自动清除图片四周的同色背景，只保留主体图案；关闭则保留原图背景。</div>
         <button id="btn-remove-bg" class="btn-soft full" hidden>一键去背景</button>
-        <div class="toggle-row">
-          <span class="toggle-name">编辑模式</span>
-          <label class="switch"><input id="toggle-edit" type="checkbox" /><span class="knob"></span></label>
-        </div>
-        <div class="help-text tight">开启后可手动修改：画笔改色 / 橡皮删除 / 吸管取色 / 填充 / 撤销。</div>
-        </div>
-      </section>
+      </div>
+    </section>
     </aside>
 
     <!-- ===== Center Canvas ===== -->
@@ -182,7 +152,7 @@
             <button class="seg-item active" data-view="template">拼豆模板</button>
             <button class="seg-item" data-view="original">原图</button>
           </div>
-          <button id="btn-mirror" class="tool-btn" title="镜像翻转（左右）：预览 / 图纸 / 采购清单同步翻转">⇋ 镜像</button>
+          <button id="btn-mirror" class="tool-btn" title="镜像翻转（左右）：预览 / 图纸同步翻转">⇋ 镜像</button>
           <!-- 放大预览暂缓：按钮和弹窗均移除，功能代码保留在 app.js 中，下周恢复 -->
         </div>
         <div class="zoom">
@@ -194,16 +164,6 @@
 
       <div class="canvas-wrap" id="canvas-wrap">
         <canvas id="bead-canvas" width="640" height="640"></canvas>
-        <!-- floating editor toolbar -->
-        <div class="edit-toolbar" id="edit-toolbar" hidden>
-          <button class="etool active" data-tool="brush" title="画笔">画笔</button>
-          <button class="etool" data-tool="eraser" title="橡皮">橡皮</button>
-          <button class="etool" data-tool="dropper" title="取色">取色</button>
-          <button class="etool" data-tool="fill" title="填充">填充</button>
-          <div class="etool-div"></div>
-          <button class="etool" data-tool="undo" title="撤销">撤销</button>
-        </div>
-        <div class="edit-badge" id="edit-badge" hidden>编辑模式 · 开</div>
       </div>
 
       <div class="canvas-hint" id="canvas-hint">预览：请上传图片或载入示例，图片将自动映射到所选品牌色板（默认 Mard）</div>
@@ -236,14 +196,11 @@
         <div class="stat-card"><div class="stat-label">网格尺寸</div><div class="stat-val" id="stat-grid">—</div></div>
         <div class="stat-card"><div class="stat-label">总豆数</div><div class="stat-val" id="stat-beads">—</div></div>
         <div class="stat-card"><div class="stat-label">使用颜色</div><div class="stat-val" id="stat-colors">—</div></div>
-        <div class="stat-card"><div class="stat-label">所需底板</div><div class="stat-val" id="stat-boards">—</div></div>
       </div>
-      <div class="board-tip" id="board-tip" hidden></div>
 
       <button id="btn-download" class="btn-primary full">下载图纸</button>
       <button id="btn-share" class="btn-soft full">下载分享图</button>
       <div class="share-hint">淡紫主题海报，适合发小红书 · 工作图纸仍保持白底干净</div>
-      <button id="btn-procurement" class="btn-outline full">导出采购清单</button>
     </aside>
   </main>
 
@@ -266,36 +223,16 @@
           <span class="slider-val" id="m-interval-val">10</span>
         </div>
         <input id="m-interval" class="range" type="range" min="2" max="20" value="10" step="1" />
-        <div class="grid-colors" id="m-grid-colors">
-          <button class="gc active" data-color="#555555" style="background:#555555"></button>
-          <button class="gc" data-color="#FF0000" style="background:#FF0000"></button>
-          <button class="gc" data-color="#0000FF" style="background:#0000FF"></button>
-          <button class="gc" data-color="#008000" style="background:#008000"></button>
-          <button class="gc" data-color="#800080" style="background:#800080"></button>
-          <button class="gc" data-color="#FFA500" style="background:#FFA500"></button>
-        </div>
       </div>
 
       <div class="modal-row">
-        <span class="modal-row-name">导出格式<small class="help-inline">矢量 SVG 放大永不模糊（推荐）</small></span>
+        <span class="modal-row-name">导出格式<small class="help-inline">高清 PNG 手机可直接查看（推荐）</small></span>
         <div class="seg seg-sm" id="format-seg">
-          <button class="seg-item active" data-format="svg">矢量 SVG</button>
-          <button class="seg-item" data-format="png">高清 PNG</button>
+          <button class="seg-item" data-format="svg">矢量 SVG</button>
+          <button class="seg-item active" data-format="png">高清 PNG</button>
         </div>
       </div>
 
-      <div class="modal-row">
-        <span class="modal-row-name">导出清晰度<small class="help-inline">像素越多越清晰、文件越大</small></span>
-        <div class="seg seg-sm" id="quality-seg">
-          <button class="seg-item" data-quality="std">标准</button>
-          <button class="seg-item active" data-quality="hd">高清</button>
-          <button class="seg-item" data-quality="uhq">超清</button>
-        </div>
-      </div>
-      <div class="modal-row">
-        <span class="modal-row-name">拼板分区线<small class="help-inline">每板分界线，照着分区拼</small></span>
-        <label class="switch"><input id="m-boards" type="checkbox" checked /><span class="knob"></span></label>
-      </div>
       <div class="modal-row">
         <span class="modal-row-name">显示坐标数字<small class="help-inline">边缘标注行列号</small></span>
         <label class="switch"><input id="m-coords" type="checkbox" /><span class="knob"></span></label>
@@ -307,10 +244,6 @@
       <div class="modal-row">
         <span class="modal-row-name">包含色号统计<small class="help-inline">底部列出各色号与数量</small></span>
         <label class="switch"><input id="m-stats" type="checkbox" checked /><span class="knob"></span></label>
-      </div>
-      <div class="modal-row">
-        <span class="modal-row-name">同时导出采购清单 (CSV)<small class="help-inline">色号+数量的表格</small></span>
-        <label class="switch"><input id="m-csv" type="checkbox" /><span class="knob"></span></label>
       </div>
 
       <div class="modal-btns">
