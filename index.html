@@ -7,12 +7,12 @@
   <meta http-equiv="Expires" content="0" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>狐狸爱拼豆 ｜ i 喵绘工坊 · 一键生成拼豆图纸</title>
-  <link rel="icon" type="image/x-icon" href="favicon.ico" />
-  <link rel="icon" type="image/png" sizes="64x64" href="favicon_64.png" />
+  <link rel="icon" type="image/x-icon" href="favicon.ico?v=124" />
+  <link rel="icon" type="image/png" sizes="64x64" href="favicon_64.png?v=124" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.v5.css?v=117" />
+  <link rel="stylesheet" href="style.v5.css?v=124" />
 <script src="https://beacon.cdn.qq.com/sdk/4.5.9/beacon_web.min.js"></script>
 <script>
 (function(){
@@ -89,6 +89,11 @@
             <div class="board-card-size">28×28cm</div>
             <div class="board-card-use">全身角色、大幅海报、九宫格拼图</div>
           </button>
+          <button class="board-card" data-board="130">
+            <div class="board-card-title">130×130 巨幅板</div>
+            <div class="board-card-size">34×34cm</div>
+            <div class="board-card-use">结婚照、轿车、摩托车等大幅真实场景</div>
+          </button>
         </div>
         <div class="help-text tight">按 2.6mm 小豆主流板子快速选择。小尺寸适合简单图案，大尺寸能还原更多细节。</div>
       </section>
@@ -128,8 +133,8 @@
             <span class="slider-name">网格尺寸</span>
             <span id="grid-size-val" class="slider-val">104 × 104</span>
           </div>
-          <input id="grid-size" class="range" type="range" min="5" max="120" value="104" step="1" />
-          <div class="slider-scale"><span>5</span><span>120</span></div>
+          <input id="grid-size" class="range" type="range" min="5" max="130" value="104" step="1" />
+          <div class="slider-scale"><span>5</span><span>130</span></div>
           <div class="help-text">决定拼豆的精细度：数值越大图案越清晰，需要的豆子也越多。如 52×52 = 2704 颗。</div>
         </div>
         <div class="toggle-row">
@@ -175,8 +180,37 @@
           </div>
           <input id="max-colors" class="range" type="range" min="4" max="64" value="64" step="1" />
           <div class="slider-scale"><span>4</span><span>64</span></div>
-          <div class="help-text tight">切模式时自动设置：卡通 16 色/清理 10、真实 24 色/清理 5、极致 32 色/清理 2。也可手动微调。</div>
+          <div class="help-text tight">切模式时自动设置：卡通 16 色/清理 10、真实 24 色/清理 5（130 巨幅板 30 色）、极致 32 色/清理 2。也可手动微调。</div>
         </div>
+      </div>
+    </section>
+
+    <section class="block collapsible collapsed">
+      <div class="block-label">像素风描边</div>
+      <div class="block-body">
+        <div class="toggle-row">
+          <span class="toggle-name">像素描边</span>
+          <label class="switch"><input id="toggle-outline" type="checkbox" /><span class="knob"></span></label>
+        </div>
+        <div class="help-text tight">在颜色边界自动描出清晰轮廓线，呈现像素插画的干净线条感（替代豆包出图的描边效果）。可与卡通/真实模式叠加。</div>
+        <div class="slider-row" style="margin-top:12px;">
+          <div class="slider-top">
+            <span class="slider-name">描边强度</span>
+            <span id="outline-strength-val" class="slider-val">50</span>
+          </div>
+          <input id="outline-strength" class="range" type="range" min="0" max="100" value="50" step="1" />
+          <div class="slider-scale"><span>弱</span><span>强</span></div>
+          <div class="help-text tight">数值越大描出的轮廓越多越明显；越小只保留最强烈的边界。</div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <span class="field-name">描边颜色</span>
+          <select id="outline-color" class="select">
+            <option value="H7">黑</option>
+            <option value="H5">深灰</option>
+            <option value="H16">深棕</option>
+          </select>
+        </div>
+        <div class="help-text tight">轮廓线使用的豆色，默认黑；深色画面可选深灰/深棕与主体更协调。</div>
       </div>
     </section>
     </aside>
@@ -312,7 +346,7 @@
         <button id="edit-selectmode-btn" class="edit-selectmode-btn" title="开启后：单指/左键拖拽=框选一片区域；关闭后：单指/左键拖拽=平移画面">框选模式：关</button>
         <button id="edit-reset-btn" class="edit-reset-btn" title="复位视图（居中适应）">复位视图</button>
         <div class="edit-actions">
-          <button id="edit-clear" class="edit-btn" title="清除当前选区（重新选择）">清除</button>
+          <button id="edit-clear" class="edit-btn" title="清除所选格子的改色（还原为原色）">清除</button>
           <button id="edit-exit" class="edit-btn primary">确认</button>
         </div>
       </div>
@@ -321,6 +355,6 @@
 
   <!-- 品牌色卡弹窗已下线（白块 bug 待修，下周开放）；放大预览弹窗也已移除（暂缓）；使用说明弹窗已移除（用户不需要） -->
 
-  <script src="app.v5.js?v=117"></script>
+  <script src="app.v5.js?v=124"></script>
 </body>
 </html>
