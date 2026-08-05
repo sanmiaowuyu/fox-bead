@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.v5.css" />
+  <link rel="stylesheet" href="style.v5.css?v=87" />
 <script src="https://beacon.cdn.qq.com/sdk/4.5.9/beacon_web.min.js"></script>
 <script>
 (function(){
@@ -70,28 +70,58 @@
         <div class="block-label">效果模式</div>
         <div class="seg" id="mode-seg">
           <button class="seg-item" data-mode="cartoon">卡通</button>
-          <button class="seg-item" data-mode="average">真实</button>
-          <button class="seg-item active" data-mode="pixel">像素</button>
+          <button class="seg-item active" data-mode="average">真实</button>
         </div>
-        <div class="mode-desc" id="mode-desc">像素原图：像马赛克一样一格一格拼，颜色最接近原图，适合大多数图片。</div>
-        <div class="toggle-row" style="margin-top: 14px;">
+        <div class="mode-desc" id="mode-desc">真实：颜色丰富、过渡自然，还原照片质感，适合猫狗、人像、风景。</div>
+        <div class="field-line" style="margin-top:14px;">
+          <span class="field-name">背景</span>
+        </div>
+        <div class="seg" id="bg-seg" style="margin-top:8px;">
+          <button class="seg-item" data-bg="black">黑底</button>
+          <button class="seg-item active" data-bg="white">白底</button>
+        </div>
+        <div class="help-text tight">白底/浅色图选「黑底」让白色主体更突出；深色图选「白底」避免深色同系。背景会随主体一起保留，不会被吃掉颜色。</div>
+        <div class="help-text tight" style="margin-top:10px;">背景会随主体一起保留，不会被吃掉颜色。</div>
+        <div class="toggle-row" style="margin-top:14px;">
           <span class="toggle-name">自动去背景</span>
-          <label class="switch"><input id="toggle-remove-bg" type="checkbox" checked /><span class="knob"></span></label>
+          <label class="switch"><input id="toggle-removebg" type="checkbox" /><span class="knob"></span></label>
         </div>
-        <div class="help-text tight">白底/浅色背景默认会自动清空，避免空白处印满色号；关闭后仍清除与边缘连通的明显背景，但会保留主体内部可能存在的孤立浅色杂点。适合白底或浅色背景的照片。</div>
-      </section>
+        <div class="help-text tight">默认关：整张图都拼豆，白色主体也正常标色号。仅当原图是纯色背景、想抠掉背景时才打开。</div>
+    </section>
 
-      <section class="block collapsible collapsed">
-        <div class="block-label">参数调节</div>
-        <div class="block-body">
+    <section class="block primary">
+      <div class="block-label">拼豆板规格</div>
+      <div class="board-list" id="board-pills">
+        <button class="board-card" data-board="52">
+          <div class="board-card-title">52×52 标准基础板</div>
+          <div class="board-card-size">14×14cm</div>
+          <div class="board-card-use">钥匙扣、头像、小卡通、挂件</div>
+        </button>
+        <button class="board-card" data-board="78">
+          <div class="board-card-title">78×78 中板</div>
+          <div class="board-card-size">21×21cm</div>
+          <div class="board-card-use">半身人物、中等场景、杯垫</div>
+        </button>
+        <button class="board-card active" data-board="104">
+          <div class="board-card-title">104×104 超大板</div>
+          <div class="board-card-size">28×28cm</div>
+          <div class="board-card-use">全身角色、大幅海报、九宫格拼图</div>
+        </button>
+      </div>
+      <div class="help-text tight">按 2.6mm 小豆主流板子快速选择。小尺寸适合简单图案，大尺寸能还原更多细节。</div>
+    </section>
+
+    <section class="block collapsible collapsed">
+      <div class="block-label">参数调节</div>
+      <div class="block-body">
         <div class="slider-row">
           <div class="slider-top">
             <span class="slider-name">网格尺寸</span>
-            <span id="grid-size-val" class="slider-val">120 × 120</span>
+            <span id="grid-size-val" class="slider-val">104 × 104</span>
           </div>
-          <input id="grid-size" class="range" type="range" min="10" max="120" value="120" step="1" />
-          <div class="slider-scale"><span>10</span><span>120</span></div>
-          <div class="help-text">决定拼豆的精细度：数值越大图案越清晰，需要的豆子也越多。如 100×100 = 10000 颗。</div>
+          <input id="grid-size" class="range" type="range" min="5" max="120" value="104" step="1" />
+          <div class="slider-scale"><span>5</span><span>120</span></div>
+          <div class="help-text">决定拼豆的精细度：数值越大图案越清晰，需要的豆子也越多。如 52×52 = 2704 颗。</div>
         </div>
         <div class="toggle-row">
           <span class="toggle-name">显示坐标数字</span>
@@ -125,11 +155,6 @@
           </div>
           <div class="help-text tight" id="brand-help">当前：Mard 共 291 色（完整官方色库）。切换品牌会按该品牌色号重新映射。</div>
         </div>
-        <div class="toggle-row">
-          <span class="toggle-name">抖动（还原渐变）</span>
-          <label class="switch"><input id="toggle-dither" type="checkbox" checked /><span class="knob"></span></label>
-        </div>
-        <div class="help-text tight">仅「像素化·抖动」模式生效；关闭则每格取最近色，画面更干净但渐变会色带化。</div>
         <div class="slider-row">
           <div class="slider-top">
             <span class="slider-name">杂色清理强度</span>
@@ -139,7 +164,15 @@
           <div class="slider-scale"><span>0</span><span>100</span></div>
           <div class="help-text tight">自动合并被孤立的杂色小点：数值越高，画面越纯净，但细节可能丢失。</div>
         </div>
-        <button id="btn-remove-bg" class="btn-soft full" hidden>一键去背景</button>
+        <div class="slider-row" style="margin-top:10px;">
+          <div class="slider-top">
+            <span class="slider-name">颜色数量上限</span>
+            <span id="max-colors-val" class="slider-val">64</span>
+          </div>
+          <input id="max-colors" class="range" type="range" min="4" max="64" value="64" step="1" />
+          <div class="slider-scale"><span>4</span><span>64</span></div>
+          <div class="help-text tight">切模式时自动设置：卡通 16 色/清理 10、真实 24 色/清理 5、极致 32 色/清理 2。也可手动微调。</div>
+        </div>
       </div>
     </section>
     </aside>
@@ -255,7 +288,6 @@
 
   <!-- 品牌色卡弹窗已下线（白块 bug 待修，下周开放）；放大预览弹窗也已移除（暂缓）；使用说明弹窗已移除（用户不需要） -->
 
-  <script src="sample.v5.js"></script>
-  <script src="app.v5.js"></script>
+  <script src="app.v5.js?v=87"></script>
 </body>
 </html>
