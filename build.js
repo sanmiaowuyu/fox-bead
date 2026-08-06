@@ -1,14 +1,16 @@
 #!/usr/bin/env node
 /**
- * build.js — 将 src/ 下的模块化源文件合并为单文件 index.html
+ * build.js — 将 src/ 源文件 + assets/ 资源 构建为单文件 dist/index.html
  * 用法: node build.js
- * 输出: index.html (与 v139 功能一致的单文件)
+ * 输出: dist/index.html
  */
 var fs = require('fs');
 var path = require('path');
 
 var ROOT = __dirname;
 var SRC = path.join(ROOT, 'src');
+var ASSETS = path.join(ROOT, 'assets');
+var DIST = path.join(ROOT, 'dist');
 
 // JS 模块加载顺序（严格按依赖顺序）
 var JS_MODULES = [
@@ -27,50 +29,122 @@ var JS_MODULES = [
   'main.js'
 ];
 
-// JS 头部注释
+// 需要内联为 data URI 的资源文件 → 对应的 JS 变量名
+var ASSET_MAP = {
+  'sample.jpg': 'SAMPLE_DATA_URI',
+  'logo.jpg': 'LOGO_DATA_URI'
+};
+
+// HTML 中的占位符 → 对应资源文件
+var HTML_ASSET_MAP = {
+  '<!-- BUILD:FAVICON_ICO -->': 'favicon.ico',
+  '<!-- BUILD:FAVICON_PNG -->': 'favicon.png',
+  '<!-- BUILD:BRAND_LOGO -->': 'brand-logo.jpg'
+};
+
+function readTrim(file) {
+  var content = fs.readFileSync(file, 'utf8');
+  return content.replace(/\n+$/, '');
+}
+
+// ========== 1. 读取资源文件并生成 data URI ==========
+function assetToDataURI(filePath) {
+  var ext = path.extname(filePath).toLowerCase();
+  var mime;
+  if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+  else if (ext === '.png') mime = 'image/png';
+  else if (ext === '.ico') mime = 'image/x-icon';
+  else mime = 'application/octet-stream';
+  var data = fs.readFileSync(filePath);
+  return 'data:' + mime + ';base64,' + data.toString('base64');
+}
+
+var assetDeclarations = [];
+for (var assetFile in ASSET_MAP) {
+  var varName = ASSET_MAP[assetFile];
+  var uri = assetToDataURI(path.join(ASSETS, assetFile));
+  assetDeclarations.push('const ' + varName + " = '" + uri + "';");
+}
+var assetBlock = '/* ---------- 0. 内联资源（构建时自动生成） ---------- */\n' + assetDeclarations.join('\n') + '\n';
+
+// ========== 2. 读取 CSS ==========
+var cssContent = readTrim(path.join(SRC, 'css', 'style.css'));
+
+// ========== 3. 拼接 JS ==========
 var JS_HEADER = '/* =========================================================================\n' +
   ' * 拼豆模板生成器 · 前端逻辑\n' +
   ' * 算法参考 Zippland/perler-beads：主导色提取 + Oklab 感知距离映射 +\n' +
   ' * 区域合并(杂色清理) + 边界背景移除 + 颜色排除重映射\n' +
   ' * ========================================================================= */\n\n';
 
-function readTrim(file) {
-  var content = fs.readFileSync(file, 'utf8');
-  // 去掉文件末尾多余空行，保留中间格式
-  return content.replace(/\n+$/, '');
-}
-
-// 1. 读取模板
-var templatePath = path.join(SRC, 'template.html');
-var template = fs.readFileSync(templatePath, 'utf8');
-
-// 2. 读取 CSS
-var cssPath = path.join(SRC, 'css', 'style.css');
-var cssContent = readTrim(cssPath);
-
-// 3. 拼接 JS（按顺序）
-var jsParts = [JS_HEADER];
+var jsParts = [JS_HEADER, assetBlock];
 for (var i = 0; i < JS_MODULES.length; i++) {
-  var jsPath = path.join(SRC, 'js', JS_MODULES[i]);
-  var jsContent = readTrim(jsPath);
+  var jsContent = readTrim(path.join(SRC, 'js', JS_MODULES[i]));
   jsParts.push(jsContent);
 }
 var jsContent = jsParts.join('\n\n');
 
-// 4. 替换占位符
-var output = template
-  .replace('/* BUILD:CSS */', cssContent)
-  .replace('/* BUILD:JS */', jsContent);
+// ========== 4. 基础压缩 ==========
+function minifyJS(code) {
+  // 去掉多行注释（保留的不去：/*! ... */ 这类 license 注释本项目没有）
+  code = code.replace(/\/\*[\s\S]*?\*\//g, '');
+  // 去掉单行注释（整行以 // 开头的）
+  code = code.replace(/^\s*\/\/.*$/gm, '');
+  // 去掉多余空行（连续空行合并为一行）
+  code = code.replace(/\n{3,}/g, '\n\n');
+  // 去掉行尾空格
+  code = code.replace(/[ \t]+$/gm, '');
+  // 去掉行首空格（保留缩进结构不做处理，安全性优先）
+  return code.trim();
+}
 
-// 5. 写入 index.html
-var outPath = path.join(ROOT, 'index.html');
+function minifyCSS(code) {
+  // 去掉多行注释
+  code = code.replace(/\/\*[\s\S]*?\*\//g, '');
+  // 去掉单行注释
+  code = code.replace(/\/\/.*$/gm, '');
+  // 去掉多余空行
+  code = code.replace(/\n{3,}/g, '\n\n');
+  // 去掉行尾空格
+  code = code.replace(/[ \t]+$/gm, '');
+  return code.trim();
+}
+
+var cssMin = minifyCSS(cssContent);
+var jsMin = minifyJS(jsContent);
+
+// ========== 5. 读取模板并替换占位符 ==========
+var template = fs.readFileSync(path.join(SRC, 'template.html'), 'utf8');
+
+// 替换 CSS 和 JS 占位符
+var output = template
+  .replace('/* BUILD:CSS */', cssMin)
+  .replace('/* BUILD:JS */', jsMin);
+
+// 替换 HTML 资源占位符
+for (var placeholder in HTML_ASSET_MAP) {
+  var assetFilePath = path.join(ASSETS, HTML_ASSET_MAP[placeholder]);
+  if (fs.existsSync(assetFilePath)) {
+    var dataUri = assetToDataURI(assetFilePath);
+    output = output.split(placeholder).join(dataUri);
+  } else {
+    console.warn('WARNING: Asset not found: ' + assetFilePath);
+  }
+}
+
+// ========== 6. 写入 dist/index.html ==========
+if (!fs.existsSync(DIST)) fs.mkdirSync(DIST, { recursive: true });
+var outPath = path.join(DIST, 'index.html');
 fs.writeFileSync(outPath, output, 'utf8');
 
-// 6. 统计
+// ========== 7. 统计 ==========
 var lines = output.split('\n').length;
 var sizeKB = Math.round(Buffer.byteLength(output, 'utf8') / 1024);
+var cssLines = cssMin.split('\n').length;
+var jsLines = jsMin.split('\n').length;
 console.log('Build complete: ' + outPath);
-console.log('  Lines: ' + lines);
+console.log('  Lines: ' + lines + ' (was ~' + (template.split('\n').length + jsContent.split('\n').length + cssContent.split('\n').length) + ' before minify)');
 console.log('  Size:  ' + sizeKB + ' KB');
-console.log('  CSS:   ' + cssContent.split('\n').length + ' lines');
-console.log('  JS:    ' + jsContent.split('\n').length + ' lines (' + JS_MODULES.length + ' modules)');
+console.log('  CSS:   ' + cssLines + ' lines (was ' + cssContent.split('\n').length + ')');
+console.log('  JS:    ' + jsLines + ' lines (was ' + jsContent.split('\n').length + ', ' + JS_MODULES.length + ' modules)');
+console.log('  Assets: ' + Object.keys(ASSET_MAP).length + ' JS inlined, ' + Object.keys(HTML_ASSET_MAP).length + ' HTML inlined');

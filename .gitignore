@@ -1,4 +1,5 @@
-# 构建产物（由 build.js 生成）
+# 构建产物
+dist/
 index.html
 
 # 临时文件
