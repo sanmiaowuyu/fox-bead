@@ -125,42 +125,66 @@ function satWeightedAverage(data, w, x0, y0, x1, y1, alpha) {
   return { r: Math.round(r / wsum), g: Math.round(g / wsum), b: Math.round(b / wsum) };
 }
 
+// v140: 分帧批处理 — 把 N×N 逐格映射拆成每批 2000 格，setTimeout 之间让浏览器渲染
+var _chunkSize = 2000;
+function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone) {
+  var endIdx = Math.min(startIdx + _chunkSize, N * N);
+  for (var idx = startIdx; idx < endIdx; idx++) {
+    var y = Math.floor(idx / N);
+    var x = idx % N;
+    if (x < dx || x >= dx + dw || y < dy || y >= dy + dh) continue;
+    var mx = x - dx, my = y - dy;
+    var x0 = Math.floor(mx * cw), y0 = Math.floor(my * ch);
+    var x1 = Math.max(x0 + 1, Math.floor((mx + 1) * cw));
+    var y1 = Math.max(y0 + 1, Math.floor((my + 1) * ch));
+    var rgb = null;
+    if (state.mode === 'average') {
+      rgb = satWeightedAverage(sd.data, sd.width, x0, y0, x1, y1, REAL_SAT_ALPHA);
+    } else {
+      rgb = dominantColor(sd.data, sd.width, sd.height, x0, y0, x1, y1, true);
+    }
+    grid[y][x] = rgb ? mapToPalette(rgb) : null;
+  }
+  if (endIdx < N * N) {
+    setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone); }, 0);
+  } else {
+    onDone();
+  }
+}
+
 function processImage() {
   if (!state.sourceImage) return;
-  // v139: 显示处理中指示器
   var _wrapEl = document.getElementById('canvas-wrap');
   if (_wrapEl) _wrapEl.classList.add('processing');
-  const N = state.N;
-  state.srcRGB = buildSrcRGB(state.sourceImage, N); // 原图采样，供 removeBackground 使用
-  const cr = getCropRect(state.sourceImage);
-  const sd = getSourceData(state.sourceImage);
-  // letterbox：原图比例居中放进 N×N，四周留白(null)不裁不拉
-  const scale = Math.min(N / cr.sw, N / cr.sh);
-  const dw = Math.max(1, Math.round(cr.sw * scale));
-  const dh = Math.max(1, Math.round(cr.sh * scale));
-  const dx = Math.floor((N - dw) / 2);
-  const dy = Math.floor((N - dh) / 2);
-  const cw = cr.sw / dw, ch = cr.sh / dh; // 仅对内容区采样，保持比例
-  const grid = Array.from({ length: N }, () => new Array(N).fill(null));
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      if (x < dx || x >= dx + dw || y < dy || y >= dy + dh) continue; // 内容区外留白
-      const mx = x - dx, my = y - dy; // 内容区内坐标
-      const x0 = Math.floor(mx * cw), y0 = Math.floor(my * ch);
-      const x1 = Math.max(x0 + 1, Math.floor((mx + 1) * cw));
-      const y1 = Math.max(y0 + 1, Math.floor((my + 1) * ch));
-      let rgb = null;
-      if (state.mode === 'average') {
-        // 真实·饱和度加权均值（区域权重识别法，v81）：保眼睛/高光，避免被浅色中和成灰
-        rgb = satWeightedAverage(sd.data, sd.width, x0, y0, x1, y1, REAL_SAT_ALPHA);
-      } else {
-        // 卡通·主色：整格"最频繁色"（大色块最干净）。v130 起对暗部勾边加权(edgeAware)，
-        // 避免细黑/深棕描边在格内是少数像素时被周围填充色吸收→黑边消失。
-        rgb = dominantColor(sd.data, sd.width, sd.height, x0, y0, x1, y1, true);
-      }
-      grid[y][x] = rgb ? mapToPalette(rgb) : null;
-    }
+  var N = state.N;
+  state.srcRGB = buildSrcRGB(state.sourceImage, N);
+  var cr = getCropRect(state.sourceImage);
+  var sd = getSourceData(state.sourceImage);
+  var scale = Math.min(N / cr.sw, N / cr.sh);
+  var dw = Math.max(1, Math.round(cr.sw * scale));
+  var dh = Math.max(1, Math.round(cr.sh * scale));
+  var dx = Math.floor((N - dw) / 2);
+  var dy = Math.floor((N - dh) / 2);
+  var cw = cr.sw / dw, ch = cr.sh / dh;
+  var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });
+
+  // v140: 分帧处理（小板子一步完成，大板子分批异步）
+  if (N <= 78) {
+    // 小板子：同步处理，零开销
+    _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, function() {
+      _finishPipeline(grid, N);
+    });
+  } else {
+    // 大板子：分帧异步，UI 不卡
+    setTimeout(function() {
+      _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, function() {
+        _finishPipeline(grid, N);
+      });
+    }, 0);
   }
+}
+
+function _finishPipeline(grid, N) {
   // 清理去噪按常规执行（卡通/真实一致）
   cleanupNoise(grid, state.cleanup);
   // 去背景：默认关闭。关掉时整张图都参与拼豆，白色主体也正常标色号（解决「白色空白、识别不到主图」）；
