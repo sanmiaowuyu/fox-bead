@@ -8,6 +8,8 @@ function renderAll() {
   // v139: 处理完成，移除指示器
   var cw = document.getElementById('canvas-wrap');
   if (cw) cw.classList.remove('processing');
+  // v140: 去背景状态反馈
+  updateBgHint();
 }
 /** 给每颗豆子画极淡的间隔线，确保白色/浅色豆在白底上也能看出边界 */
 function drawBeadBorders(c, ox, oy, cols, rows, cell, color) {
@@ -193,4 +195,17 @@ function renderCanvas() {
   renderGeom = { M: M, ox: ox, oy: oy, cell: cell };
 }
 function applyZoom() { renderCanvas(); }
+function updateBgHint() {
+  var hint = document.getElementById('canvas-hint');
+  if (!hint) return;
+  var msg = {
+    'no_bg': '去背景：未检测到纯色背景，图片已保留完整。建议用豆包生成纯色底图后再上传。',
+    'small': '去背景：板子≤52格，自动跳过以防止小图主体被误删。',
+    'full': '去背景：背景区域过大，为防止误删主体已跳过。可尝试手动排除背景色。'
+  }[state.bgStatus];
+  if (msg) {
+    hint.textContent = msg;
+    hint.style.color = '#C0392B';
+  }
+}
 

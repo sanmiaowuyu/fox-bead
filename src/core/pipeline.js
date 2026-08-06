@@ -166,9 +166,11 @@ function processImage() {
   // 去背景：默认关闭。关掉时整张图都参与拼豆，白色主体也正常标色号（解决「白色空白、识别不到主图」）；
   // 只有用户明确要抠纯色背景时才在 UI 打开「自动去背景」。
   if (state.removeBg) {
+    state.bgStatus = 'ok'; // will be overwritten if a gate fails
     removeBackground(grid);
   } else {
     state.bgMask = Array.from({ length: N }, () => new Array(N).fill(false));
+    state.bgStatus = '';
   }
   // 颜色数量上限：合并肉眼难分的相近色，让卡通/插画色块更干净
   reduceColors(grid, state.maxColors);
@@ -468,6 +470,7 @@ function removeBackground(grid = state.grid) {
 
   if (!mainGate && !cornerGate) {
     // 无统一亮/暗背景：保留原图，但仍把残留的 null 填充，避免图纸出现空号
+    state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         if (grid[y][x] == null) grid[y][x] = bgColorId;
@@ -480,6 +483,7 @@ function removeBackground(grid = state.grid) {
   // 小图主体格数少，去背景 BFS 极易把主体同色区域当背景吃掉（如白猫在白底上）。
   // 背景豆子用户可用「颜色数量上限」+「排除色」自行处理。
   if (N <= 52) {
+    state.bgStatus = 'small';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
         if (grid[y][x] == null) grid[y][x] = bgColorId;
@@ -585,7 +589,7 @@ function removeBackground(grid = state.grid) {
   var gateConfident = (mL > 0.95 && vL < 0.05) || (mL < 0.08 && vL < 0.05) ||
                       (midL > 0.95 && vL < 0.06) || (midL < 0.06 && vL < 0.06);
   var safetyLimit = gateConfident ? 0.98 : 0.85;
-  if (nonNull && toFill.length / nonNull > safetyLimit) return;
+  if (nonNull && toFill.length / nonNull > safetyLimit) { state.bgStatus = 'full'; return; }
 
   for (const [x, y] of toFill) { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
 

@@ -21,6 +21,7 @@ const state = {
   excluded: new Set(),   // 用户排除的颜色
   maxColors: 24,         // 最终图纸颜色数量上限（4~64），与默认真实模式一致；切模式时按预设自动调整为 8/24
   bgMask: null,          // 二维布尔数组：true=该格为背景填充（导出不画色号、不计入用料）
+  bgStatus: '',           // 去背景状态反馈：''=未开启 / 'ok'=成功 / 'no_bg'=未检测到背景 / 'small'=板子太小跳过 / 'full'=主体占满
   // v100: 编辑模式
   editMode: false,       // 编辑模式开关
   editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）

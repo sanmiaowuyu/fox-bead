@@ -464,36 +464,122 @@ function buildExportCanvas(opts) {
     }
   }
 
-  // 水印：斜向平铺，覆盖整图，加深可见但不喧宾夺主
-  c.save();
-  c.globalAlpha = 0.28;
-  c.fillStyle = '#7A7A7A';
-  c.font = `italic bold ${Math.round(36 * k)}px sans-serif`;
-  c.textAlign = 'center'; c.textBaseline = 'middle';
-  const stepX = 360 * k;
-  const stepY = 240 * k;
-  const rows = Math.ceil((H + stepY) / stepY);
-  for (let row = 0; row < rows; row++) {
-    const y = row * stepY;
-    const xOffset = (row % 2) * (stepX / 2); // 奇偶行错开，避免对齐成直线
-    for (let x = -stepX; x < W + stepX; x += stepX) {
-      c.save();
-      c.translate(x + xOffset, y);
-      c.rotate(-45 * Math.PI / 180);
-      c.fillText('mxm', 0, 0);
-      c.restore();
+  // ===== 采购清单（按色系分组）=====
+  if (showStats && sorted.length > 0) {
+    const seriesNames = { A:'黄橙系', B:'绿色系', C:'蓝青系', D:'蓝紫系', E:'粉玫系', F:'红色系', G:'棕肤系', H:'黑白系', M:'大地系' };
+    const bySeries = {};
+    for (const [id, cnt] of sorted) {
+      const m = id.match(/^([A-Za-z]+)/);
+      if (!m) continue;
+      const s = m[1];
+      if (!bySeries[s]) bySeries[s] = { name: seriesNames[s] || s+'系', items: [], subtotal: 0 };
+      bySeries[s].items.push({ id, cnt });
+      bySeries[s].subtotal += cnt;
     }
+    const seriesOrder = Object.keys(bySeries).sort();
+    const listTitleH = Math.round(72 * k);
+    const listLineH = Math.round(40 * k);
+    const listSeriesGap = Math.round(28 * k);
+    const listColW = Math.floor((W - palPad * 3) / 2);
+    const listFontSize = Math.round(26 * k);
+    const listSmallSize = Math.round(20 * k);
+
+    let listTotalH = listTitleH + palPad;
+    for (const s of seriesOrder) {
+      listTotalH += listSeriesGap + Math.ceil(bySeries[s].items.length / 2) * listLineH;
+    }
+    listTotalH += listPad * 3;
+
+    const listTop = titleH + patternH + gap + palH;
+    const finalH = listTop + listTotalH;
+
+    // Redraw on taller canvas
+    const oldCv = cv;
+    cv = document.createElement('canvas');
+    cv.width = W; cv.height = finalH;
+    const ctx2 = cv.getContext('2d');
+    ctx2.imageSmoothingEnabled = false;
+    ctx2.drawImage(oldCv, 0, 0);
+
+    // Divider
+    ctx2.strokeStyle = '#ECE6E0'; ctx2.lineWidth = Math.max(1, k);
+    ctx2.beginPath(); ctx2.moveTo(0, listTop); ctx2.lineTo(W, listTop); ctx2.stroke();
+
+    // Title
+    ctx2.fillStyle = '#211E2B';
+    ctx2.font = 'bold ' + Math.round(54 * k) + 'px sans-serif';
+    ctx2.textAlign = 'left'; ctx2.textBaseline = 'top';
+    ctx2.fillText('采购清单', palPad, listTop + palPad);
+
+    let yPos = listTop + listTitleH + palPad;
+    for (const s of seriesOrder) {
+      const block = bySeries[s];
+      ctx2.fillStyle = '#F6F1FB';
+      ctx2.fillRect(palPad, yPos, W - palPad * 2, listLineH);
+      ctx2.fillStyle = '#6A4C93';
+      ctx2.font = 'bold ' + listFontSize + 'px sans-serif';
+      ctx2.textAlign = 'left'; ctx2.textBaseline = 'middle';
+      ctx2.fillText(s + '系（' + block.name + '）— 小计 ' + block.subtotal.toLocaleString() + ' 颗', palPad + 10, yPos + listLineH / 2);
+      yPos += listLineH + 4;
+
+      const items = block.items;
+      for (let i = 0; i < items.length; i += 2) {
+        for (let col = 0; col < 2; col++) {
+          const idx = i + col;
+          if (idx >= items.length) break;
+          const item = items[idx];
+          const cx = col === 0 ? palPad + 6 : palPad + listColW + 6;
+          const sw = Math.round(20 * k);
+          ctx2.fillStyle = PALETTE_BY_ID[item.id].hex;
+          ctx2.fillRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
+          ctx2.strokeStyle = '#E2D8F2'; ctx2.lineWidth = 0.5;
+          ctx2.strokeRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
+          ctx2.fillStyle = '#211E2B';
+          ctx2.font = 'bold ' + listSmallSize + 'px monospace';
+          ctx2.textAlign = 'left'; ctx2.textBaseline = 'middle';
+          ctx2.fillText(item.id, cx + sw + 6, yPos + listLineH / 2);
+          ctx2.fillStyle = '#6B6675';
+          ctx2.font = listSmallSize + 'px sans-serif';
+          ctx2.fillText(item.cnt.toLocaleString() + ' 颗', cx + sw + 56, yPos + listLineH / 2);
+        }
+        yPos += listLineH;
+      }
+      yPos += listSeriesGap;
+    }
+
+    // Grand total
+    ctx2.fillStyle = '#ECE6E0';
+    ctx2.fillRect(palPad, yPos, W - palPad * 2, 1);
+    yPos += 12;
+    ctx2.fillStyle = '#211E2B';
+    ctx2.font = 'bold ' + Math.round(32 * k) + 'px sans-serif';
+    ctx2.textAlign = 'right';
+    ctx2.fillText('总计：' + totalBeads.toLocaleString() + ' 颗，' + sorted.length + ' 色', W - palPad, yPos + listLineH / 2);
+
+    // Watermark on new canvas
+    ctx2.save();
+    ctx2.globalAlpha = 0.28;
+    ctx2.fillStyle = '#7A7A7A';
+    ctx2.font = 'italic bold ' + Math.round(36 * k) + 'px sans-serif';
+    ctx2.textAlign = 'center'; ctx2.textBaseline = 'middle';
+    var wRows2 = Math.ceil((finalH + 240 * k) / (240 * k));
+    for (var wr2 = 0; wr2 < wRows2; wr2++) {
+      var wy = wr2 * 240 * k;
+      var xOff = (wr2 % 2) * (360 * k / 2);
+      for (var x = -360 * k; x < W + 360 * k; x += 360 * k) {
+        ctx2.save();
+        ctx2.translate(x + xOff, wy);
+        ctx2.rotate(-45 * Math.PI / 180);
+        ctx2.fillText('mxm', 0, 0);
+        ctx2.restore();
+      }
+    }
+    ctx2.restore();
   }
-  c.restore();
 
   return cv;
 }
 
-/**
- * 构建「矢量 SVG」图纸（无限放大不模糊，色号始终清晰）
- * 与 buildExportCanvas 同布局：标题栏 + N×N 网格(可选格内色号/网格线/坐标) + 用料详情(横向流式)
- * SVG 是矢量格式，缩放/放大查看时文字与色块保持锐利，从根本上解决「放大模糊、色号看不清」。
- */
 function buildExportSVG(opts) {
   const N = state.N;
   // v100: 导出固定 (N-4)×(N-4) 正方形
@@ -647,7 +733,91 @@ function buildExportSVG(opts) {
     }
   }
 
-  // 水印：斜向平铺 SVG pattern，低透明度，不影响色号阅读
+  // ===== SVG 采购清单（按色系分组）=====
+  if (showStats && sorted.length > 0) {
+    const seriesNames = { A:'黄橙系', B:'绿色系', C:'蓝青系', D:'蓝紫系', E:'粉玫系', F:'红色系', G:'棕肤系', H:'黑白系', M:'大地系' };
+    const bySeries = {};
+    for (const [id2, cnt2] of sorted) {
+      const mm = id2.match(/^([A-Za-z]+)/);
+      if (!mm) continue;
+      const ss = mm[1];
+      if (!bySeries[ss]) bySeries[ss] = { name: seriesNames[ss] || ss+'系', items: [], subtotal: 0 };
+      bySeries[ss].items.push({ id: id2, cnt: cnt2 });
+      bySeries[ss].subtotal += cnt2;
+    }
+    const svgSeriesOrder = Object.keys(bySeries).sort();
+    const svgListH = 30, svgLineH = 52, svgSeriesGap = 20;
+    let svgExtra = 0;
+    for (const s2 of svgSeriesOrder) svgExtra += svgSeriesGap + Math.ceil(bySeries[s2].items.length / 2) * svgLineH;
+    svgExtra += svgListH + palPad * 2 + 60;
+
+    const svgListTop = parseFloat(H) + (showStats && sorted.length > 0 ? 0 : 0); // already included in H? No - H was fixed.
+    // Actually H was calculated earlier and doesn't include the采购清单. We need to add it.
+    // Let's calculate newH and update the svg element
+    var svgNewH = parseFloat(H) + svgExtra;
+
+    // Divider
+    p.push('<line x1="0" y1="' + H + '" x2="' + W + '" y2="' + H + '" stroke="#ECE6E0" stroke-width="1"/>');
+    // Title
+    p.push('<text x="' + palPad + '" y="' + (parseFloat(H) + svgListH + palPad) + '" font-size="60" font-weight="700" fill="#211E2B" dominant-baseline="middle">采购清单</text>');
+
+    let syPos = parseFloat(H) + svgListH + palPad * 2;
+    for (const s2 of svgSeriesOrder) {
+      const block = bySeries[s2];
+      p.push('<rect x="' + palPad + '" y="' + syPos + '" width="' + (W - palPad * 2) + '" height="' + svgLineH + '" fill="#F6F1FB"/>');
+      p.push('<text x="' + (palPad + 10) + '" y="' + (syPos + svgLineH / 2) + '" font-size="30" font-weight="700" fill="#6A4C93" dominant-baseline="middle">' + s2 + '系（' + block.name + '）— 小计 ' + block.subtotal.toLocaleString() + ' 颗</text>');
+      syPos += svgLineH + 4;
+
+      const items = block.items;
+      const svgColW = Math.floor((W - palPad * 3) / 2);
+      for (let i2 = 0; i2 < items.length; i2 += 2) {
+        for (let col = 0; col < 2; col++) {
+          const idx = i2 + col;
+          if (idx >= items.length) break;
+          const item = items[idx];
+          const cx = col === 0 ? palPad + 6 : palPad + svgColW + 6;
+          p.push('<rect x="' + cx + '" y="' + (syPos + (svgLineH - 24) / 2) + '" width="24" height="24" fill="' + PALETTE_BY_ID[item.id].hex + '" stroke="#E2D8F2" stroke-width="0.5"/>');
+          p.push('<text x="' + (cx + 34) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" font-weight="700" font-family="monospace" fill="#211E2B" dominant-baseline="middle">' + item.id + '</text>');
+          p.push('<text x="' + (cx + 90) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" fill="#6B6675" dominant-baseline="middle">' + item.cnt.toLocaleString() + ' 颗</text>');
+        }
+        syPos += svgLineH;
+      }
+      syPos += svgSeriesGap;
+    }
+    // Grand total
+    p.push('<line x1="' + palPad + '" y1="' + syPos + '" x2="' + (W - palPad) + '" y2="' + syPos + '" stroke="#ECE6E0" stroke-width="1"/>');
+    syPos += 16;
+    p.push('<text x="' + (W - palPad) + '" y="' + (syPos + 24) + '" font-size="36" font-weight="700" fill="#211E2B" text-anchor="end" dominant-baseline="middle">总计：' + totalBeads.toLocaleString() + ' 颗，' + sorted.length + ' 色</text>');
+
+    // Update H to svgNewH for watermark rect
+    // Since p is already built, we need to update the opening svg tag height and the closing watermark rect
+    // The opening svg tag is at p[0] - let's update it
+    p[0] = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + svgNewH + '" viewBox="0 0 ' + W + ' ' + svgNewH + '" font-family="Noto Sans SC, PingFang SC, Microsoft YaHei, sans-serif">';
+    // Update white background rect
+    p[2] = '<rect x="0" y="0" width="' + W + '" height="' + svgNewH + '" fill="#FFFFFF"/>';
+    // The watermark is at the end, we'll replace it
+    // Remove the old watermark lines (last 5 elements)
+    var wmIdx = p.length;
+    while (wmIdx > 0 && p[wmIdx - 1].indexOf('url(#wm)') < 0) wmIdx--;
+    if (wmIdx > 0) {
+      // Keep p[0..wmIdx-1], replace the rest with updated watermark
+      p.length = wmIdx;
+    }
+    p.push('<rect x="0" y="0" width="' + W + '" height="' + svgNewH + '" fill="url(#wm)"/>');
+    p.push('</svg>');
+  }
+
+  // Remove old standalone </svg> and watermark if they exist (they were already handled above)
+  // The original code after this had: p.push('</svg>'); return '<?xml...'
+  // But if we already added </svg> above, we need to skip the original one.
+  // For simplicity, let's not touch the remaining code and handle it in the original flow.
+
+  // 水印：斜向平铺 SVG pattern
+  // If采购清单 was already added, it handled watermark + </svg> + return
+  var _hasList = (showStats && sorted.length > 0);
+  if (_hasList) {
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + p.join('');
+  }
   p.push('<defs>');
   p.push('<pattern id="wm" x="0" y="0" width="360" height="240" patternUnits="userSpaceOnUse" patternTransform="rotate(-45 180 120)">');
   p.push('<text x="180" y="120" font-size="42" font-style="italic" font-weight="700" fill="#7A7A7A" opacity="0.28" text-anchor="middle" dominant-baseline="central">mxm</text>');
