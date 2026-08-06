@@ -3,7 +3,7 @@
  * build.js — 将 src/ 源文件 + assets/ 资源 构建为单文件 dist/index.html
  * 用法: node build.js [--bump]
  *   --bump  构建前自动递增 APP_VERSION
- * 输出: dist/index.html
+ * 输出: docs/index.html
  */
 var fs = require('fs');
 var path = require('path');
@@ -26,7 +26,7 @@ var SRC = path.join(ROOT, 'src');
 var CORE = path.join(SRC, 'core');
 var WEB = path.join(SRC, 'web');
 var ASSETS = path.join(ROOT, 'assets');
-var DIST = path.join(ROOT, 'dist');
+var DIST = path.join(ROOT, 'docs');
 
 // JS 模块加载顺序（core/ 纯算法先加载，web/ 平台绑定后加载）
 var JS_MODULES = [

@@ -1,7 +1,3 @@
-# 构建产物
-dist/
-index.html
-
 # 临时文件
 *.tmp
 _check*.js
