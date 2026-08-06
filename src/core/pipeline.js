@@ -184,51 +184,76 @@ function processImage() {
   }
 }
 
-// v140: Floyd-Steinberg 误差扩散抖动 — 有限色板下模拟更平滑过渡
-function applyFloydSteinberg(grid, srcRGB, N) {
-  if (!srcRGB) return;
-  // Floyd-Steinberg 扩散权重
-  var W = [7/16, 3/16, 5/16, 1/16];
-  // 为每个 cell 维护累积 RGB（初始 = srcRGB 采样值）
-  var acc = Array.from({ length: N }, function() { return new Array(N).fill(null); });
-  for (var y = 0; y < N; y++) {
-    for (var x = 0; x < N; x++) {
-      var s = srcRGB[y][x];
-      if (s) acc[y][x] = { r: s.r, g: s.g, b: s.b };
-    }
-  }
-  for (var y = 0; y < N; y++) {
-    for (var x = 0; x < N; x++) {
-      if (!acc[y][x]) continue;
-      var cur = acc[y][x];
-      // 将累积 RGB clamp 到有效范围
-      cur.r = Math.max(0, Math.min(255, Math.round(cur.r)));
-      cur.g = Math.max(0, Math.min(255, Math.round(cur.g)));
-      cur.b = Math.max(0, Math.min(255, Math.round(cur.b)));
-      // 找最近调色板色
-      var newId = mapToPalette(cur);
-      if (!newId) continue;
-      var palHex = PALETTE_BY_ID[newId].hex;
-      var pr = parseInt(palHex.slice(1,3), 16), pg = parseInt(palHex.slice(3,5), 16), pb = parseInt(palHex.slice(5,7), 16);
-      // 误差 = 累积RGB - 调色板RGB
-      var errR = cur.r - pr, errG = cur.g - pg, errB = cur.b - pb;
-      grid[y][x] = newId;
-      // 扩散到邻格
-      var neighbors = [[x+1,y,W[0]],[x-1,y+1,W[1]],[x,y+1,W[2]],[x+1,y+1,W[3]]];
-      for (var n = 0; n < 4; n++) {
-        var nx = neighbors[n][0], ny = neighbors[n][1], nw = neighbors[n][2];
-        if (nx < 0 || nx >= N || ny < 0 || ny >= N || !acc[ny][nx]) continue;
-        acc[ny][nx].r += errR * nw;
-        acc[ny][nx].g += errG * nw;
-        acc[ny][nx].b += errB * nw;
-      }
+// Floyd-Steinberg 单行处理（供分帧异步调用）
+var _fsW = [7/16, 3/16, 5/16, 1/16];
+function _fsProcessRow(grid, acc, y, N) {
+  for (var x = 0; x < N; x++) {
+    if (!acc[y][x]) continue;
+    var cur = acc[y][x];
+    cur.r = Math.max(0, Math.min(255, Math.round(cur.r)));
+    cur.g = Math.max(0, Math.min(255, Math.round(cur.g)));
+    cur.b = Math.max(0, Math.min(255, Math.round(cur.b)));
+    var newId = mapToPalette(cur);
+    if (!newId) continue;
+    var palHex = PALETTE_BY_ID[newId].hex;
+    var pr = parseInt(palHex.slice(1,3), 16), pg = parseInt(palHex.slice(3,5), 16), pb = parseInt(palHex.slice(5,7), 16);
+    var errR = cur.r - pr, errG = cur.g - pg, errB = cur.b - pb;
+    grid[y][x] = newId;
+    var nb = [[x+1,y,_fsW[0]],[x-1,y+1,_fsW[1]],[x,y+1,_fsW[2]],[x+1,y+1,_fsW[3]]];
+    for (var n = 0; n < 4; n++) {
+      var nx = nb[n][0], ny = nb[n][1], nw = nb[n][2];
+      if (nx < 0 || nx >= N || ny < 0 || ny >= N || !acc[ny][nx]) continue;
+      acc[ny][nx].r += errR * nw;
+      acc[ny][nx].g += errG * nw;
+      acc[ny][nx].b += errB * nw;
     }
   }
 }
 
+// v140: 同步 Floyd-Steinberg（小板子）
+function applyFloydSteinberg(grid, srcRGB, N) {
+  if (!srcRGB) return;
+  var acc = Array.from({ length: N }, function() { return new Array(N).fill(null); });
+  for (var y = 0; y < N; y++)
+    for (var x = 0; x < N; x++)
+      if (srcRGB[y][x]) acc[y][x] = { r: srcRGB[y][x].r, g: srcRGB[y][x].g, b: srcRGB[y][x].b };
+  for (var y = 0; y < N; y++) _fsProcessRow(grid, acc, y, N);
+}
+
+// v140: 异步分帧 Floyd-Steinberg（大板子，逐行 setTimeout）
+function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
+  if (!srcRGB) { onDone(); return; }
+  var acc = Array.from({ length: N }, function() { return new Array(N).fill(null); });
+  for (var y = 0; y < N; y++)
+    for (var x = 0; x < N; x++)
+      if (srcRGB[y][x]) acc[y][x] = { r: srcRGB[y][x].r, g: srcRGB[y][x].g, b: srcRGB[y][x].b };
+  var row = 0;
+  var batchSize = 4; // 每批处理 4 行
+  function nextBatch() {
+    var end = Math.min(row + batchSize, N);
+    for (; row < end; row++) _fsProcessRow(grid, acc, row, N);
+    if (row < N) { setTimeout(nextBatch, 0); }
+    else { onDone(); }
+  }
+  nextBatch();
+}
+
 function _finishPipeline(grid, N) {
   // v140: Floyd-Steinberg 抖动（在降噪之前，利用原图 RGB 信息）
-  if (state.dither) applyFloydSteinberg(grid, state.srcRGB, N);
+  if (state.dither) {
+    if (N <= 78) {
+      applyFloydSteinberg(grid, state.srcRGB, N);
+      _finishAfter(grid, N);
+    } else {
+      applyFloydSteinbergAsync(grid, state.srcRGB, N, function() {
+        _finishAfter(grid, N);
+      });
+      return; // async, _finishAfter will be called later
+    }
+  }
+  _finishAfter(grid, N);
+}
+function _finishAfter(grid, N) {
   // 清理去噪按常规执行（卡通/真实一致）
   cleanupNoise(grid, state.cleanup);
   // 去背景：默认关闭。关掉时整张图都参与拼豆，白色主体也正常标色号（解决「白色空白、识别不到主图」）；
