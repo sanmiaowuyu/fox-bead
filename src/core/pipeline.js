@@ -317,7 +317,7 @@ function cleanupNoise(grid, threshold) {
   // threshold 0-100 → Oklab 距离阈值
   const okT = 0.02 + (threshold / 100) * 0.22;
   const N = grid.length;
-  const lab = id => PALETTE_BY_ID[id] ? PALETTE_LAB.find(c => c.id === id).lab : null;
+  const lab = id => LAB_BY_ID[id] || null;
   for (let iter = 0; iter < 3; iter++) {
     const next = grid.map(r => r.slice());
     for (let y = 0; y < N; y++) {
@@ -782,10 +782,7 @@ function reduceColors(grid, maxColors) {
   for (const id of ids) mapping[id] = id;
 
   // 预取 Lab，避免反复 find；同时计算 lightness/chroma 用于浅色保护
-  const labOf = id => {
-    const c = PALETTE_LAB.find(c => c.id === id);
-    return c ? c.lab : null;
-  };
+  const labOf = id => LAB_BY_ID[id] || null;
   const labCache = {};
   const meta = {};
   for (const id of ids) {

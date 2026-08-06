@@ -643,32 +643,50 @@ function buildExportSVG(opts) {
 
   const showcode = opts.showcode;
   const codeFont = Math.max(7, Math.floor(C * 0.5));
-  // v100: 遍历 M×M 显示格，映射到 grid 源坐标（内容居中，四周为背景填充）
+  // v140: Run-length 合并 — 同行相邻同色格合成一个宽矩形，大幅减少 SVG 元素
   for (let gy = 0; gy < M; gy++) {
-    for (let gx = 0; gx < M; gx++) {
-      let id = null, isBgCell = false;
+    var runStart = 0;
+    var runId = null, runBg = false, runHex = '#FFFFFF';
+    var _getCell = function(gx) {
       if (gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
-        const sx = dr.srcMinX + (gx - dr.offX);
-        const sy = dr.srcMinY + (gy - dr.offY);
-        id = state.grid[sy][sx];
-        isBgCell = state.bgMask && state.bgMask[sy][sx];
+        var sx = dr.srcMinX + (gx - dr.offX);
+        var sy = dr.srcMinY + (gy - dr.offY);
+        var tid = state.grid[sy][sx];
+        var tbg = state.bgMask && state.bgMask[sy][sx];
+        return { id: tid, bg: tbg, hex: (tid && !tbg) ? PALETTE_BY_ID[tid].hex : '#FFFFFF' };
       }
-      const dispX = state.mirror ? (M - 1 - gx) : gx;
-      const px = patOX + dispX * C, py = patOY + gy * C;
-      // v136: 背景格画白色（白底导出，保证任意查看器正常显示）
-      if (id && !isBgCell) {
-        const hex = PALETTE_BY_ID[id].hex;
-        p.push('<rect x="' + px + '" y="' + py + '" width="' + C + '" height="' + C + '" fill="' + hex + '"/>');
-        // 色号：背景填充格不画色号（只有底色），主体格正常标注
-        if (showcode) {
-          const fill = isLight(hex) ? '#333333' : '#FFFFFF';
-          p.push('<text x="' + (px + C / 2) + '" y="' + (py + C / 2) + '" font-size="' + codeFont + '" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="' + fill + '">' + id + '</text>');
+      return { id: null, bg: false, hex: '#FFFFFF' };
+    };
+    var _flushRun = function(endGx) {
+      var w = (endGx - runStart) * C;
+      if (w <= 0) return;
+      // Mirror: run appears reversed, leftmost display position = M-endGx
+      var rpx = state.mirror ? patOX + (M - endGx) * C : patOX + runStart * C;
+      p.push('<rect x="' + rpx + '" y="' + (patOY + gy * C) + '" width="' + w + '" height="' + C + '" fill="' + runHex + '"/>');
+      // Color codes: still emit per-cell (text positions are unique)
+      if (showcode && runId && !runBg) {
+        for (var tx = runStart; tx < endGx; tx++) {
+          var tinfo = _getCell(tx);
+          if (tinfo.id && !tinfo.bg) {
+            var tpx = patOX + (state.mirror ? (M - 1 - tx) : tx) * C;
+            var tfill = isLight(tinfo.hex) ? '#333333' : '#FFFFFF';
+            p.push('<text x="' + (tpx + C / 2) + '" y="' + (patOY + gy * C + C / 2) + '" font-size="' + codeFont + '" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="' + tfill + '">' + tinfo.id + '</text>');
+          }
         }
-      } else {
-        // 背景格或空格：填白色
-        p.push('<rect x="' + px + '" y="' + py + '" width="' + C + '" height="' + C + '" fill="#FFFFFF"/>');
       }
+    };
+    for (var gx = 0; gx < M; gx++) {
+      var info = _getCell(gx);
+      var key = info.id || 'bg', isBg = !info.id || info.bg;
+      if (gx === runStart) { runId = info.id; runBg = isBg; runHex = info.hex; continue; }
+      if ((!isBg && !runBg && info.id === runId) || (isBg && runBg)) {
+        // same run, continue
+        continue;
+      }
+      _flushRun(gx);
+      runStart = gx; runId = info.id; runBg = isBg; runHex = info.hex;
     }
+    _flushRun(M);
   }
 
   // 豆子间隔线（始终显示，极淡）：让白色/浅色豆在白底上也能看出边界

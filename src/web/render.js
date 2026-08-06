@@ -31,8 +31,7 @@ function drawBeadBorders(c, ox, oy, cols, rows, cell, color) {
  *  实际拼豆仍按原色号（色板/清单/导出色号）统计，不受影响。 */
 function getVisibleFill(id) {
   if (!id || state.bgMode !== 'white') return PALETTE_BY_ID[id].hex;
-  const found = PALETTE_LAB.find(c => c.id === id);
-  const lab = found && found.lab;
+  const lab = LAB_BY_ID[id];
   if (!lab) return PALETTE_BY_ID[id].hex;
   // L 接近 1.0 的极浅色在白底上会消失，渲染时统一用浅灰显示
   if (lab.L > 0.92) return '#F5F5F5';

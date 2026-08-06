@@ -2,7 +2,7 @@
 function nearestAvailable(id) {
   const src = PALETTE_BY_ID[id];
   if (!src) return null;
-  const sLab = PALETTE_LAB.find(c => c.id === id).lab;
+  const sLab = LAB_BY_ID[id];
   let best = null, bestD = Infinity;
   for (const c of PALETTE_LAB) {
     if (state.excluded.has(c.id) || c.id === id) continue;

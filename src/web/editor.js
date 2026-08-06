@@ -259,26 +259,50 @@ function clearEditSelColor() {
       if (src && editOrigGrid[src.y] && editOrigGrid[src.y][src.x] !== undefined) {
         state.grid[src.y][src.x] = editOrigGrid[src.y][src.x];
         if (state.bgMask && editOrigBg && editOrigBg[src.y]) state.bgMask[src.y][src.x] = editOrigBg[src.y][src.x];
+        _patchEditCell(s.gx, s.gy, state.grid[src.y][src.x]);
       }
     }
-    renderEditCanvas(); renderCanvas(); renderStats();
+    renderCanvas(); renderStats();
   }
   setEditSel([]);
   drawEditOverlayCanvas();
 }
 
+// v140: 增量重绘单格（不重建整张编辑画布）
+function _patchEditCell(gx, gy, colorId) {
+  if (!editOctx || !editGeom) return;
+  var g = editGeom;
+  var dispX = state.mirror ? (g.M - 1 - gx) : gx;
+  var px = g.ox + dispX * g.cell;
+  var py = g.oy + gy * g.cell;
+  var cell = g.cell;
+  if (colorId == null) {
+    drawEmptyCell(editOctx, px, py, cell);
+  } else {
+    editOctx.fillStyle = PALETTE_BY_ID[colorId].hex;
+    editOctx.fillRect(px, py, cell, cell);
+  }
+  // 补画豆子间隔线（四周像素边界）
+  editOctx.strokeStyle = state.bgMode === 'black' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
+  editOctx.lineWidth = Math.max(1, Math.round(cell * 0.03));
+  editOctx.strokeRect(px, py, cell, cell);
+}
 // 选色后替换选中格子（选区保留，可继续点别的色）
 function applyEditColor(colorId) {
   if (!state.editSel || state.editSel.length === 0) return;
+  var patched = {};
   for (var i = 0; i < state.editSel.length; i++) {
     var s = state.editSel[i];
     var src = dispToSrc(s.gx, s.gy);
     if (src && state.grid[src.y] && state.grid[src.y][src.x] !== undefined) {
       state.grid[src.y][src.x] = colorId;
       if (state.bgMask && state.bgMask[src.y]) state.bgMask[src.y][src.x] = false;
+      _patchEditCell(s.gx, s.gy, colorId);
+      patched[s.gx + ',' + s.gy] = true;
     }
   }
-  renderEditCanvas();
+  drawEditOverlayCanvas();
+  // 主预览也增量更新（复用同一逻辑，renderCanvas 内部遍历 M×M 时自然会读最新 grid）
   renderCanvas();
   renderStats();
 }
