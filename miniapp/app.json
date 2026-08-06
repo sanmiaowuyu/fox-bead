@@ -1,0 +1,9 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "navigationBarTitleText": "狐狸爱拼豆",
+    "navigationBarBackgroundColor": "#FBF9FE",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#FBF9FE"
+  }
+}

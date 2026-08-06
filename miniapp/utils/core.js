@@ -1,3 +1,380 @@
+// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成
+// 版本: N/A
+
+/* ---------- 2. 颜色空间工具 ---------- */
+function hexToRgb(hex) {
+  const h = hex.replace('#', '');
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
+}
+function srgbToLinear(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function rgbToOklab({ r, g, b }) {
+  const lr = srgbToLinear(r), lg = srgbToLinear(g), lb = srgbToLinear(b);
+  const l = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb;
+  const m = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb;
+  const s = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb;
+  const l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
+  return {
+    L: 0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+    a: 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
+    b: 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_,
+  };
+}
+function oklabDist(p, q) {
+  const dL = p.L - q.L, da = p.a - q.a, db = p.b - q.b;
+  return Math.sqrt(dL * dL + da * da + db * db);
+}
+// 预计算调色板 Oklab（PALETTE_LAB 已在上方定义，固定 Mard 221 色）
+/* ---------- 1. 官方 Mard 221 色库（A~M 九系，按用户实物豆标准色卡） ---------- */
+/* 数据来自 pixelbead.art / pindou.online / pixel-beads.com 三源交叉核对一致 */
+const MARD_PALETTE = [
+  { id:'A1', name:'黄橙系', hex:'#FAF4C8' },
+  { id:'A2', name:'黄橙系', hex:'#FFFFD5' },
+  { id:'A3', name:'黄橙系', hex:'#FEFF8B' },
+  { id:'A4', name:'黄橙系', hex:'#FBED56' },
+  { id:'A5', name:'黄橙系', hex:'#F4D738' },
+  { id:'A6', name:'黄橙系', hex:'#FEAC4C' },
+  { id:'A7', name:'黄橙系', hex:'#FE8B4C' },
+  { id:'A8', name:'黄橙系', hex:'#FFDA45' },
+  { id:'A9', name:'黄橙系', hex:'#FF995B' },
+  { id:'A10', name:'黄橙系', hex:'#F77C31' },
+  { id:'A11', name:'黄橙系', hex:'#FFDD99' },
+  { id:'A12', name:'黄橙系', hex:'#FE9F72' },
+  { id:'A13', name:'黄橙系', hex:'#FFC365' },
+  { id:'A14', name:'黄橙系', hex:'#FD543D' },
+  { id:'A15', name:'黄橙系', hex:'#FFF365' },
+  { id:'A16', name:'黄橙系', hex:'#FFFF9F' },
+  { id:'A17', name:'黄橙系', hex:'#FFE36E' },
+  { id:'A18', name:'黄橙系', hex:'#FEBE7D' },
+  { id:'A19', name:'黄橙系', hex:'#FD7C72' },
+  { id:'A20', name:'黄橙系', hex:'#FFD568' },
+  { id:'A21', name:'黄橙系', hex:'#FFE395' },
+  { id:'A22', name:'黄橙系', hex:'#F4F57D' },
+  { id:'A23', name:'黄橙系', hex:'#E6C9B7' },
+  { id:'A24', name:'黄橙系', hex:'#F7F8A2' },
+  { id:'A25', name:'黄橙系', hex:'#FFD67D' },
+  { id:'A26', name:'黄橙系', hex:'#FFC830' },
+  { id:'B1', name:'绿色系', hex:'#E6EE31' },
+  { id:'B2', name:'绿色系', hex:'#63F347' },
+  { id:'B3', name:'绿色系', hex:'#9EF780' },
+  { id:'B4', name:'绿色系', hex:'#5DE035' },
+  { id:'B5', name:'绿色系', hex:'#35E352' },
+  { id:'B6', name:'绿色系', hex:'#65E2A6' },
+  { id:'B7', name:'绿色系', hex:'#3DAF80' },
+  { id:'B8', name:'绿色系', hex:'#1C9C4F' },
+  { id:'B9', name:'绿色系', hex:'#27523A' },
+  { id:'B10', name:'绿色系', hex:'#95D3C2' },
+  { id:'B11', name:'绿色系', hex:'#5D722A' },
+  { id:'B12', name:'绿色系', hex:'#166F41' },
+  { id:'B13', name:'绿色系', hex:'#CAEB7B' },
+  { id:'B14', name:'绿色系', hex:'#ADE946' },
+  { id:'B15', name:'绿色系', hex:'#2E5132' },
+  { id:'B16', name:'绿色系', hex:'#C5ED9C' },
+  { id:'B17', name:'绿色系', hex:'#9BB13A' },
+  { id:'B18', name:'绿色系', hex:'#E6EE49' },
+  { id:'B19', name:'绿色系', hex:'#24B88C' },
+  { id:'B20', name:'绿色系', hex:'#C2F0CC' },
+  { id:'B21', name:'绿色系', hex:'#156A6B' },
+  { id:'B22', name:'绿色系', hex:'#0B3C43' },
+  { id:'B23', name:'绿色系', hex:'#303A21' },
+  { id:'B24', name:'绿色系', hex:'#EEFCA5' },
+  { id:'B25', name:'绿色系', hex:'#4E846D' },
+  { id:'B26', name:'绿色系', hex:'#8D7A35' },
+  { id:'B27', name:'绿色系', hex:'#CCE1AF' },
+  { id:'B28', name:'绿色系', hex:'#9EE5B9' },
+  { id:'B29', name:'绿色系', hex:'#C5E254' },
+  { id:'B30', name:'绿色系', hex:'#E2FCB1' },
+  { id:'B31', name:'绿色系', hex:'#B0E792' },
+  { id:'B32', name:'绿色系', hex:'#9CAB5A' },
+  { id:'C1', name:'蓝青系', hex:'#E8FFE7' },
+  { id:'C2', name:'蓝青系', hex:'#A9F9FC' },
+  { id:'C3', name:'蓝青系', hex:'#A0E2FB' },
+  { id:'C4', name:'蓝青系', hex:'#41CCFF' },
+  { id:'C5', name:'蓝青系', hex:'#01ACEB' },
+  { id:'C6', name:'蓝青系', hex:'#50AAF0' },
+  { id:'C7', name:'蓝青系', hex:'#3677D2' },
+  { id:'C8', name:'蓝青系', hex:'#0F54C0' },
+  { id:'C9', name:'蓝青系', hex:'#324BCA' },
+  { id:'C10', name:'蓝青系', hex:'#3EBCE2' },
+  { id:'C11', name:'蓝青系', hex:'#28DDDE' },
+  { id:'C12', name:'蓝青系', hex:'#1C334D' },
+  { id:'C13', name:'蓝青系', hex:'#CDE8FF' },
+  { id:'C14', name:'蓝青系', hex:'#D5FDFF' },
+  { id:'C15', name:'蓝青系', hex:'#22C4C6' },
+  { id:'C16', name:'蓝青系', hex:'#1557A8' },
+  { id:'C17', name:'蓝青系', hex:'#04D1F6' },
+  { id:'C18', name:'蓝青系', hex:'#1D3344' },
+  { id:'C19', name:'蓝青系', hex:'#1887A2' },
+  { id:'C20', name:'蓝青系', hex:'#176DAF' },
+  { id:'C21', name:'蓝青系', hex:'#BEDDFF' },
+  { id:'C22', name:'蓝青系', hex:'#67B4BE' },
+  { id:'C23', name:'蓝青系', hex:'#C8E2FF' },
+  { id:'C24', name:'蓝青系', hex:'#7CC4FF' },
+  { id:'C25', name:'蓝青系', hex:'#A9E5E5' },
+  { id:'C26', name:'蓝青系', hex:'#3CAED8' },
+  { id:'C27', name:'蓝青系', hex:'#D3DFFA' },
+  { id:'C28', name:'蓝青系', hex:'#BBCFED' },
+  { id:'C29', name:'蓝青系', hex:'#34488E' },
+  { id:'D1', name:'蓝紫系', hex:'#AEB4F2' },
+  { id:'D2', name:'蓝紫系', hex:'#858EDD' },
+  { id:'D3', name:'蓝紫系', hex:'#2F54AF' },
+  { id:'D4', name:'蓝紫系', hex:'#182A84' },
+  { id:'D5', name:'蓝紫系', hex:'#B843C5' },
+  { id:'D6', name:'蓝紫系', hex:'#AC7BDE' },
+  { id:'D7', name:'蓝紫系', hex:'#8854B3' },
+  { id:'D8', name:'蓝紫系', hex:'#E2D3FF' },
+  { id:'D9', name:'蓝紫系', hex:'#D5B9F8' },
+  { id:'D10', name:'蓝紫系', hex:'#361851' },
+  { id:'D11', name:'蓝紫系', hex:'#B9BAE1' },
+  { id:'D12', name:'蓝紫系', hex:'#DE9AD4' },
+  { id:'D13', name:'蓝紫系', hex:'#B90095' },
+  { id:'D14', name:'蓝紫系', hex:'#8B279B' },
+  { id:'D15', name:'蓝紫系', hex:'#2F1F90' },
+  { id:'D16', name:'蓝紫系', hex:'#E3E1EE' },
+  { id:'D17', name:'蓝紫系', hex:'#C4D4F6' },
+  { id:'D18', name:'蓝紫系', hex:'#A45EC7' },
+  { id:'D19', name:'蓝紫系', hex:'#D8C3D7' },
+  { id:'D20', name:'蓝紫系', hex:'#9C32B2' },
+  { id:'D21', name:'蓝紫系', hex:'#9A009B' },
+  { id:'D22', name:'蓝紫系', hex:'#333A95' },
+  { id:'D23', name:'蓝紫系', hex:'#EBDAFC' },
+  { id:'D24', name:'蓝紫系', hex:'#7786E5' },
+  { id:'D25', name:'蓝紫系', hex:'#494FC7' },
+  { id:'D26', name:'蓝紫系', hex:'#DFC2F8' },
+  { id:'E1', name:'粉玫系', hex:'#FDD3CC' },
+  { id:'E2', name:'粉玫系', hex:'#FEC0DF' },
+  { id:'E3', name:'粉玫系', hex:'#FFB7E7' },
+  { id:'E4', name:'粉玫系', hex:'#E8649E' },
+  { id:'E5', name:'粉玫系', hex:'#F551A2' },
+  { id:'E6', name:'粉玫系', hex:'#F13D74' },
+  { id:'E7', name:'粉玫系', hex:'#C63478' },
+  { id:'E8', name:'粉玫系', hex:'#FFDBE9' },
+  { id:'E9', name:'粉玫系', hex:'#E970CC' },
+  { id:'E10', name:'粉玫系', hex:'#D33793' },
+  { id:'E11', name:'粉玫系', hex:'#FCDDD2' },
+  { id:'E12', name:'粉玫系', hex:'#F78FC3' },
+  { id:'E13', name:'粉玫系', hex:'#B5006D' },
+  { id:'E14', name:'粉玫系', hex:'#FFD1BA' },
+  { id:'E15', name:'粉玫系', hex:'#F8C7C9' },
+  { id:'E16', name:'粉玫系', hex:'#FFF3EB' },
+  { id:'E17', name:'粉玫系', hex:'#FFE2EA' },
+  { id:'E18', name:'粉玫系', hex:'#FFC7DB' },
+  { id:'E19', name:'粉玫系', hex:'#FEBAD5' },
+  { id:'E20', name:'粉玫系', hex:'#D8C7D1' },
+  { id:'E21', name:'粉玫系', hex:'#BD9DA1' },
+  { id:'E22', name:'粉玫系', hex:'#B785A1' },
+  { id:'E23', name:'粉玫系', hex:'#937A8D' },
+  { id:'E24', name:'粉玫系', hex:'#E1BCE8' },
+  { id:'F1', name:'红色系', hex:'#FD957B' },
+  { id:'F2', name:'红色系', hex:'#FC3D46' },
+  { id:'F3', name:'红色系', hex:'#F74941' },
+  { id:'F4', name:'红色系', hex:'#FC283C' },
+  { id:'F5', name:'红色系', hex:'#E7002F' },
+  { id:'F6', name:'红色系', hex:'#943630' },
+  { id:'F7', name:'红色系', hex:'#971937' },
+  { id:'F8', name:'红色系', hex:'#BC0028' },
+  { id:'F9', name:'红色系', hex:'#E2677A' },
+  { id:'F10', name:'红色系', hex:'#8A4526' },
+  { id:'F11', name:'红色系', hex:'#5A2121' },
+  { id:'F12', name:'红色系', hex:'#FD4E6A' },
+  { id:'F13', name:'红色系', hex:'#F35744' },
+  { id:'F14', name:'红色系', hex:'#FFA9AD' },
+  { id:'F15', name:'红色系', hex:'#D30022' },
+  { id:'F16', name:'红色系', hex:'#FEC2A6' },
+  { id:'F17', name:'红色系', hex:'#E69C79' },
+  { id:'F18', name:'红色系', hex:'#D37C46' },
+  { id:'F19', name:'红色系', hex:'#C1444A' },
+  { id:'F20', name:'红色系', hex:'#CD9391' },
+  { id:'F21', name:'红色系', hex:'#F7B4C6' },
+  { id:'F22', name:'红色系', hex:'#FDC0D0' },
+  { id:'F23', name:'红色系', hex:'#F67E66' },
+  { id:'F24', name:'红色系', hex:'#E698AA' },
+  { id:'F25', name:'红色系', hex:'#E54B4F' },
+  { id:'G1', name:'棕肤系', hex:'#FFE2CE' },
+  { id:'G2', name:'棕肤系', hex:'#FFC4AA' },
+  { id:'G3', name:'棕肤系', hex:'#F4C3A5' },
+  { id:'G4', name:'棕肤系', hex:'#E1B383' },
+  { id:'G5', name:'棕肤系', hex:'#EDB045' },
+  { id:'G6', name:'棕肤系', hex:'#E99C17' },
+  { id:'G7', name:'棕肤系', hex:'#9D5B3E' },
+  { id:'G8', name:'棕肤系', hex:'#753832' },
+  { id:'G9', name:'棕肤系', hex:'#E6B483' },
+  { id:'G10', name:'棕肤系', hex:'#D98C39' },
+  { id:'G11', name:'棕肤系', hex:'#E0C593' },
+  { id:'G12', name:'棕肤系', hex:'#FFC890' },
+  { id:'G13', name:'棕肤系', hex:'#B7714A' },
+  { id:'G14', name:'棕肤系', hex:'#8D614C' },
+  { id:'G15', name:'棕肤系', hex:'#FCF9E0' },
+  { id:'G16', name:'棕肤系', hex:'#F2D9BA' },
+  { id:'G17', name:'棕肤系', hex:'#78524B' },
+  { id:'G18', name:'棕肤系', hex:'#FFE4CC' },
+  { id:'G19', name:'棕肤系', hex:'#E07935' },
+  { id:'G20', name:'棕肤系', hex:'#A94023' },
+  { id:'G21', name:'棕肤系', hex:'#B88558' },
+  { id:'H1', name:'黑白系', hex:'#FDFBFF' },
+  { id:'H2', name:'黑白系', hex:'#FEFFFF' },
+  { id:'H3', name:'黑白系', hex:'#B6B1BA' },
+  { id:'H4', name:'黑白系', hex:'#89858C' },
+  { id:'H5', name:'黑白系', hex:'#48464E' },
+  { id:'H6', name:'黑白系', hex:'#2F2B2F' },
+  { id:'H7', name:'黑白系', hex:'#000000' },
+  { id:'H8', name:'黑白系', hex:'#E7D6DB' },
+  { id:'H9', name:'黑白系', hex:'#EDEDED' },
+  { id:'H10', name:'黑白系', hex:'#EEE9EA' },
+  { id:'H11', name:'黑白系', hex:'#CECDD5' },
+  { id:'H12', name:'黑白系', hex:'#FFF5ED' },
+  { id:'H13', name:'黑白系', hex:'#F5ECD2' },
+  { id:'H14', name:'黑白系', hex:'#CFD7D3' },
+  { id:'H15', name:'黑白系', hex:'#98A6A8' },
+  { id:'H16', name:'黑白系', hex:'#1D1414' },
+  { id:'H17', name:'黑白系', hex:'#F1EDED' },
+  { id:'H18', name:'黑白系', hex:'#FFFDF0' },
+  { id:'H19', name:'黑白系', hex:'#F6EFE2' },
+  { id:'H20', name:'黑白系', hex:'#949FA3' },
+  { id:'H21', name:'黑白系', hex:'#FFFBE1' },
+  { id:'H22', name:'黑白系', hex:'#CACAD4' },
+  { id:'H23', name:'黑白系', hex:'#9A9D94' },
+  { id:'M1', name:'大地系', hex:'#BCC6B8' },
+  { id:'M2', name:'大地系', hex:'#8AA386' },
+  { id:'M3', name:'大地系', hex:'#697D80' },
+  { id:'M4', name:'大地系', hex:'#E3D2BC' },
+  { id:'M5', name:'大地系', hex:'#D0CCAA' },
+  { id:'M6', name:'大地系', hex:'#B0A782' },
+  { id:'M7', name:'大地系', hex:'#B4A497' },
+  { id:'M8', name:'大地系', hex:'#B38281' },
+  { id:'M9', name:'大地系', hex:'#A58767' },
+  { id:'M10', name:'大地系', hex:'#C5B2BC' },
+  { id:'M11', name:'大地系', hex:'#9F7594' },
+  { id:'M12', name:'大地系', hex:'#644749' },
+  { id:'M13', name:'大地系', hex:'#D19066' },
+  { id:'M14', name:'大地系', hex:'#C77362' },
+  { id:'M15', name:'大地系', hex:'#757D78' },
+];
+function fromEntries(entries) { const obj = {}; for (let i = 0; i < entries.length; i++) { obj[entries[i][0]] = entries[i][1]; } return obj; }
+
+const BRAND_LABEL = 'Mard';
+const PALETTE = MARD_PALETTE;
+const PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
+const PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+const LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// 背景填充专用：最接近纯黑 / 纯白的调色板色号
+let BG_BLACK_ID = null, BG_WHITE_ID = null;
+function updateBgIds() {
+  let bestB = null, bestBD = Infinity, bestW = null, bestWD = Infinity;
+  for (const c of PALETTE_LAB) {
+    const r = parseInt(c.hex.slice(1, 3), 16), g = parseInt(c.hex.slice(3, 5), 16), b = parseInt(c.hex.slice(5, 7), 16);
+    const dk = r * r + g * g + b * b;
+    const wt = (255 - r) * (255 - r) + (255 - g) * (255 - g) + (255 - b) * (255 - b);
+    if (dk < bestBD) { bestBD = dk; bestB = c.id; }
+    if (wt < bestWD) { bestWD = wt; bestW = c.id; }
+  }
+  BG_BLACK_ID = bestB; BG_WHITE_ID = bestW;
+}
+updateBgIds();
+// 提亮映射表：每个色号 → 同系列（同首字母）里亮度高一档的真实色号
+// 每系按 Oklab L 升序排列（暗→亮），每个色号指向下一个更亮的；最亮的保持自身不变
+let BRIGHTEN_MAP = {};
+function buildBrightenMap() {
+  BRIGHTEN_MAP = {};
+  const series = {};
+  for (const c of PALETTE_LAB) {
+    const m = c.id.match(/^([A-Za-z]+)/);
+    if (!m) continue;
+    const letter = m[1];
+    if (!series[letter]) series[letter] = [];
+    series[letter].push(c);
+  }
+  for (const letter in series) {
+    const colors = series[letter].sort(function(a, b) { return a.lab.L - b.lab.L; });
+    for (var i = 0; i < colors.length; i++) {
+      BRIGHTEN_MAP[colors[i].id] = (i + 1 < colors.length) ? colors[i + 1].id : colors[i].id;
+    }
+  }
+}
+buildBrightenMap();
+/* ---------- 3. 状态 ---------- */
+const CELL = 28; // 画布内每格像素
+const state = {
+  sourceImage: null,     // 原图 Image
+  grid: null,            // grid[y][x] = colorId | null
+  N: 104,                // 默认 104×104（2.6mm 小豆超大板 28×28cm）
+  view: 'template',      // 'template' | 'original'
+  zoom: 1,
+  mode: 'average',       // 'cartoon' | 'average'（卡通 / 真实，默认真实模式）
+  dither: false,         // 抖动已随模式固化，当前各模式均关闭抖动，由采样方式决定风格
+  cleanup: 5,
+  crop: false,           // 默认不裁剪：原图按比例居中(letterbox)显示，四周留白，不裁不拉
+  mirror: false,         // 镜像翻转（左右）：预览 / 图纸 / 采购清单同步翻转
+  showGrid: true,
+  bgMode: 'white',       // 一键切换背景：'black' 黑底 / 'white' 白底（默认白底）
+  removeBg: false,        // 自动去背景：默认关，整张图都参与拼豆（白色主体正常标色号）；纯色背景图才手动开
+  brighten: false,        // 提亮一档：默认关，开后每个色号替换成同系列更亮一档的真实色号
+  outline: { on: false, strength: 50, colorId: 'H7' }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。
+  paletteView: 'grid',   // 右侧色板清单视图：'grid' 紧凑色块 / 'list' 行列表
+  showCoords: true,      // 画布预览是否显示坐标数字（左侧/底部轴）
+  excluded: new Set(),   // 用户排除的颜色
+  maxColors: 24,         // 最终图纸颜色数量上限（4~64），与默认真实模式一致；切模式时按预设自动调整为 8/24
+  bgMask: null,          // 二维布尔数组：true=该格为背景填充（导出不画色号、不计入用料）
+  bgStatus: '',           // 去背景状态反馈：''=未开启 / 'ok'=成功 / 'no_bg'=未检测到背景 / 'small'=板子太小跳过 / 'full'=主体占满
+  // v100: 编辑模式
+  editMode: false,       // 编辑模式开关
+  editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）
+};
+/* 处理模式说明 + 每个模式对应的参数预设 */
+const MODE_DESC = {
+  cartoon: '卡通：使用格子内最频繁的颜色，配合高清理阈值，形成干净、清晰的大色块，适合插画、Logo、新手体验。',
+  average: '真实：计算格子内所有颜色的平均值，保留光影渐变，24色作为日常主力，适合人像、宠物、风景。',
+};
+// 每个模式对应的预设参数（切模式时自动应用，用户可手动微调覆盖）
+const MODE_PRESET = {
+  cartoon: { dither: false, maxColors: 14, cleanup: 10 }, // v122: maxColors 实际由 recommendMaxColors 按板子覆盖；此处默认 104 板值
+  average: { dither: false, maxColors: 24, cleanup: 5 },
+};
+// v117: 按板子大小动态推荐颜色数——小板子格子少，颜色给太多会糊；板子越大越能还原。
+// 真实模式映射（v121 修正 78 偏色；v131 将 104 从 24 提到 26）：48→16, 52→20, 78→24, 104→26, 130→30。
+// 卡通模式（v122 设动态；v130 大幅提高）：用户实测 78 板卡通黑边全失、52 板更惨——根因是预算过低 +
+//   卡通 dominantColor 取众数把细黑勾边吃掉。v130 把卡通预算提到接近真实（仍少 4~6 色保持大色块感），
+//   并配合 dominantColor 暗部勾边加权 + reduceColors 描边色保护，确保黑边存活：48→10, 52→14, 78→18, 104→22, 130→26。
+// v118: 新增 130×130 巨幅板，真实模式颜色增至 30 色，专供结婚照/轿车/摩托车等大幅真实场景。
+function recommendMaxColors(mode, N) {
+  if (mode === 'cartoon') {
+    // v130: 卡通随板子动态（比真实少 4~6 色保持大色块感，但给足预算保黑边/特点）
+    if (N <= 48) return 10;
+    if (N <= 52) return 14;
+    if (N <= 78) return 18;
+    if (N <= 104) return 22;
+    return 26; // 130 巨幅板
+  }
+  if (N <= 48) return 16;
+  if (N <= 52) return 20;
+  if (N <= 78) return 24;   // 78 保持 24：保证色相正确（v121 修正 78 偏色）
+  if (N <= 104) return 26;  // 104 用户要求提到 26（v131）
+  return 30; // 130 巨幅板
+}
+function applyModePreset() {
+  const p = MODE_PRESET[state.mode];
+  if (!p) return;
+  state.dither = p.dither;
+  state.maxColors = recommendMaxColors(state.mode, state.N); // v117: 随板子大小推荐
+  state.cleanup = p.cleanup;
+  // 同步色数上限滑块
+  const mc = $('max-colors');
+  if (mc) mc.value = state.maxColors;
+  const mcv = $('max-colors-val');
+  if (mcv) mcv.textContent = state.maxColors;
+  // 同步杂色清理滑块
+  const cu = $('cleanup');
+  if (cu) cu.value = state.cleanup;
+  const cuv = $('cleanup-val');
+  if (cuv) cuv.textContent = state.cleanup;
+}
+function updateModeDesc() {
+  const el = $('mode-desc');
+  if (el) el.textContent = MODE_DESC[state.mode] || '';
+}
 /* ---------- 5. 图片处理管线 ---------- */
 function getCropRect(img) {
   if (!state.crop) return { sx: 0, sy: 0, sw: img.width, sh: img.height };
@@ -983,4 +1360,59 @@ function applyBrighten(grid) {
     }
   }
 }
+/* ---------- 6. 颜色排除 / 恢复 ---------- */
+function nearestAvailable(id) {
+  const src = PALETTE_BY_ID[id];
+  if (!src) return null;
+  const sLab = LAB_BY_ID[id];
+  let best = null, bestD = Infinity;
+  for (const c of PALETTE_LAB) {
+    if (state.excluded.has(c.id) || c.id === id) continue;
+    const d = oklabDist(sLab, c.lab);
+    if (d < bestD) { bestD = d; best = c.id; }
+  }
+  return best;
+}
+function excludeColor(id) {
+  if (state.excluded.has(id)) return;
+  state.excluded.add(id);
+  if (state.grid) {
+    for (let y = 0; y < state.N; y++)
+      for (let x = 0; x < state.N; x++)
+        if (state.grid[y][x] === id) state.grid[y][x] = nearestAvailable(id);
+  }
+  renderAll();
+}
+function restoreColor(id) {
+  if (!state.excluded.has(id)) return;
+  state.excluded.delete(id);
+  renderAll();
+}
 
+// 小程序适配层
+function processImageMini(imgData, N) {
+  // MVP: 简化管线 — 仅做颜色映射
+  var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });
+  var scale = Math.min(N / imgData.width, N / imgData.height);
+  var counts = {};
+  for (var y = 0; y < N; y++) {
+    for (var x = 0; x < N; x++) {
+      var sx = Math.floor(x / scale), sy = Math.floor(y / scale);
+      if (sx >= imgData.width || sy >= imgData.height) continue;
+      var i = (sy * imgData.width + sx) * 4;
+      var rgb = { r: imgData.data[i], g: imgData.data[i+1], b: imgData.data[i+2] };
+      if (imgData.data[i+3] < 128) continue;
+      var id = mapToPalette(rgb);
+      if (id) { grid[y][x] = id; counts[id] = (counts[id] || 0) + 1; }
+    }
+  }
+  return { grid: grid, totalBeads: Object.values(counts).reduce(function(a,b){return a+b;},0), colorCount: Object.keys(counts).length };
+}
+module.exports = {
+  PALETTE: PALETTE, PALETTE_BY_ID: PALETTE_BY_ID, PALETTE_LAB: PALETTE_LAB, LAB_BY_ID: LAB_BY_ID,
+  BRAND_LABEL: BRAND_LABEL, state: state,
+  hexToRgb: hexToRgb, rgbToOklab: rgbToOklab, oklabDist: oklabDist,
+  mapToPalette: mapToPalette, reduceColors: reduceColors,
+  buildBrightenMap: buildBrightenMap, updateBgIds: updateBgIds,
+  processImageMini: processImageMini
+};

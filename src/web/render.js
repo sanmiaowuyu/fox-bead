@@ -194,6 +194,34 @@ function renderCanvas() {
   renderGeom = { M: M, ox: ox, oy: oy, cell: cell };
 }
 function applyZoom() { renderCanvas(); }
+// v140: 增量重绘主预览单格（编辑器改色后只重绘被改格，不重建全图）
+function patchMainCell(gy, gx, colorId) {
+  if (!renderGeom || !state.grid) return;
+  var g = renderGeom;
+  var dr = state.displayRect;
+  var M = g.M;
+  if (gx < 0 || gx >= M || gy < 0 || gy >= M) return;
+  var dispX = state.mirror ? (M - 1 - gx) : gx;
+  var px = g.ox + dispX * g.cell;
+  var py = g.oy + gy * g.cell;
+  // 判定是否背景格
+  var bgY = gy, bgX = gx;
+  if (dr && gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
+    bgY = dr.srcMinY + (gy - dr.offY);
+    bgX = dr.srcMinX + (gx - dr.offX);
+  }
+  var isBg = isBgCell(bgY, bgX);
+  if (colorId == null || isBg) {
+    drawEmptyCell(ctx, px, py, g.cell);
+  } else {
+    ctx.fillStyle = PALETTE_BY_ID[colorId].hex;
+    ctx.fillRect(px, py, g.cell, g.cell);
+  }
+  // 补豆子间隔线
+  ctx.strokeStyle = state.bgMode === 'black' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = Math.max(1, Math.round(g.cell * 0.03));
+  ctx.strokeRect(px, py, g.cell, g.cell);
+}
 function updateBgHint() {
   var hint = document.getElementById('canvas-hint');
   if (!hint) return;

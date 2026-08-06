@@ -141,6 +141,9 @@ function bindEvents() {
   // 提亮一档开关（默认关，见 state.brighten）
   const bt = $('toggle-brighten');
   if (bt) bt.addEventListener('change', function(e) { state.brighten = e.target.checked; processImage(); });
+  // v140: Floyd-Steinberg 抖动开关
+  const dt = $('toggle-dither');
+  if (dt) dt.addEventListener('change', function(e) { state.dither = e.target.checked; processImage(); });
   // v123: 像素描边（后处理）——开关/强度/颜色均触发重算管线
   const ot = $('toggle-outline');
   if (ot) ot.addEventListener('change', function(e) { state.outline.on = e.target.checked; processImage(); });

@@ -1,0 +1,33 @@
+<view class="container">
+  <view class="header">
+    <text class="title">狐狸爱拼豆</text>
+    <text class="sub">图片一键生成拼豆图纸 · Mard 官方色库</text>
+  </view>
+
+  <view class="board-row">
+    <text class="label">板子：</text>
+    <picker mode="selector" range="{{boardSizes}}" value="{{boardIdx}}" bindchange="onBoardChange">
+      <view class="picker">{{boardSizes[boardIdx]}} 格</view>
+    </picker>
+  </view>
+
+  <view class="actions">
+    <button class="btn" bindtap="chooseImage">选择图片</button>
+    <button class="btn outline" bindtap="useSample">示例图片</button>
+  </view>
+
+  <view class="canvas-area" wx:if="{{hasImage}}">
+    <canvas canvas-id="beadCanvas" class="bead-canvas" style="width:{{canvasSize}}px;height:{{canvasSize}}px;"></canvas>
+    <view class="stats" wx:if="{{beadCount}}">
+      <text>{{beadCount}} 颗 · {{colorCount}} 色</text>
+    </view>
+  </view>
+
+  <view class="empty-hint" wx:if="{{!hasImage}}">
+    <text>请选择一张图片开始生成拼豆图纸</text>
+  </view>
+
+  <view class="footer" wx:if="{{hasImage}}">
+    <button class="btn primary" bindtap="exportImage">导出图纸</button>
+  </view>
+</view>

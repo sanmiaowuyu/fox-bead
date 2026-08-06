@@ -1,13 +1,27 @@
 #!/usr/bin/env node
 /**
  * build.js — 将 src/ 源文件 + assets/ 资源 构建为单文件 dist/index.html
- * 用法: node build.js
+ * 用法: node build.js [--bump]
+ *   --bump  构建前自动递增 APP_VERSION
  * 输出: dist/index.html
  */
 var fs = require('fs');
 var path = require('path');
 
 var ROOT = __dirname;
+
+// 版本号自增
+if (process.argv.indexOf('--bump') >= 0) {
+  var initPath = path.join(ROOT, 'src', 'core', 'init.js');
+  var initContent = fs.readFileSync(initPath, 'utf8');
+  var verMatch = initContent.match(/const APP_VERSION = '(\d+)'/);
+  if (verMatch) {
+    var newVer = parseInt(verMatch[1], 10) + 1;
+    initContent = initContent.replace(/const APP_VERSION = '\d+'/, "const APP_VERSION = '" + newVer + "'");
+    fs.writeFileSync(initPath, initContent, 'utf8');
+    console.log('Version bumped: ' + verMatch[1] + ' → ' + newVer);
+  }
+}
 var SRC = path.join(ROOT, 'src');
 var CORE = path.join(SRC, 'core');
 var WEB = path.join(SRC, 'web');
@@ -141,7 +155,48 @@ if (!fs.existsSync(DIST)) fs.mkdirSync(DIST, { recursive: true });
 var outPath = path.join(DIST, 'index.html');
 fs.writeFileSync(outPath, output, 'utf8');
 
-// ========== 7. 统计 ==========
+// ========== 7. 构建小程序核心算法包 ==========
+var MINIAPP = path.join(ROOT, 'miniapp');
+var MINIAPP_CORE = path.join(MINIAPP, 'utils', 'core.js');
+if (fs.existsSync(MINIAPP)) {
+  var mpModules = ['color.js', 'palette.js', 'state.js', 'presets.js', 'pipeline.js', 'colors.js'];
+  var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成\n// 版本: ' + (verMatch ? newVer : 'N/A') + '\n'];
+  for (var mi = 0; mi < mpModules.length; mi++) {
+    mpParts.push(readTrim(path.join(CORE, mpModules[mi])));
+  }
+  // Add mini-program adapter: export functions for require()
+  mpParts.push('\n// 小程序适配层');
+  mpParts.push('function processImageMini(imgData, N) {');
+  mpParts.push('  // MVP: 简化管线 — 仅做颜色映射');
+  mpParts.push('  var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });');
+  mpParts.push('  var scale = Math.min(N / imgData.width, N / imgData.height);');
+  mpParts.push('  var counts = {};');
+  mpParts.push('  for (var y = 0; y < N; y++) {');
+  mpParts.push('    for (var x = 0; x < N; x++) {');
+  mpParts.push('      var sx = Math.floor(x / scale), sy = Math.floor(y / scale);');
+  mpParts.push('      if (sx >= imgData.width || sy >= imgData.height) continue;');
+  mpParts.push('      var i = (sy * imgData.width + sx) * 4;');
+  mpParts.push('      var rgb = { r: imgData.data[i], g: imgData.data[i+1], b: imgData.data[i+2] };');
+  mpParts.push('      if (imgData.data[i+3] < 128) continue;');
+  mpParts.push('      var id = mapToPalette(rgb);');
+  mpParts.push('      if (id) { grid[y][x] = id; counts[id] = (counts[id] || 0) + 1; }');
+  mpParts.push('    }');
+  mpParts.push('  }');
+  mpParts.push('  return { grid: grid, totalBeads: Object.values(counts).reduce(function(a,b){return a+b;},0), colorCount: Object.keys(counts).length };');
+  mpParts.push('}');
+  mpParts.push('module.exports = {');
+  mpParts.push('  PALETTE: PALETTE, PALETTE_BY_ID: PALETTE_BY_ID, PALETTE_LAB: PALETTE_LAB, LAB_BY_ID: LAB_BY_ID,');
+  mpParts.push('  BRAND_LABEL: BRAND_LABEL, state: state,');
+  mpParts.push('  hexToRgb: hexToRgb, rgbToOklab: rgbToOklab, oklabDist: oklabDist,');
+  mpParts.push('  mapToPalette: mapToPalette, reduceColors: reduceColors,');
+  mpParts.push('  buildBrightenMap: buildBrightenMap, updateBgIds: updateBgIds,');
+  mpParts.push('  processImageMini: processImageMini');
+  mpParts.push('};');
+  fs.writeFileSync(MINIAPP_CORE, mpParts.join('\n'), 'utf8');
+  console.log('Mini-app core: ' + MINIAPP_CORE + ' (' + Math.round(Buffer.byteLength(mpParts.join('\n'), 'utf8') / 1024) + ' KB)');
+}
+
+// ========== 8. 统计 ==========
 var lines = output.split('\n').length;
 var sizeKB = Math.round(Buffer.byteLength(output, 'utf8') / 1024);
 var cssLines = cssMin.split('\n').length;

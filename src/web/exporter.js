@@ -355,37 +355,49 @@ function buildExportCanvas(opts) {
   const patOX = Math.floor((W - M * cell) / 2);   // 图案水平居中
   const patOY = titleH + pad;
 
-  // 绘制图案网格：遍历 M×M 显示格，映射到 grid 源坐标（内容居中，四周为背景填充）
-  for (let gy = 0; gy < M; gy++) {
-    for (let gx = 0; gx < M; gx++) {
-      let id = null, isBgCell = false;
-      if (gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
-        const sx = dr.srcMinX + (gx - dr.offX);
-        const sy = dr.srcMinY + (gy - dr.offY);
-        id = state.grid[sy][sx];
-        isBgCell = state.bgMask && state.bgMask[sy][sx];
-      }
-      const dispX = state.mirror ? (M - 1 - gx) : gx;   // 镜像：M×M 内水平翻转
-      const px = patOX + dispX * cell, py = patOY + gy * cell;
-      // v136: 背景格画白色（白底导出，保证手机/任意查看器正常显示）
-      if (id && !isBgCell) {
-        c.fillStyle = PALETTE_BY_ID[id].hex;
-        c.fillRect(px, py, cell, cell);
-      } else {
-        // 背景格或空格：填白色
-        c.fillStyle = '#FFFFFF';
-        c.fillRect(px, py, cell, cell);
-      }
-      // 色号：背景填充格不画色号（只有底色），主体格正常标注
-      if (id && !isBgCell && opts.showcode && cell >= 6) {
-        // 字号按色号长度自适应，保证多字符（如 F14）也塞进格子不出格；不加粗
-        const len = String(id).length;
-        const fitByWidth = (cell * 0.82) / (len * 0.6); // 每字符约 0.6em 宽
-        const fs = Math.max(6, Math.floor(Math.min(cell * 0.5, fitByWidth)));
-        c.fillStyle = isLight(PALETTE_BY_ID[id].hex) ? '#333' : '#fff';
-        c.font = `${fs}px monospace`;
-        c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillText(id, px + cell / 2, py + cell / 2);
+  // v140: 绘制图案网格 — 同行相邻同色格合并为宽矩形（减少 fillRect 调用）
+  var _pngGetCell = function(gx, gy) {
+    if (gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
+      var sx = dr.srcMinX + (gx - dr.offX);
+      var sy = dr.srcMinY + (gy - dr.offY);
+      var tid = state.grid[sy][sx];
+      var tbg = state.bgMask && state.bgMask[sy][sx];
+      return { id: tid, bg: tbg, hex: (tid && !tbg) ? PALETTE_BY_ID[tid].hex : '#FFFFFF' };
+    }
+    return { id: null, bg: false, hex: '#FFFFFF' };
+  };
+  for (var gy = 0; gy < M; gy++) {
+    var runStart = 0;
+    var runHex = '#FFFFFF', runId = null, runBg = false;
+    for (var gx = 0; gx < M; gx++) {
+      var info = _pngGetCell(gx, gy);
+      var isBg = !info.id || info.bg;
+      if (gx === runStart) { runId = info.id; runBg = isBg; runHex = info.hex; continue; }
+      if ((!isBg && !runBg && info.id === runId) || (isBg && runBg)) continue;
+      // Flush run
+      var rw = (gx - runStart) * cell;
+      var rpx = state.mirror ? patOX + (M - gx) * cell : patOX + runStart * cell;
+      c.fillStyle = runHex;
+      c.fillRect(rpx, patOY + gy * cell, rw, cell);
+      runStart = gx; runId = info.id; runBg = isBg; runHex = info.hex;
+    }
+    // Flush final run
+    var rw2 = (M - runStart) * cell;
+    var rpx2 = state.mirror ? patOX + (M - M) * cell : patOX + runStart * cell;
+    c.fillStyle = runHex;
+    c.fillRect(rpx2, patOY + gy * cell, rw2, cell);
+    // Color codes: per-cell (text positions are unique)
+    if (opts.showcode && cell >= 6) {
+      for (var tx = 0; tx < M; tx++) {
+        var tinfo2 = _pngGetCell(tx, gy);
+        if (tinfo2.id && !tinfo2.bg) {
+          var tpx = patOX + (state.mirror ? (M - 1 - tx) : tx) * cell;
+          var tfs = Math.max(6, Math.floor(Math.min(cell * 0.5, (cell * 0.82) / (String(tinfo2.id).length * 0.6))));
+          c.fillStyle = isLight(tinfo2.hex) ? '#333' : '#fff';
+          c.font = tfs + 'px monospace';
+          c.textAlign = 'center'; c.textBaseline = 'middle';
+          c.fillText(tinfo2.id, tpx + cell / 2, patOY + gy * cell + cell / 2);
+        }
       }
     }
   }

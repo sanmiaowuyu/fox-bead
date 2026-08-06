@@ -260,9 +260,10 @@ function clearEditSelColor() {
         state.grid[src.y][src.x] = editOrigGrid[src.y][src.x];
         if (state.bgMask && editOrigBg && editOrigBg[src.y]) state.bgMask[src.y][src.x] = editOrigBg[src.y][src.x];
         _patchEditCell(s.gx, s.gy, state.grid[src.y][src.x]);
+        patchMainCell(s.gy, s.gx, state.grid[src.y][src.x]);
       }
     }
-    renderCanvas(); renderStats();
+    renderStats();
   }
   setEditSel([]);
   drawEditOverlayCanvas();
@@ -298,12 +299,11 @@ function applyEditColor(colorId) {
       state.grid[src.y][src.x] = colorId;
       if (state.bgMask && state.bgMask[src.y]) state.bgMask[src.y][src.x] = false;
       _patchEditCell(s.gx, s.gy, colorId);
+      patchMainCell(s.gy, s.gx, colorId);
       patched[s.gx + ',' + s.gy] = true;
     }
   }
   drawEditOverlayCanvas();
-  // 主预览也增量更新（复用同一逻辑，renderCanvas 内部遍历 M×M 时自然会读最新 grid）
-  renderCanvas();
   renderStats();
 }
 

@@ -1,0 +1,16 @@
+.container { padding: 20rpx; background: #FBF9FE; min-height: 100vh; }
+.header { text-align: center; padding: 30rpx 0 20rpx; }
+.title { font-size: 40rpx; font-weight: 700; color: #211E2B; }
+.sub { font-size: 24rpx; color: #9A95A3; display: block; margin-top: 8rpx; }
+.board-row { display: flex; align-items: center; padding: 16rpx 24rpx; background: #fff; border-radius: 16rpx; margin: 16rpx 0; }
+.label { font-size: 28rpx; color: #211E2B; margin-right: 16rpx; }
+.picker { font-size: 28rpx; color: #6A4C93; font-weight: 600; }
+.actions { display: flex; gap: 16rpx; margin: 20rpx 0; }
+.btn { flex: 1; padding: 20rpx; border-radius: 16rpx; background: #E8E0F8; color: #6A4C93; font-size: 28rpx; font-weight: 600; text-align: center; border: 1rpx solid #E2D8F2; }
+.btn.primary { background: #E8E0F8; color: #6A4C93; }
+.btn.outline { background: #fff; }
+.canvas-area { display: flex; flex-direction: column; align-items: center; margin: 24rpx 0; }
+.bead-canvas { border-radius: 16rpx; box-shadow: 0 4rpx 24rpx rgba(0,0,0,0.1); }
+.stats { margin-top: 16rpx; font-size: 28rpx; color: #6B6675; }
+.empty-hint { text-align: center; padding: 120rpx 40rpx; color: #9A95A3; font-size: 28rpx; }
+.footer { padding: 20rpx 0; }

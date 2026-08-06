@@ -183,6 +183,11 @@
           <input id="max-colors" class="range" type="range" min="4" max="64" value="64" step="1" />
           <div class="slider-scale"><span>4</span><span>64</span></div>
           <div class="help-text tight">切模式时自动设置：卡通 16 色/清理 10、真实 24 色/清理 5（130 巨幅板 30 色）、极致 32 色/清理 2。也可手动微调。</div>
+        <div class="toggle-row">
+          <span class="toggle-name">Floyd-Steinberg 抖动</span>
+          <label class="switch"><input id="toggle-dither" type="checkbox" /><span class="knob"></span></label>
+        </div>
+        <div class="help-text tight">默认关。开启后在有限色板下模拟更平滑的色彩过渡，适合渐变丰富的照片。效果：颜色过渡更自然，但颗粒感略增。</div>
         </div>
       </div>
     </section>
