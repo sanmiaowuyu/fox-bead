@@ -225,11 +225,7 @@ const MARD_PALETTE = [
 ];
 function fromEntries(entries) { const obj = {}; for (let i = 0; i < entries.length; i++) { obj[entries[i][0]] = entries[i][1]; } return obj; }
 
-/* v101: 多品牌已下线，只做 Mard（用户 2026-07-29 拍板）。BRANDS/ACTIVE_BRAND 保留最小结构供导出文件名/分享图取品牌名 */
-const BRANDS = {
-  mard:   { key:'mard',   label:'Mard',   approx:false, palette: MARD_PALETTE },
-};
-const ACTIVE_BRAND = 'mard';
+const BRAND_LABEL = 'Mard';
 const PALETTE = MARD_PALETTE;
 const PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
 const PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
@@ -269,13 +265,3 @@ function buildBrightenMap() {
   }
 }
 buildBrightenMap();
-// v101: setBrand 已删除（多品牌下线，固定 Mard）
-function updateBrandUI() {
-  const tag = document.getElementById('brand-tag'); if (tag) tag.textContent = 'Mard';
-}
-
-function syncMirrorUI() {
-  const btn = document.getElementById('btn-mirror');
-  if (btn) btn.classList.toggle('active', !!state.mirror);
-}
-

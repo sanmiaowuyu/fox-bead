@@ -9,24 +9,27 @@ var path = require('path');
 
 var ROOT = __dirname;
 var SRC = path.join(ROOT, 'src');
+var CORE = path.join(SRC, 'core');
+var WEB = path.join(SRC, 'web');
 var ASSETS = path.join(ROOT, 'assets');
 var DIST = path.join(ROOT, 'dist');
 
-// JS 模块加载顺序（严格按依赖顺序）
+// JS 模块加载顺序（core/ 纯算法先加载，web/ 平台绑定后加载）
 var JS_MODULES = [
-  'init.js',
-  'palette.js',
-  'color.js',
-  'state.js',
-  'dom.js',
-  'pipeline.js',
-  'colors.js',
-  'render.js',
-  'editor.js',
-  'exporter.js',
-  'sample.js',
-  'events.js',
-  'main.js'
+  { dir: CORE, file: 'init.js' },
+  { dir: CORE, file: 'palette.js' },
+  { dir: CORE, file: 'color.js' },
+  { dir: CORE, file: 'state.js' },
+  { dir: CORE, file: 'presets.js' },
+  { dir: CORE, file: 'pipeline.js' },
+  { dir: CORE, file: 'colors.js' },
+  { dir: WEB,  file: 'dom.js' },
+  { dir: WEB,  file: 'render.js' },
+  { dir: WEB,  file: 'editor.js' },
+  { dir: WEB,  file: 'exporter.js' },
+  { dir: WEB,  file: 'sample.js' },
+  { dir: WEB,  file: 'events.js' },
+  { dir: WEB,  file: 'main.js' }
 ];
 
 // 需要内联为 data URI 的资源文件 → 对应的 JS 变量名
@@ -68,7 +71,7 @@ for (var assetFile in ASSET_MAP) {
 var assetBlock = '/* ---------- 0. 内联资源（构建时自动生成） ---------- */\n' + assetDeclarations.join('\n') + '\n';
 
 // ========== 2. 读取 CSS ==========
-var cssContent = readTrim(path.join(SRC, 'css', 'style.css'));
+var cssContent = readTrim(path.join(WEB, 'css', 'style.css'));
 
 // ========== 3. 拼接 JS ==========
 var JS_HEADER = '/* =========================================================================\n' +
@@ -79,7 +82,8 @@ var JS_HEADER = '/* ============================================================
 
 var jsParts = [JS_HEADER, assetBlock];
 for (var i = 0; i < JS_MODULES.length; i++) {
-  var jsContent = readTrim(path.join(SRC, 'js', JS_MODULES[i]));
+  var mod = JS_MODULES[i];
+  var jsContent = readTrim(path.join(mod.dir, mod.file));
   jsParts.push(jsContent);
 }
 var jsContent = jsParts.join('\n\n');
@@ -114,7 +118,7 @@ var cssMin = minifyCSS(cssContent);
 var jsMin = minifyJS(jsContent);
 
 // ========== 5. 读取模板并替换占位符 ==========
-var template = fs.readFileSync(path.join(SRC, 'template.html'), 'utf8');
+var template = fs.readFileSync(path.join(WEB, 'template.html'), 'utf8');
 
 // 替换 CSS 和 JS 占位符
 var output = template
@@ -146,5 +150,5 @@ console.log('Build complete: ' + outPath);
 console.log('  Lines: ' + lines + ' (was ~' + (template.split('\n').length + jsContent.split('\n').length + cssContent.split('\n').length) + ' before minify)');
 console.log('  Size:  ' + sizeKB + ' KB');
 console.log('  CSS:   ' + cssLines + ' lines (was ' + cssContent.split('\n').length + ')');
-console.log('  JS:    ' + jsLines + ' lines (was ' + jsContent.split('\n').length + ', ' + JS_MODULES.length + ' modules)');
+console.log('  JS:    ' + jsLines + ' lines (was ' + jsContent.split('\n').length + ', ' + JS_MODULES.length + ' modules: ' + (JS_MODULES.filter(function(m){return m.dir===CORE}).length) + ' core + ' + (JS_MODULES.filter(function(m){return m.dir===WEB}).length) + ' web)');
 console.log('  Assets: ' + Object.keys(ASSET_MAP).length + ' JS inlined, ' + Object.keys(HTML_ASSET_MAP).length + ' HTML inlined');

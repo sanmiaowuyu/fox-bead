@@ -1,4 +1,4 @@
-  --accent: #E8E0F8;
+--accent: #E8E0F8;
   --accent-ink: #6A4C93;
   --accent-soft: #F6F2FC;
   --accent-line: #E2D8F2;
@@ -197,13 +197,6 @@ body {
 .num-input { width: 56px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font-size: 13px; font-weight: 600; color: var(--ink); font-family: var(--mono); text-align: center; }
 .num-input:focus { outline: none; border-color: var(--accent-ink); }
 
-.brand-row { display: flex; align-items: center; gap: 8px; }
-.brand-select { display: flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--line); background: #fff; font-size: 12px; font-weight: 600; color: var(--ink); cursor: pointer; }
-.brand-select .chev { color: var(--ink3); font-size: 11px; }
-.pills { display: flex; gap: 5px; }
-.pill { padding: 4px 9px; border-radius: 12px; border: 1px solid var(--line); background: #fff; font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink2); cursor: pointer; transition: all .15s; }
-.pill.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-
 /* segmented */
 .seg { display: flex; gap: 4px; padding: 4px; border-radius: 10px; background: #fff; border: 1px solid var(--line2); width: fit-content; }
 .seg-item { border: none; background: transparent; padding: 6px 14px; border-radius: 7px; font-size: 13px; font-weight: 500; color: var(--ink2); cursor: pointer; font-family: var(--sans); transition: all .15s; }
@@ -237,12 +230,6 @@ body {
 #bead-canvas { border-radius: 16px; box-shadow: 0 12px 32px rgba(33,30,43,.10); border: 1px solid var(--line2); max-width: 100%; max-height: 100%; image-rendering: pixelated; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges; cursor: default; }
 .canvas-wrap.editing #bead-canvas { cursor: crosshair; }
 
-/* floating editor toolbar — text labels */
-.edit-toolbar { position: absolute; left: 14px; top: 14px; width: auto; background: #fff; border-radius: 14px; padding: 7px; display: flex; flex-direction: column; align-items: center; gap: 6px; box-shadow: 0 6px 16px rgba(33,30,43,.18); }
-.etool { min-width: 48px; height: 32px; border: none; background: var(--side); border-radius: 9px; font-size: 12px; color: var(--ink2); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0 8px; font-family: var(--sans); font-weight: 500; }
-.etool.active { background: var(--accent); color: var(--accent-ink); }
-.etool-div { width: 24px; height: 1px; background: var(--line); }
-.edit-badge { position: absolute; right: 14px; top: 14px; padding: 6px 12px; border-radius: 20px; background: var(--ink); color: #fff; font-size: 12px; font-weight: 600; }
 .canvas-hint { font-size: 12px; color: var(--ink3); text-align: center; }
 
 /* ===== Right panel ===== */
@@ -304,81 +291,7 @@ body {
 .grid-colors { display: flex; gap: 10px; }
 .gc { width: 26px; height: 26px; border-radius: 13px; border: 2px solid transparent; cursor: pointer; }
 
-/* ===== Guide Modal ===== */
-.guide-card { width: 480px; }
-.guide-demo { display: flex; align-items: center; justify-content: center; gap: 14px; background: var(--side); border-radius: 12px; padding: 14px; }
-.demo-img { width: 132px; height: 132px; object-fit: cover; border-radius: 8px; background: #fff; box-shadow: 0 2px 8px rgba(33,30,43,.08); }
-.demo-arrow { font-size: 24px; color: var(--accent-ink); font-weight: 700; }
-.guide-demo-cap { text-align: center; font-size: 12px; color: var(--ink3); margin-top: -4px; }
-.steps { display: flex; flex-direction: column; gap: 14px; }
-.step { display: flex; gap: 12px; align-items: flex-start; }
-.step-num { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
-.step-title { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 3px; }
-.step-desc { font-size: 12.5px; line-height: 1.6; color: var(--ink3); }
-.guide-tips { display: flex; gap: 8px; align-items: flex-start; background: var(--accent-soft); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; color: var(--ink2); }
-.tip-tag { flex: 0 0 auto; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
-.gc.active { border-color: var(--accent); }
 .modal-btns { display: flex; gap: 12px; margin-top: 4px; }
-
-/* ===== 放大预览弹窗 ===== */
-.preview-backdrop {
-  background: rgba(33, 30, 43, 0.78);
-  flex-direction: column;
-  cursor: grab;
-  overflow: hidden;
-}
-.preview-backdrop:active { cursor: grabbing; }
-.preview-hint {
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 18px;
-  background: #fff;
-  border-radius: 30px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ink);
-  box-shadow: 0 6px 18px rgba(33, 30, 43, 0.2);
-  z-index: 110;
-  pointer-events: none;
-}
-.preview-shortcut { font-size: 12px; font-weight: 500; color: var(--ink3); }
-.preview-canvas {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(33, 30, 43, 0.35);
-  image-rendering: pixelated;
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
-  touch-action: none;
-}
-.preview-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 38px;
-  height: 38px;
-  border: none;
-  border-radius: 50%;
-  background: #fff;
-  color: var(--ink2);
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(33, 30, 43, 0.2);
-  z-index: 110;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background .15s;
-}
-.preview-close:hover { background: var(--accent-soft); }
-
-
 
 /* ===== Tool button (canvas toolbar) ===== */
 .tool-btn {
@@ -395,17 +308,6 @@ body {
 /* ===== 画布工具栏左侧组 & 视图标签放大加粗 ===== */
 .tool-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 #view-seg .seg-item { padding: 8px 18px; font-size: 15px; font-weight: 700; }
-
-/* ===== 品牌色卡弹窗 ===== */
-.palette-card { width: 560px; max-width: 92vw; }
-.pal-meta { font-size: 12px; color: var(--ink3); margin: 2px 0 6px; }
-.palette-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; max-height: 54vh; min-height: 160px; overflow-y: auto; padding: 10px; background: #EDE9F8; border: 1px solid var(--line2); border-radius: 12px; position: relative; z-index: 1; }
-.pal-chip { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border-radius: 8px; background: var(--white); border: 1px solid var(--line2); box-shadow: 0 2px 6px rgba(33,30,43,.08); }
-.pal-chip:hover { background: var(--accent-soft); border-color: var(--accent); }
-.pal-swatch { width: 100%; height: 34px; border-radius: 6px; border: 1px solid rgba(33,30,43,.12); box-shadow: inset 0 0 0 1px rgba(255,255,255,.35); }
-.pal-id { font-size: 11px; font-weight: 700; color: var(--ink); font-family: var(--mono); }
-.pal-name { font-size: 10px; color: var(--ink3); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pal-empty { grid-column: 1 / -1; text-align: center; padding: 40px 12px; font-size: 13px; color: var(--ink3); }
 
 /* ===== Responsive（平板 / 手机） ===== */
 @media (max-width: 1024px) {
@@ -437,7 +339,6 @@ body {
   #view-seg .seg-item { padding: 6px 12px; font-size: 13px; font-weight: 600; }
   .tool-btn { padding: 6px 10px; font-size: 12px; }
 }
-
 
 /* ====================== v103: 编辑大图面板（按用户草图：左色板+右大图，右下角确认） ====================== */
 .edit-overlay {

@@ -208,7 +208,7 @@ function bindEvents() {
       stats: $('m-stats').checked,
     };
     if (!state.grid) { closeModal(); return; }
-    const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_${ACTIVE_BRAND.toUpperCase()}`;
+    const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_${'MARD'}`;
     if (isMobileDevice()) {
       // 手机端：先明确「生成中」，再显示图片长按保存（避免大图渲染时疑似卡死）
       closeModal();
@@ -295,57 +295,6 @@ function mobileQuickExport() {
 function openModal() { if (!state.grid) { alert('请先上传图片或载入示例'); return; } $('modal-backdrop').hidden = false; }
 function closeModal() { $('modal-backdrop').hidden = true; }
 
-/* 色卡弹窗：展示 Mard 完整色板（v101 起只做 Mard；弹窗本身仍处下线状态） */
-function openPaletteModal() {
-  // 先强制关闭可能挡在上面的其他弹窗
-  ['modal-backdrop'].forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.hidden = true;
-    el.style.display = 'none';
-    void el.offsetHeight;
-    el.style.display = '';
-  });
-
-  const bd = $('palette-backdrop');
-  bd.hidden = false;
-  bd.style.display = '';
-  // 同步立即渲染，确保内容第一时间进 DOM
-  renderBrandPalette(ACTIVE_BRAND);
-  // 多重异步兜底：setTimeout + requestAnimationFrame 各再渲染一次
-  setTimeout(() => renderBrandPalette(ACTIVE_BRAND), 0);
-  requestAnimationFrame(() => renderBrandPalette(ACTIVE_BRAND));
-}
-function renderBrandPalette(key) {
-  try {
-    const b = BRANDS[key];
-    const grid = $('palette-grid');
-    if (!b || !grid) {
-      if (grid) grid.innerHTML = '<div class="pal-empty">色板数据加载失败，请刷新页面重试</div>';
-      return;
-    }
-    document.querySelectorAll('#pal-brand-tabs .seg-item').forEach(s => s.classList.toggle('active', s.dataset.brand === key));
-    $('pal-meta').textContent = `${b.label} 共 ${b.palette.length} 色（完整官方色库）`;
-    grid.innerHTML = '';
-    if (!b.palette.length) {
-      grid.innerHTML = '<div class="pal-empty">该品牌暂无数据</div>';
-      return;
-    }
-    const frag = document.createDocumentFragment();
-    for (const c of b.palette) {
-      const chip = document.createElement('div');
-      chip.className = 'pal-chip';
-      chip.innerHTML = `<span class="pal-swatch" style="background:${c.hex};" aria-hidden="true"></span><span class="pal-id">${c.id}</span><span class="pal-name" title="${c.name}">${c.name}</span>`;
-      frag.appendChild(chip);
-    }
-    grid.appendChild(frag);
-  } catch (err) {
-    const grid = $('palette-grid');
-    if (grid) grid.innerHTML = `<div class="pal-empty">渲染出错：${err.message}<br>请按 Ctrl+F5 刷新后重试</div>`;
-    console.error('[品牌色卡] 渲染失败', err);
-  }
-}
-
 /* 载入示例图：固定为手捧白猫 sample.jpg（用户已确认不再更换）。
  * v133修复：部分托管平台(如艾可秀)的CSP策略会拦截 data:image URI 的 <img> 加载，
  *         导致示例图空白。改用 Blob+ObjectURL 方式绕过——先把 base64 解码为二进制 Blob，
@@ -421,4 +370,3 @@ function syncUI() {
   const mcv = $('max-colors-val');
   if (mcv) mcv.textContent = state.maxColors;
 }
-

@@ -233,7 +233,7 @@ async function buildShareCanvas() {
   c.fillStyle = '#6A4C93';
   c.font = `bold 26px ${font}`;
   c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(`${BRANDS[ACTIVE_BRAND].label} ${N}×${N} 拼豆还原 · 一键生成`, W / 2, H - 70);
+  c.fillText(`${BRAND_LABEL} ${N}×${N} 拼豆还原 · 一键生成`, W / 2, H - 70);
 
   // 水印：斜向平铺，覆盖整图，加深可见但不喧宾夺主
   c.save();

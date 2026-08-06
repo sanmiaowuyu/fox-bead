@@ -1,22 +1,3 @@
-/* ---------- 4. DOM ---------- */
-const $ = id => document.getElementById(id);
-const canvas = $('bead-canvas');
-const ctx = canvas.getContext('2d');
-const previewCanvas = $('preview-canvas');
-const previewCtx = previewCanvas && previewCanvas.getContext('2d');
-
-/* 放大预览状态 */
-const preview = {
-  cell: 8,          // 预览每格像素（越大越清晰）
-  zoom: 1,
-  minZoom: 0.2,
-  maxZoom: 8,
-  pan: { x: 0, y: 0 },
-  dragging: false,
-  last: { x: 0, y: 0 },
-  pattern: null,    // 缓存的图案区 canvas
-};
-
 /* 处理模式说明 + 每个模式对应的参数预设 */
 const MODE_DESC = {
   cartoon: '卡通：使用格子内最频繁的颜色，配合高清理阈值，形成干净、清晰的大色块，适合插画、Logo、新手体验。',
@@ -69,4 +50,3 @@ function updateModeDesc() {
   const el = $('mode-desc');
   if (el) el.textContent = MODE_DESC[state.mode] || '';
 }
-
