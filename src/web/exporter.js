@@ -477,7 +477,7 @@ function buildExportCanvas(opts) {
   }
 
   // ===== 采购清单（按色系分组）=====
-  if (showStats && sorted.length > 0) {
+  if (showStats && sorted.length > 0 && opts.bom !== false) {
     const seriesNames = { A:'黄橙系', B:'绿色系', C:'蓝青系', D:'蓝紫系', E:'粉玫系', F:'红色系', G:'棕肤系', H:'黑白系', M:'大地系' };
     const bySeries = {};
     for (const [id, cnt] of sorted) {
@@ -764,7 +764,7 @@ function buildExportSVG(opts) {
   }
 
   // ===== SVG 采购清单（按色系分组）=====
-  if (showStats && sorted.length > 0) {
+  if (showStats && sorted.length > 0 && opts.bom !== false) {
     const seriesNames = { A:'黄橙系', B:'绿色系', C:'蓝青系', D:'蓝紫系', E:'粉玫系', F:'红色系', G:'棕肤系', H:'黑白系', M:'大地系' };
     const bySeries = {};
     for (const [id2, cnt2] of sorted) {

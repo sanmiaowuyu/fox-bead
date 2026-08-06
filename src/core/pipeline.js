@@ -492,10 +492,15 @@ function removeBackground(grid = state.grid) {
   const mid = sorted[Math.floor(sorted.length / 2)];
   const bgLab = rgbToOklab({ r: mid.r, g: mid.g, b: mid.b });
 
-  // v139: 自动检测背景色——根据中位数亮度判断是亮底还是暗底，
-  // 不再硬性依赖用户手动切换 bgMode。用户选的 bgMode 仍影响画布底色渲染，
-  // 但去背景填充色由算法自动选择，解决"纯黑底图但停在白底"导致去不掉的问题。
-  var bgColorId = bgLab.L > 0.5 ? BG_WHITE_ID : BG_BLACK_ID;
+  // v140: 手动取样模式 — 直接用用户点击的背景色，绕过自动检测
+  var manualBg = state._manualBgRGB;
+  if (manualBg) {
+    bgColorId = mapToPalette(manualBg);
+    state._manualBgRGB = null;
+  } else {
+    // v139: 自动检测背景色
+    bgColorId = bgLab.L > 0.5 ? BG_WHITE_ID : BG_BLACK_ID;
+  }
   if (bgColorId == null) return;
 
   // —— 保护闸：仅当边界是「亮底或暗底且整体均匀」时才填充。
@@ -561,7 +566,7 @@ function removeBackground(grid = state.grid) {
     }
   }
 
-  if (!mainGate && !cornerGate) {
+  if (!mainGate && !cornerGate && !manualBg) {
     // 无统一亮/暗背景：保留原图，但仍把残留的 null 填充，避免图纸出现空号
     state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {

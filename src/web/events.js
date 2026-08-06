@@ -96,6 +96,8 @@ function bindEvents() {
   // v103: 编辑大图面板按钮（v102 缩放控件已移除）
   $('edit-exit').addEventListener('click', closeEditor);
   $('edit-clear').addEventListener('click', clearEditSelColor);
+  $('edit-undo').addEventListener('click', undoEdit);
+  $('edit-redo').addEventListener('click', redoEdit);
   // v126: 色号一键替换
   $('edit-replace-from').addEventListener('change', updateReplaceInfo);
   $('edit-replace-btn').addEventListener('click', replaceColorById);
@@ -144,6 +146,45 @@ function bindEvents() {
   // v140: Floyd-Steinberg 抖动开关
   const dt = $('toggle-dither');
   if (dt) dt.addEventListener('change', function(e) { state.dither = e.target.checked; processImage(); });
+  // v140: 手动取样背景色
+  var _samplingBg = false;
+  var sampleBtn = $('btn-sample-bg');
+  if (sampleBtn) sampleBtn.addEventListener('click', function() {
+    if (!state.grid) return;
+    _samplingBg = !_samplingBg;
+    sampleBtn.classList.toggle('active', _samplingBg);
+    sampleBtn.textContent = _samplingBg ? '请在画布背景区域点一下...' : '手动取样背景色';
+    canvas.style.cursor = _samplingBg ? 'crosshair' : 'default';
+  });
+  canvas.addEventListener('click', function(e) {
+    if (!_samplingBg || !state.srcRGB || !renderGeom) return;
+    var rect = canvas.getBoundingClientRect();
+    var dr = state.displayRect;
+    var M = dr ? dr.M : state.N;
+    var scaleX = M / (rect.width / renderGeom.cell);
+    // Actually compute grid position from click
+    var gx = Math.floor((e.clientX - rect.left) / rect.width * M);
+    var gy = Math.floor((e.clientY - rect.top) / rect.height * M);
+    if (gx < 0 || gx >= M || gy < 0 || gy >= M) return;
+    // Translate display coords to grid coords
+    var srcX = gx, srcY = gy;
+    if (dr && gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
+      srcX = dr.srcMinX + (gx - dr.offX);
+      srcY = dr.srcMinY + (gy - dr.offY);
+    }
+    if (state.mirror) srcX = M - 1 - srcX;
+    if (state.srcRGB[srcY] && state.srcRGB[srcY][srcX]) {
+      state._manualBgRGB = state.srcRGB[srcY][srcX];
+      state.removeBg = true;
+      var rb2 = $('toggle-removebg');
+      if (rb2) rb2.checked = true;
+      processImage();
+    }
+    _samplingBg = false;
+    sampleBtn.classList.remove('active');
+    sampleBtn.textContent = '手动取样背景色';
+    canvas.style.cursor = 'default';
+  });
   // v123: 像素描边（后处理）——开关/强度/颜色均触发重算管线
   const ot = $('toggle-outline');
   if (ot) ot.addEventListener('change', function(e) { state.outline.on = e.target.checked; processImage(); });
@@ -209,6 +250,7 @@ function bindEvents() {
       coords: $('m-coords').checked,
       showcode: $('m-showcode').checked,
       stats: $('m-stats').checked,
+      bom: $('m-bom') ? $('m-bom').checked : true,
     };
     if (!state.grid) { closeModal(); return; }
     const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_${'MARD'}`;
@@ -282,6 +324,7 @@ function mobileQuickExport() {
     coords: $('m-coords').checked,
     showcode: $('m-showcode').checked,
     stats: $('m-stats').checked,
+    bom: $('m-bom') ? $('m-bom').checked : true,
   };
   const loading = showGeneratingOverlay('正在生成图纸…');
   setTimeout(() => {

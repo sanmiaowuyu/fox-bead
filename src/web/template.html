@@ -119,7 +119,8 @@
           <span class="toggle-name">自动去背景</span>
           <label class="switch"><input id="toggle-removebg" type="checkbox" /><span class="knob"></span></label>
         </div>
-        <div class="help-text tight">默认关：整张图都拼豆。打开后自动识别并抠掉纯色背景（白底/黑底均可自动识别），只保留主体豆子。</div>
+        <div class="help-text tight">默认关：整张图都拼豆。打开后自动识别并抠掉纯色背景（白底/黑底均可自动识别），只保留主体豆子。<br>自动识别失败时，点下方按钮后在画布背景区域点一下即可手动指定背景色。</div>
+        <button id="btn-sample-bg" class="btn-ghost full" style="margin-top:4px;padding:6px 12px;font-size:12px;">手动取样背景色</button>
         <div class="toggle-row" style="margin-top:14px;">
           <span class="toggle-name">提亮一档</span>
           <label class="switch"><input id="toggle-brighten" type="checkbox" /><span class="knob"></span></label>
@@ -324,6 +325,10 @@
         <span class="modal-row-name">包含色号统计<small class="help-inline">底部列出各色号与数量</small></span>
         <label class="switch"><input id="m-stats" type="checkbox" checked /><span class="knob"></span></label>
       </div>
+      <div class="modal-row">
+        <span class="modal-row-name">包含采购清单<small class="help-inline">按色系分组的购物清单</small></span>
+        <label class="switch"><input id="m-bom" type="checkbox" checked /><span class="knob"></span></label>
+      </div>
 
       <div class="modal-btns">
         <button id="m-cancel" class="btn-ghost full">取消</button>
@@ -362,6 +367,8 @@
         <div class="edit-view-hint" id="edit-view-hint">100% · 滚轮缩放 · 右键/空格拖拽平移 · 双击选格</div>
         <button id="edit-reset-btn" class="edit-reset-btn" title="复位视图（居中适应）">复位视图</button>
         <div class="edit-actions">
+          <button id="edit-undo" class="edit-btn" title="撤销上一步操作">↩ 撤销</button>
+          <button id="edit-redo" class="edit-btn" title="重做已撤销的操作">↪ 重做</button>
           <button id="edit-clear" class="edit-btn" title="清除所选格子的改色（还原为原色）">清除</button>
           <button id="edit-exit" class="edit-btn primary">确认</button>
         </div>

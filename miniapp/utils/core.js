@@ -319,6 +319,7 @@ const state = {
   maxColors: 24,         // 最终图纸颜色数量上限（4~64），与默认真实模式一致；切模式时按预设自动调整为 8/24
   bgMask: null,          // 二维布尔数组：true=该格为背景填充（导出不画色号、不计入用料）
   bgStatus: '',           // 去背景状态反馈：''=未开启 / 'ok'=成功 / 'no_bg'=未检测到背景 / 'small'=板子太小跳过 / 'full'=主体占满
+  _manualBgRGB: null,     // v140: 手动取样背景色（{r,g,b}），设置后 removeBackground 跳过自动检测直接用此色
   // v100: 编辑模式
   editMode: false,       // 编辑模式开关
   editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）
@@ -869,10 +870,15 @@ function removeBackground(grid = state.grid) {
   const mid = sorted[Math.floor(sorted.length / 2)];
   const bgLab = rgbToOklab({ r: mid.r, g: mid.g, b: mid.b });
 
-  // v139: 自动检测背景色——根据中位数亮度判断是亮底还是暗底，
-  // 不再硬性依赖用户手动切换 bgMode。用户选的 bgMode 仍影响画布底色渲染，
-  // 但去背景填充色由算法自动选择，解决"纯黑底图但停在白底"导致去不掉的问题。
-  var bgColorId = bgLab.L > 0.5 ? BG_WHITE_ID : BG_BLACK_ID;
+  // v140: 手动取样模式 — 直接用用户点击的背景色，绕过自动检测
+  var manualBg = state._manualBgRGB;
+  if (manualBg) {
+    bgColorId = mapToPalette(manualBg);
+    state._manualBgRGB = null;
+  } else {
+    // v139: 自动检测背景色
+    bgColorId = bgLab.L > 0.5 ? BG_WHITE_ID : BG_BLACK_ID;
+  }
   if (bgColorId == null) return;
 
   // —— 保护闸：仅当边界是「亮底或暗底且整体均匀」时才填充。
@@ -938,7 +944,7 @@ function removeBackground(grid = state.grid) {
     }
   }
 
-  if (!mainGate && !cornerGate) {
+  if (!mainGate && !cornerGate && !manualBg) {
     // 无统一亮/暗背景：保留原图，但仍把残留的 null 填充，避免图纸出现空号
     state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {

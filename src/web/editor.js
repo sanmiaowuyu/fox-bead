@@ -126,6 +126,7 @@ function updateReplaceInfo() {
 }
 
 function replaceColorById() {
+  _pushUndo();
   var fromSel = $('edit-replace-from'), toSel = $('edit-replace-to');
   if (!fromSel || !fromSel.options.length) return;
   var fromId = fromSel.value, toId = toSel.value;
@@ -252,6 +253,7 @@ function setEditSel(list) {
 
 // v120: 「清除」=把选中格还原为打开编辑时的原色（撤销改色）+取消选中
 function clearEditSelColor() {
+  _pushUndo();
   if (state.editSel && state.editSel.length && editOrigGrid) {
     for (var i = 0; i < state.editSel.length; i++) {
       var s = state.editSel[i];
@@ -288,8 +290,35 @@ function _patchEditCell(gx, gy, colorId) {
   editOctx.lineWidth = Math.max(1, Math.round(cell * 0.03));
   editOctx.strokeRect(px, py, cell, cell);
 }
+// v140: 编辑撤销/重做
+var _undoStack = [], _redoStack = [], _maxUndo = 30;
+function _pushUndo() {
+  if (!state.grid) return;
+  var snap = { grid: state.grid.map(function(r) { return r.slice(); }), bgMask: state.bgMask ? state.bgMask.map(function(r) { return r.slice(); }) : null };
+  _undoStack.push(snap);
+  if (_undoStack.length > _maxUndo) _undoStack.shift();
+  _redoStack = [];
+}
+function undoEdit() {
+  if (!_undoStack.length || !state.grid) return;
+  _redoStack.push({ grid: state.grid.map(function(r) { return r.slice(); }), bgMask: state.bgMask ? state.bgMask.map(function(r) { return r.slice(); }) : null });
+  var snap = _undoStack.pop();
+  state.grid = snap.grid;
+  state.bgMask = snap.bgMask;
+  renderEditCanvas(); renderCanvas(); renderStats();
+}
+function redoEdit() {
+  if (!_redoStack.length || !state.grid) return;
+  _undoStack.push({ grid: state.grid.map(function(r) { return r.slice(); }), bgMask: state.bgMask ? state.bgMask.map(function(r) { return r.slice(); }) : null });
+  var snap = _redoStack.pop();
+  state.grid = snap.grid;
+  state.bgMask = snap.bgMask;
+  renderEditCanvas(); renderCanvas(); renderStats();
+}
 // 选色后替换选中格子（选区保留，可继续点别的色）
 function applyEditColor(colorId) {
+  if (!state.editSel || state.editSel.length === 0) return;
+  _pushUndo();
   if (!state.editSel || state.editSel.length === 0) return;
   var patched = {};
   for (var i = 0; i < state.editSel.length; i++) {
