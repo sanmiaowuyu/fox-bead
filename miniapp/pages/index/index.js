@@ -93,8 +93,10 @@ Page({
     core.state.N = N;
     core.state.sourceImage = { width: imgInfo.width, height: imgInfo.height };
 
-    // Simplified pipeline for MVP
-    // Full implementation would mirror web version's processImage
+    // processImageMini 与网页版 processImage 共用 src/core 同一套算法内核
+    // （取色 / 抖动 / 降噪 / 去背景 / 减色 / 提亮 / 描边），非简化版。
+    // 第三参数 opts 可选，缺省即：average 取色、不抖动、cleanup 5、maxColors 24、
+    // 不去背景、不提亮、不描边。后续页面加开关时按需透传即可。
     var result = core.processImageMini(imgData, N);
 
     if (result) {

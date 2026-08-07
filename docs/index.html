@@ -1222,19 +1222,10 @@ function updateModeDesc() {
   if (el) el.textContent = MODE_DESC[state.mode] || '';
 }
 
-function getCropRect(img) {
-  if (!state.crop) return { sx: 0, sy: 0, sw: img.width, sh: img.height };
-  const side = Math.min(img.width, img.height);
-  return { sx: (img.width - side) / 2, sy: (img.height - side) / 2, sw: side, sh: side };
-}
-function getSourceData(img) {
-
-  const cr = getCropRect(img);
-  const off = document.createElement('canvas');
-  off.width = cr.sw; off.height = cr.sh;
-  const octx = off.getContext('2d');
-  octx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, 0, 0, cr.sw, cr.sh);
-  return octx.getImageData(0, 0, cr.sw, cr.sh);
+function getCropRect(w, h) {
+  if (!state.crop) return { sx: 0, sy: 0, sw: w, sh: h };
+  var side = Math.min(w, h);
+  return { sx: (w - side) / 2, sy: (h - side) / 2, sw: side, sh: side };
 }
 function quantKey(r, g, b) { return ((r >> 4) << 10) | ((g >> 4) << 5) | (b >> 4); }
 
@@ -1275,40 +1266,8 @@ function mapToPalette(rgb) {
   return best; // 全排除时回退 null
 }
 
-function pixelateToGrid(img, N) {
-  const cr = getCropRect(img);
-  const off = document.createElement('canvas');
-  off.width = N; off.height = N;
-  const octx = off.getContext('2d');
-  octx.imageSmoothingEnabled = false; // 最近邻：每格取一个真实像素，避免均值糊成脏色
-
-  const scale = Math.min(N / cr.sw, N / cr.sh);
-  const dw = Math.max(1, Math.round(cr.sw * scale));
-  const dh = Math.max(1, Math.round(cr.sh * scale));
-  const dx = Math.floor((N - dw) / 2);
-  const dy = Math.floor((N - dh) / 2);
-  octx.clearRect(0, 0, N, N); // 透明底，四周留白 ⇒ 抖动/映射时判为 null
-  octx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, dx, dy, dw, dh);
-  return octx.getImageData(0, 0, N, N);
-}
-
-function buildSrcRGB(img, N) {
-
-  const imgData = pixelateToGrid(img, N);
-  const data = imgData.data;
-  const arr = Array.from({ length: N }, () => new Array(N).fill(null));
-  for (let y = 0; y < N; y++) {
-    for (let x = 0; x < N; x++) {
-      const i = (y * N + x) * 4;
-      if (data[i + 3] < 128) { arr[y][x] = null; continue; }
-      arr[y][x] = { r: data[i], g: data[i + 1], b: data[i + 2] };
-    }
-  }
-  return arr;
-}
-
-const REAL_SAT_ALPHA = 15.0; // 饱和度权重强度：值越大鲜艳特征越突出。v83 5.0→8.0 眼睛仍不够突出（蓝色占比仅61%），v89 8.0→15.0 提升到~74%
-const REAL_LUM_THRESHOLD = 0.9; // 亮度保护阈值：lum>此值的近白像素获得额外加权
+const REAL_SAT_ALPHA = 15.0; // 饱和度权重强度
+const REAL_LUM_THRESHOLD = 0.9; // 亮度保护阈值
 function satWeightedAverage(data, w, x0, y0, x1, y1, alpha) {
   let r = 0, g = 0, b = 0, wsum = 0;
   for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) {
@@ -1316,17 +1275,26 @@ function satWeightedAverage(data, w, x0, y0, x1, y1, alpha) {
     if (data[i + 3] < 128) continue; // 跳过透明
     const cr = data[i], cg = data[i + 1], cb = data[i + 2];
     const max = Math.max(cr, cg, cb), min = Math.min(cr, cg, cb);
-    const sat = max === 0 ? 0 : (max - min) / max; // 0~1 纯度（近白/近黑/灰≈0，鲜艳色高）
+    const sat = max === 0 ? 0 : (max - min) / max; // 0~1 纯度
     let wt = 1 + alpha * sat;
-
-    wt = wt * wt;
-
+    wt = wt * wt; // 非线性平方，让小面积高饱和特征更突出
     const lum = (0.299 * cr + 0.587 * cg + 0.114 * cb) / 255;
     if (lum > REAL_LUM_THRESHOLD) wt += alpha * (lum - REAL_LUM_THRESHOLD) * 10;
     r += cr * wt; g += cg * wt; b += cb * wt; wsum += wt;
   }
   if (wsum === 0) return null;
   return { r: Math.round(r / wsum), g: Math.round(g / wsum), b: Math.round(b / wsum) };
+}
+
+function sampleCellRGB(sd, x0, y0, x1, y1, mode) {
+  return (mode === 'average')
+    ? satWeightedAverage(sd.data, sd.width, x0, y0, x1, y1, REAL_SAT_ALPHA)
+    : dominantColor(sd.data, sd.width, sd.height, x0, y0, x1, y1, true);
+}
+
+function mapCell(sd, x0, y0, x1, y1, mode) {
+  const rgb = sampleCellRGB(sd, x0, y0, x1, y1, mode);
+  return rgb ? mapToPalette(rgb) : null;
 }
 
 var _chunkSize = 2000;
@@ -1340,49 +1308,13 @@ function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone
     var x0 = Math.floor(mx * cw), y0 = Math.floor(my * ch);
     var x1 = Math.max(x0 + 1, Math.floor((mx + 1) * cw));
     var y1 = Math.max(y0 + 1, Math.floor((my + 1) * ch));
-    var rgb = null;
-    if (state.mode === 'average') {
-      rgb = satWeightedAverage(sd.data, sd.width, x0, y0, x1, y1, REAL_SAT_ALPHA);
-    } else {
-      rgb = dominantColor(sd.data, sd.width, sd.height, x0, y0, x1, y1, true);
-    }
+    var rgb = sampleCellRGB(sd, x0, y0, x1, y1, state.mode);
     grid[y][x] = rgb ? mapToPalette(rgb) : null;
   }
   if (endIdx < N * N) {
     setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone); }, 0);
   } else {
     onDone();
-  }
-}
-
-function processImage() {
-  if (!state.sourceImage) return;
-  var _wrapEl = document.getElementById('canvas-wrap');
-  if (_wrapEl) _wrapEl.classList.add('processing');
-  var N = state.N;
-  state.srcRGB = buildSrcRGB(state.sourceImage, N);
-  var cr = getCropRect(state.sourceImage);
-  var sd = getSourceData(state.sourceImage);
-  var scale = Math.min(N / cr.sw, N / cr.sh);
-  var dw = Math.max(1, Math.round(cr.sw * scale));
-  var dh = Math.max(1, Math.round(cr.sh * scale));
-  var dx = Math.floor((N - dw) / 2);
-  var dy = Math.floor((N - dh) / 2);
-  var cw = cr.sw / dw, ch = cr.sh / dh;
-  var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });
-
-  if (N <= 78) {
-
-    _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, function() {
-      _finishPipeline(grid, N);
-    });
-  } else {
-
-    setTimeout(function() {
-      _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, function() {
-        _finishPipeline(grid, N);
-      });
-    }, 0);
   }
 }
 
@@ -1437,20 +1369,23 @@ function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
   nextBatch();
 }
 
-function _finishPipeline(grid, N) {
+function _finishPipeline(grid, N, onDone) {
 
   if (state.dither) {
     if (N <= 78) {
       applyFloydSteinberg(grid, state.srcRGB, N);
       _finishAfter(grid, N);
+      if (onDone) onDone();
     } else {
       applyFloydSteinbergAsync(grid, state.srcRGB, N, function() {
         _finishAfter(grid, N);
+        if (onDone) onDone();
       });
-      return; // async, _finishAfter will be called later
+      return; // async, _finishAfter 稍后调用
     }
   }
   _finishAfter(grid, N);
+  if (onDone) onDone();
 }
 function _finishAfter(grid, N) {
 
@@ -1476,7 +1411,7 @@ function _finishAfter(grid, N) {
     for (let x = 0; x < N; x++) {
       const id = grid[y][x];
       if (id == null) continue;
-      if (state.bgMask && state.bgMask[y][x]) continue; // 背景填充格不计入有效区
+      if (state.bgMask && state.bgMask[y][x]) continue;
       if (x < eminX) eminX = x;
       if (x > emaxX) emaxX = x;
       if (y < eminY) eminY = y;
@@ -1497,8 +1432,7 @@ function _finishAfter(grid, N) {
     for (var i = 0; i < corners.length; i++) cc[corners[i]] = (cc[corners[i]] || 0) + 1;
     var bgId = null, bgMax = 0;
     for (var id in cc) { if (cc[id] > bgMax) { bgMax = cc[id]; bgId = id; } }
-    if (bgMax < 3) return state.effective; // 四角不统一 → 无明确背景
-
+    if (bgMax < 3) return state.effective;
     var sMinY = eminY;
     while (sMinY <= emaxY) {
       var allBg = true;
@@ -1539,7 +1473,6 @@ function _finishAfter(grid, N) {
       if (!allBg4) break;
       sMaxX--;
     }
-
     var sArea = (sMaxX - sMinX + 1) * (sMaxY - sMinY + 1);
     var eArea = (emaxX - eminX + 1) * (emaxY - eminY + 1);
     if (sArea < eArea * 0.5) return state.effective;
@@ -1570,7 +1503,6 @@ function _finishAfter(grid, N) {
     var fy = fit(eff.rows, eff.minY);
     return { M: M, offX: fx.off, offY: fy.off, srcMinX: fx.srcStart, srcMinY: fy.srcStart, drawCols: fx.len, drawRows: fy.len };
   })();
-  renderAll();
 }
 function cleanupNoise(grid, threshold) {
 
@@ -1608,7 +1540,6 @@ function cleanupNoise(grid, threshold) {
 function applyOutline(grid, strength, colorId) {
   if (!colorId || !LAB_BY_ID[colorId]) return;
   const N = grid.length;
-
   const thr = 0.20 - (strength / 100) * 0.18;
   const lab = new Array(N * N);
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
@@ -1626,9 +1557,7 @@ function applyOutline(grid, strength, colorId) {
         const nx = x + nb[k][0], ny = y + nb[k][1];
         if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
         const nlab = lab[ny * N + nx];
-
         if (!nlab) { isEdge = true; break; }
-
         if (oklabDist(cur, nlab) > thr) { isEdge = true; break; }
       }
       if (isEdge) edge[y * N + x] = 1;
@@ -1644,7 +1573,6 @@ function removeBackground(grid = state.grid) {
   const srcRGB = state.srcRGB;
 
   state.bgMask = Array.from({ length: N }, () => new Array(N).fill(false));
-
   let minX = N, minY = N, maxX = -1, maxY = -1, nonNull = 0;
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
@@ -1655,28 +1583,23 @@ function removeBackground(grid = state.grid) {
       }
     }
   }
-  if (maxX < 0) return; // 全空
-
+  if (maxX < 0) return;
   const boundary = [];
   const acc = (x, y) => { const s = srcRGB[y][x]; if (s) boundary.push(s); };
   for (let x = minX; x <= maxX; x++) { acc(x, minY); acc(x, maxY); }
   for (let y = minY; y <= maxY; y++) { acc(minX, y); acc(maxX, y); }
   if (!boundary.length) return;
-
   const sorted = boundary.slice().sort((a, b) => (a.r + a.g + a.b) - (b.r + b.g + b.b));
   const mid = sorted[Math.floor(sorted.length / 2)];
   const bgLab = rgbToOklab({ r: mid.r, g: mid.g, b: mid.b });
-
   var manualBg = state._manualBgRGB;
   if (manualBg) {
     bgColorId = mapToPalette(manualBg);
     state._manualBgRGB = null;
   } else {
-
     bgColorId = bgLab.L > 0.5 ? BG_WHITE_ID : BG_BLACK_ID;
   }
   if (bgColorId == null) return;
-
   const topLab = boundary.map(s => rgbToOklab(s));
   let mL = 0;
   for (var ti = 0; ti < topLab.length; ti++) mL += topLab[ti].L;
@@ -1687,7 +1610,6 @@ function removeBackground(grid = state.grid) {
   var midL = bgLab.L;
   var mainGate = ((mL > 0.86 || mL < 0.35) && vL < 0.15) ||
                  ((midL > 0.88 || midL < 0.30) && vL < 0.18);
-
   var cornerGate = false;
   if (!mainGate && N > 40) {
     var corners_avg = [];
@@ -1713,11 +1635,9 @@ function removeBackground(grid = state.grid) {
       var cvL = 0;
       for (var cj = 0; cj < cLabs.length; cj++) cvL += (cLabs[cj].L - cmL) * (cLabs[cj].L - cmL);
       cvL = Math.sqrt(cvL / cLabs.length);
-
       cornerGate = ((cmL > 0.90 || cmL < 0.22) && cvL < 0.08);
-
       if (cornerGate) {
-        var bestCornerL = cmL > 0.5 ? 0 : 1; // 找最亮/最暗的角落
+        var bestCornerL = cmL > 0.5 ? 0 : 1;
         var bestCorner = null, bestScore = -1;
         for (var cw = 0; cw < corners_avg.length; cw++) {
           var cl = rgbToOklab(corners_avg[cw]).L;
@@ -1732,9 +1652,7 @@ function removeBackground(grid = state.grid) {
       }
     }
   }
-
   if (!mainGate && !cornerGate && !manualBg) {
-
     state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -1743,7 +1661,6 @@ function removeBackground(grid = state.grid) {
     }
     return;
   }
-
   if (N <= 52) {
     state.bgStatus = 'small';
     for (let y = minY; y <= maxY; y++) {
@@ -1751,22 +1668,19 @@ function removeBackground(grid = state.grid) {
         if (grid[y][x] == null) grid[y][x] = bgColorId;
       }
     }
-    if (grid === state.grid) renderAll();
     return;
   }
-
   var BG_T = 0.08;
-  if (vL < 0.05) BG_T = 0.12;       // 极纯背景（如纯白/纯黑）：放宽到 0.12
-  else if (vL < 0.10) BG_T = 0.10;  // 较纯：0.10
-  else BG_T = 0.08;                 // 一般：保持 0.08
+  if (vL < 0.05) BG_T = 0.12;
+  else if (vL < 0.10) BG_T = 0.10;
+  else BG_T = 0.08;
   const isBg = (x, y) => {
-    if (grid[y][x] == null) return false; // 透明留白不算背景
+    if (grid[y][x] == null) return false;
     const s = srcRGB[y][x];
     if (!s) return false;
     return oklabDist(rgbToOklab(s), bgLab) < BG_T;
   };
-
-  const DILATE_R = 2; // 膨胀半径（格）
+  const DILATE_R = 2;
   const isBgArr = Array.from({ length: N }, () => new Array(N).fill(false));
   const cover = Array.from({ length: N }, () => new Array(N).fill(false));
   for (let y = 0; y < N; y++) {
@@ -1777,7 +1691,7 @@ function removeBackground(grid = state.grid) {
       if (d < BG_T) {
         isBgArr[y][x] = true;
       } else {
-        cover[y][x] = true; // 确定前景种子
+        cover[y][x] = true;
       }
     }
   }
@@ -1799,15 +1713,13 @@ function removeBackground(grid = state.grid) {
     }
     for (let y = 0; y < N; y++) cover[y] = next[y];
   }
-
-  const EDGE_T = 42; // 0-255 RGB 欧氏距离阈值
+  const EDGE_T = 42;
   const edgeBetween = (x1, y1, x2, y2) => {
     const a = srcRGB[y1] && srcRGB[y1][x1], b = srcRGB[y2] && srcRGB[y2][x2];
     if (!a || !b) return 0;
     const dr = a.r - b.r, dg = a.g - b.g, db = a.b - b.b;
     return Math.sqrt(dr * dr + dg * dg + db * db);
   };
-
   const toFill = [];
   const visited = Array.from({ length: N }, () => new Array(N).fill(false));
   const queue = [];
@@ -1819,10 +1731,9 @@ function removeBackground(grid = state.grid) {
   const step = (fx, fy, x, y) => {
     if (x < 0 || x >= N || y < 0 || y >= N) return;
     if (visited[y][x] || !isBgArr[y][x] || cover[y][x]) return;
-    if (edgeBetween(fx, fy, x, y) > EDGE_T) return; // 硬边界：不穿越
+    if (edgeBetween(fx, fy, x, y) > EDGE_T) return;
     visited[y][x] = true; queue.push([x, y]);
   };
-
   for (let x = 0; x < N; x++) { seed(x, 0); seed(x, N - 1); }
   for (let y = 0; y < N; y++) { seed(0, y); seed(N - 1, y); }
   while (queue.length) {
@@ -1831,14 +1742,11 @@ function removeBackground(grid = state.grid) {
     step(x, y, x - 1, y); step(x, y, x + 1, y);
     step(x, y, x, y - 1); step(x, y, x, y + 1);
   }
-
   var gateConfident = (mL > 0.95 && vL < 0.05) || (mL < 0.08 && vL < 0.05) ||
                       (midL > 0.95 && vL < 0.06) || (midL < 0.06 && vL < 0.06);
   var safetyLimit = gateConfident ? 0.98 : 0.85;
   if (nonNull && toFill.length / nonNull > safetyLimit) { state.bgStatus = 'full'; return; }
-
   for (const [x, y] of toFill) { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
-
   {
     const visited2 = Array.from({ length: N }, () => new Array(N).fill(false));
     for (let y = minY; y <= maxY; y++) {
@@ -1868,22 +1776,16 @@ function removeBackground(grid = state.grid) {
       }
     }
   }
-
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
       if (grid[y][x] == null) grid[y][x] = bgColorId;
     }
   }
-
   fillEnclosedHoles(grid);
-
-  if (grid === state.grid) renderAll();
 }
-
 function fillEnclosedHoles(grid) {
   if (!grid || !state.bgMask) return;
   const N = grid.length;
-
   let minX = N, minY = N, maxX = -1, maxY = -1;
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
@@ -1901,7 +1803,6 @@ function fillEnclosedHoles(grid) {
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
       if (!isBg(x, y) || visited[y][x]) continue;
-
       const stack = [[x, y]];
       visited[y][x] = true;
       const cells = [];
@@ -1919,8 +1820,7 @@ function fillEnclosedHoles(grid) {
           stack.push([xx, yy]);
         }
       }
-      if (touchesBorder) continue; // 接触边框 = 真背景，保留
-
+      if (touchesBorder) continue;
       const near = {};
       for (const [cx, cy] of cells) {
         const nx = [cx - 1, cx + 1, cx, cx], ny = [cy, cy, cy - 1, cy + 1];
@@ -1936,7 +1836,7 @@ function fillEnclosedHoles(grid) {
       for (const id in near) {
         if (near[id] > best) { best = near[id]; fillId = +id; }
       }
-      if (fillId == null) continue; // 无邻居前景，保持不动
+      if (fillId == null) continue;
       for (const [cx, cy] of cells) {
         grid[cy][cx] = fillId;
         state.bgMask[cy][cx] = false;
@@ -1944,7 +1844,6 @@ function fillEnclosedHoles(grid) {
     }
   }
 }
-
 function computeMaxRegion(grid, bgMask) {
   const N = grid.length;
   const visited = new Uint8Array(N * N);
@@ -1973,26 +1872,22 @@ function computeMaxRegion(grid, bgMask) {
   }
   return maxReg;
 }
-
 function reduceColors(grid, maxColors) {
   if (!grid || maxColors <= 0) return;
   const N = grid.length;
-
   const counts = {};
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
       const id = grid[y][x];
       if (id == null) continue;
-      if (state.bgMask && state.bgMask[y][x]) continue; // 背景填充格不参与合并
+      if (state.bgMask && state.bgMask[y][x]) continue;
       counts[id] = (counts[id] || 0) + 1;
     }
   }
   let ids = Object.keys(counts);
   if (ids.length <= maxColors) return;
-
   const mapping = {};
   for (const id of ids) mapping[id] = id;
-
   const labOf = id => LAB_BY_ID[id] || null;
   const labCache = {};
   const meta = {};
@@ -2001,32 +1896,25 @@ function reduceColors(grid, maxColors) {
     labCache[id] = lab;
     if (lab) meta[id] = { L: lab.L, C: Math.sqrt(lab.a * lab.a + lab.b * lab.b) };
   }
-
   const lightest = new Set(ids.slice().sort((a, b) => ((meta[b] && meta[b].L) || 0) - ((meta[a] && meta[a].L) || 0)).slice(0, Math.max(3, Math.ceil(ids.length * 0.15))));
-
   const CONTRAST_THRESHOLD = 0.12;
   const contrastProtected = new Set();
-
   const regionSize = computeMaxRegion(grid, state.bgMask);
   const MIN_FEATURE = 2;
   for (const id of ids) {
     if ((regionSize[id] || 0) >= MIN_FEATURE) contrastProtected.add(id);
   }
-
   const featScore = (id) => counts[id] * (1 + 4 * Math.min(1, (meta[id] && meta[id].C) || 0) / 0.1);
   if (contrastProtected.size > maxColors) {
     var ranked = Array.from(contrastProtected).sort(function(a, b) { return featScore(b) - featScore(a); }).slice(0, maxColors);
     contrastProtected.clear();
     for (const id of ranked) contrastProtected.add(id);
   }
-
   const OUTLINE_L = 0.30;
   const outlineCandidates = ids.filter(id => { const m = meta[id]; return m && m.L < OUTLINE_L; })
-    .sort((a, b) => (meta[a].L - meta[b].L)); // 最暗的排前面
+    .sort((a, b) => (meta[a].L - meta[b].L));
   const outlineProtected = new Set(outlineCandidates.slice(0, 3));
-
   while (ids.length > maxColors) {
-
     let lowId = null;
     for (const id of ids) {
       if (contrastProtected.has(id) || outlineProtected.has(id)) continue;
@@ -2034,7 +1922,6 @@ function reduceColors(grid, maxColors) {
     }
     let forceMerge = false;
     if (!lowId) {
-
       contrastProtected.clear();
       lowId = null;
       for (const id of ids) {
@@ -2042,26 +1929,22 @@ function reduceColors(grid, maxColors) {
         if (!lowId || counts[id] < counts[lowId]) lowId = id;
       }
       if (!lowId) {
-
         outlineProtected.clear();
         lowId = ids[0];
         for (const id of ids) if (counts[id] < counts[lowId]) lowId = id;
       }
       forceMerge = true;
     }
-
     let bestId = null, bestD = Infinity;
     for (const id of ids) {
       if (id === lowId) continue;
-      if (counts[id] < counts[lowId]) continue; // 只往更高频或同频的颜色合并，避免吃掉主色
+      if (counts[id] < counts[lowId]) continue;
       const la = labCache[lowId], lb = labCache[id];
       if (!la || !lb) continue;
-
       if (lightest.has(id) && !lightest.has(lowId) && meta[lowId] && meta[id] && meta[lowId].C > meta[id].C * 1.5) continue;
       const d = oklabDist(la, lb);
       if (d < bestD) { bestD = d; bestId = id; }
     }
-
     if (!bestId) {
       for (const id of ids) {
         if (id === lowId) continue;
@@ -2070,13 +1953,11 @@ function reduceColors(grid, maxColors) {
       }
     }
     if (!bestId) break;
-
     const lowC = meta[lowId] ? meta[lowId].C : 0;
     const bestC = meta[bestId] ? meta[bestId].C : 0;
     const effectiveThreshold = (lowC > 0.07 && bestC < Math.max(0.03, lowC * 0.3))
       ? CONTRAST_THRESHOLD * 0.6
       : CONTRAST_THRESHOLD;
-
     if (!forceMerge && bestD > effectiveThreshold && !contrastProtected.has(lowId)) {
       const sLow = featScore(lowId);
       if (contrastProtected.size < maxColors) {
@@ -2089,9 +1970,7 @@ function reduceColors(grid, maxColors) {
         if (s < minS) { minS = s; minId = id; }
       }
       if (minId && sLow > minS) { contrastProtected.delete(minId); contrastProtected.add(lowId); continue; }
-
     }
-
     for (const key in mapping) {
       if (mapping[key] === lowId) mapping[key] = bestId;
     }
@@ -2101,26 +1980,24 @@ function reduceColors(grid, maxColors) {
     delete meta[lowId];
     ids = ids.filter(id => id !== lowId);
   }
-
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
       const id = grid[y][x];
       if (id && mapping[id] !== id) {
-        if (state.bgMask && state.bgMask[y][x]) continue; // 背景格不改动
+        if (state.bgMask && state.bgMask[y][x]) continue;
         grid[y][x] = mapping[id];
       }
     }
   }
 }
-
 function applyBrighten(grid) {
   if (!state.brighten) return;
   var N = grid.length;
   for (var y = 0; y < N; y++) {
     for (var x = 0; x < N; x++) {
       var id = grid[y][x];
-      if (!id) continue;                       // 空格不提亮
-      if (state.bgMask && state.bgMask[y][x]) continue; // 背景填充格不提亮
+      if (!id) continue;
+      if (state.bgMask && state.bgMask[y][x]) continue;
       var brighter = BRIGHTEN_MAP[id];
       if (brighter && brighter !== id && !state.excluded.has(brighter)) {
         grid[y][x] = brighter;
@@ -2155,6 +2032,70 @@ function restoreColor(id) {
   if (!state.excluded.has(id)) return;
   state.excluded.delete(id);
   renderAll();
+}
+
+function getSourceData(img) {
+
+  const cr = getCropRect(img.width, img.height);
+  const off = document.createElement('canvas');
+  off.width = cr.sw; off.height = cr.sh;
+  const octx = off.getContext('2d');
+  octx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, 0, 0, cr.sw, cr.sh);
+  return octx.getImageData(0, 0, cr.sw, cr.sh);
+}
+function pixelateToGrid(img, N) {
+  const cr = getCropRect(img.width, img.height);
+  const off = document.createElement('canvas');
+  off.width = N; off.height = N;
+  const octx = off.getContext('2d');
+  octx.imageSmoothingEnabled = false; // 最近邻：每格取一个真实像素，避免均值糊成脏色
+  const scale = Math.min(N / cr.sw, N / cr.sh);
+  const dw = Math.max(1, Math.round(cr.sw * scale));
+  const dh = Math.max(1, Math.round(cr.sh * scale));
+  const dx = Math.floor((N - dw) / 2);
+  const dy = Math.floor((N - dh) / 2);
+  octx.clearRect(0, 0, N, N); // 透明底，四周留白
+  octx.drawImage(img, cr.sx, cr.sy, cr.sw, cr.sh, dx, dy, dw, dh);
+  return octx.getImageData(0, 0, N, N);
+}
+function buildSrcRGB(img, N) {
+
+  const imgData = pixelateToGrid(img, N);
+  const data = imgData.data;
+  const arr = Array.from({ length: N }, () => new Array(N).fill(null));
+  for (let y = 0; y < N; y++) {
+    for (let x = 0; x < N; x++) {
+      const i = (y * N + x) * 4;
+      if (data[i + 3] < 128) { arr[y][x] = null; continue; }
+      arr[y][x] = { r: data[i], g: data[i + 1], b: data[i + 2] };
+    }
+  }
+  return arr;
+}
+function processImage() {
+  if (!state.sourceImage) return;
+  var _wrapEl = document.getElementById('canvas-wrap');
+  if (_wrapEl) _wrapEl.classList.add('processing');
+  var N = state.N;
+  state.srcRGB = buildSrcRGB(state.sourceImage, N);
+  var cr = getCropRect(state.sourceImage.width, state.sourceImage.height);
+  var sd = getSourceData(state.sourceImage);
+  var scale = Math.min(N / cr.sw, N / cr.sh);
+  var dw = Math.max(1, Math.round(cr.sw * scale));
+  var dh = Math.max(1, Math.round(cr.sh * scale));
+  var dx = Math.floor((N - dw) / 2);
+  var dy = Math.floor((N - dh) / 2);
+  var cw = cr.sw / dw, ch = cr.sh / dh;
+  var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });
+
+  var onFinish = function() { _finishPipeline(grid, N, function() { renderAll(); }); };
+  if (N <= 78) {
+    _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish);
+  } else {
+    setTimeout(function() {
+      _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish);
+    }, 0);
+  }
 }
 
 const $ = id => document.getElementById(id);

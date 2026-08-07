@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07
+> 维护人：余莎莎 ｜ 最后更新：2026-08-05（P0/P1/P2 已全部解决）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -27,14 +27,20 @@
 | C3 | 禁止展开运算符 `...`（数组 / 对象 spread） | 已踩坑：spread→Array.from 修复过 | SeniorDeveloper |
 | C4 | Mard 221 色板（`src/core/colors.js`）**不得改动** | 业务固定 palette，改了配色全乱 | 余莎莎 / 业务 |
 | C5 | `docs/index.html` 是构建产物，**禁止手改** | 由 `build.js` 生成，手改下次构建被覆盖 | SeniorDeveloper |
-| C6 | 内核纯函数不得直接依赖 `document` / `window` | 小程序端无 DOM，需注入 canvas 工厂 | 待定（P0） |
+| C6 | `src/core/pipeline-core.js` 内**禁止**出现 `document`/`window`/`canvas` | 该文件会被打进小程序，小程序端无 DOM | SeniorDeveloper（已落地） |
+| C7 | 平台相关代码只能放 `src/core/pipeline.js`（网页，可用 canvas）或 `src/web/` | 保持内核纯净，双端共用同一算法 | SeniorDeveloper |
+| C8 | `sampleCellRGB()` 返回**原始 RGB**，`mapCell()` 返回**色号字符串**，禁止混用 | 混用会「双重映射」，grid 全变 null（已真实踩坑，见 §4.1 2026-08-05） | SeniorDeveloper |
 
 **每次构建后验证（违反任一项即失败）：**
 ```bash
 node --check build.js
-grep -c "?\."  src/ docs/index.html      # 应为 0
-grep -c "Object.fromEntries" src/        # 应为 0
-# 颜色一致性：docs/index.html 内 colors 段须与 src/core/colors.js 完全一致
+node build.js                                        # 重新生成双端产物
+node tools/smoke-mini.js                             # 无 DOM 环境跑通小程序内核，须全 PASS
+
+grep -c "?\." docs/index.html                        # 应为 0
+grep -c "Object.fromEntries" docs/index.html         # 应为 0
+grep -cE "document\.|window\.|\.getContext|createElement" miniapp/utils/core.js   # 应为 0
+# 颜色一致性：docs/index.html 内 colors 段须与 src/core/colors.js 完全一致（221 色）
 ```
 
 ---
@@ -43,24 +49,42 @@ grep -c "Object.fromEntries" src/        # 应为 0
 
 ```
 fox-bead/
-├── src/core/         # 【网页版内核】7 个纯模块
-│   └── color.js colors.js init.js palette.js pipeline.js presets.js state.js
-├── src/web/          # 【网页版 UI】render/editor/exporter/events/sample/main + css + template.html
+├── src/core/              # 【唯一算法内核】双端共享，8 个模块
+│   ├── pipeline-core.js   # ★ 纯算法层（零 DOM）：取色/抖动/降噪/去背景/减色/提亮/描边
+│   ├── pipeline.js        # 网页平台层：canvas 取像素 + processImage()，仅网页打包
+│   └── color.js colors.js init.js palette.js presets.js state.js
+├── src/web/               # 【网页 UI】render/editor/exporter/events/sample/main + css + template.html
 │   └── css/style.css
-├── miniapp/          # 【小程序 MVP】独立工程
-│   ├── utils/core.js # ⚠️ 1448 行单体：processImage(网页流)+processImageMini + 5 处 document 依赖
-│   ├── pages/index/  # index.js / index.wxml / index.wxss
+├── miniapp/               # 【小程序】工程（core.js 为构建产物，勿手改）
+│   ├── utils/core.js      # ✅ build.js §7 自动生成（51KB，0 处 DOM 依赖）
+│   ├── pages/index/       # index.js / index.wxml / index.wxss
 │   └── app.js app.json project.config.json
-├── build.js          # Node 构建脚本 → 输出 docs/index.html（GitHub Pages 源）
+├── tools/
+│   └── smoke-mini.js      # ★ 无 DOM 环境冒烟测试，改内核后必跑
+├── build.js               # 构建脚本 → ①docs/index.html ②miniapp/utils/core.js
 ├── docs/
-│   ├── index.html    # 构建产物（~493KB），GitHub Pages 实际部署文件
+│   ├── index.html         # 构建产物（~481KB），GitHub Pages 部署文件
 │   └── GitHub参考项目对比.md
-├── assets/           # 外置资源
+├── assets/
 ├── README.md
 └── .gitignore
 ```
 
-> ⚠️ **双内核警告**：`src/core/*.js`（网页内核）与 `miniapp/utils/core.js`（小程序内核）是**两份独立拷贝**，逻辑已存在漂移风险。详见 §5。
+**单内核数据流（2026-08-05 起）：**
+
+```
+                    src/core/pipeline-core.js   ← 唯一算法真源（零 DOM）
+                              │
+             ┌────────────────┴────────────────┐
+             ▼                                 ▼
+  src/core/pipeline.js                build.js §7 自动拼接
+  （canvas 取像素，网页专用）          （只打包纯模块 + 小程序适配层）
+             ▼                                 ▼
+   docs/index.html                    miniapp/utils/core.js
+   processImage() 分帧异步            processImageMini() 同步返回
+```
+
+> ✅ **双内核问题已解决**：算法只有 `src/core/pipeline-core.js` 一份。`miniapp/utils/core.js` 现为**构建产物**，任何手改都会被下次 `node build.js` 覆盖。
 
 ---
 
@@ -91,6 +115,13 @@ fox-bead/
 | 2026-08-05 | 修复 git 分叉（detached HEAD）：`checkout -B master 058630d` + 恢复 README | 用户「修复」指令 | — | ✅ |
 | 2026-08-06 | 迁移项目到 `D:\余莎莎资料\fox-bead\` | 用户要求整体移动 | — | ✅ |
 | 2026-08-06 | 评审 v140 改动，指出双内核 / 5 处 document 依赖问题 | 用户「你再看一下我改的」 | 评审结论 | ✅ |
+| 2026-08-05 | 建立本协作日志 AGENT_CHANGELOG.md | 双 Agent 无法从 git author 区分 | AGENT_CHANGELOG.md | ✅ |
+| 2026-08-05 | **【P0】抽出 `pipeline-core.js` 纯算法层**：把全部算法从 pipeline.js 迁出，pipeline.js 只留 canvas 相关（getSourceData / pixelateToGrid / buildSrcRGB / processImage） | 双内核漂移，算法必须单一真源 | 新增 src/core/pipeline-core.js（~470 行）、重写 src/core/pipeline.js | ✅ |
+| 2026-08-05 | **【P1】小程序接入完整管线**：重写 build.js §7 适配层，`processImageMini` 串起裁剪→取色→FS抖动→降噪→去背景→减色→提亮→描边，返回 `{grid,totalBeads,colorCount}` | 小程序此前只有颜色映射，效果和网页差一大截 | build.js §7 | ✅ |
+| 2026-08-05 | **【P2】小程序产物零 DOM**：§7 只打包纯模块（color/palette/state/pipeline-core），生成物 DOM 引用 5 → 0 | 小程序无 DOM，原产物会崩 | build.js、miniapp/utils/core.js | ✅ |
+| 2026-08-05 | 🐛 **修复双重映射致命 bug**：适配层误用 `mapCell()`（已返回色号）当原始 RGB 再喂 `mapToPalette()`，导致 grid 全 null、珠数 0；且 srcRGB 存成色号字符串，连带抖动/去背景失效 | 冒烟测试暴露 | 抽出共用 `sampleCellRGB()`，web `_processChunk` 与 mini 适配层共用同一采样器 | ✅ |
+| 2026-08-05 | 新增 `tools/smoke-mini.js` 无 DOM 冒烟测试：44 项断言（色板 221 / 导出完整性 / 采样器契约 / 7 种参数组合 / 3 种尺寸） | 双端共内核后需要回归防线 | tools/smoke-mini.js | ✅ |
+| 2026-08-05 | 修正 miniapp/pages/index/index.js 过时注释（管线已非「简化 MVP」） | 注释误导 | miniapp/pages/index/index.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 
@@ -115,21 +146,48 @@ fox-bead/
 > **待补充项：**
 > - v140 哪些 commit 是 ClaudeCode 协助完成的？
 > - ClaudeCode 是否独立改过 `miniapp/` 或 `src/`？
-> - ClaudeCode 对 §5 双内核问题有无方案？
+>
+> **⚠️ 给 ClaudeCode 的重要变更提醒（2026-08-05）：**
+> 1. `src/core/pipeline.js` 已被拆分——**算法都搬到了 `src/core/pipeline-core.js`**，pipeline.js 现在只剩 canvas 相关 4 个函数。改算法请改 pipeline-core.js。
+> 2. `miniapp/utils/core.js` **不再是手写文件，是构建产物**。改小程序算法请改 `src/core/pipeline-core.js`，改小程序适配请改 `build.js` §7，然后 `node build.js` 重新生成。
+> 3. 新增约束 C6/C7/C8，特别注意 **C8 采样器契约**（`sampleCellRGB` 返 RGB / `mapCell` 返色号，混用会导致 grid 全 null）。
+> 4. 动内核后请跑 `node tools/smoke-mini.js`，须全 PASS。
 
 ---
 
-## 5. 已知冲突 / 待决策（P0 → P2）
+## 5. 已知冲突 / 待决策
 
-| 优先级 | 问题 | 现状 | 建议方案 | 负责人 |
-|--------|------|------|----------|--------|
-| **P0** | 双内核：`src/core/*.js` vs `miniapp/utils/core.js` 两份拷贝，已漂移 | 小程序 core.js 是 1448 行单体，含网页 processImage 全流 | 合并成单一 `src/core/`，小程序构建时拷贝 + 注入 `module.exports` + canvas 工厂 | 待分配 |
-| **P1** | 小程序仅接了颜色映射（processImageMini），未接去背景 / 抖动 / 降噪 | mini 是简化 MVP | 把完整 pipeline 接到小程序 | 待分配 |
-| **P2** | `miniapp/utils/core.js` 有 5 处 `document`/`getContext`/`getElementById` 依赖（L388/390/443/445/535） | 非纯内核，小程序端会崩 | 抽 canvas 工厂注入，内核保持纯函数 | 待分配 |
+### 5.1 ✅ 已解决（2026-08-05 · SeniorDeveloper）
+
+| 优先级 | 问题 | 解决方式 | 验证 |
+|--------|------|----------|------|
+| **P0** | 双内核：`src/core/*.js` vs `miniapp/utils/core.js` 两份拷贝已漂移 | 算法全部收敛到 `src/core/pipeline-core.js` 单一真源；`miniapp/utils/core.js` 改为 build.js §7 自动生成的产物 | 构建通过，产物 51KB |
+| **P1** | 小程序只有颜色映射，缺去背景 / 抖动 / 降噪 | `processImageMini` 接入完整管线，与网页同算法 | 7 种参数组合冒烟全 PASS |
+| **P2** | 小程序产物 5 处 `document`/`getContext` 依赖 | §7 只打包零 DOM 的纯模块 | `grep -cE "document\.\|window\.\|\.getContext\|createElement"` = **0** |
+
+**回归结果**（`node tools/smoke-mini.js`，纯 Node 无 DOM）：
+
+| 场景 | N | 珠数 | 用色 | 耗时 |
+|------|---|------|------|------|
+| 默认 | 32 | 1024 | 3 | 7ms |
+| 抖动 | 32 | 1024 | 20 | 20ms |
+| 减色到 4 | 32 | 1024 | 3 | 3ms |
+| 去背景 | 64 | 4096→**1601** | 2 | 28ms |
+| 全开（抖动+去背景+提亮+减色12+描边） | 64 | 1601 | 8 | 29ms |
+
+### 5.2 ⚠️ 遗留待办
+
+| 优先级 | 事项 | 说明 |
+|--------|------|------|
+| P3 | `miniapp/utils/core.js` 已是产物，建议加入 `.gitignore`？ | 暂**保留在 git**——小程序开发者工具需要它，且方便对端 Agent 直接 checkout 就能跑。但**禁止手改**（见 C5 同理） |
+| P3 | 小程序页面缺开关 UI | `processImageMini` 第三参 `opts` 已支持 mode/dither/cleanup/maxColors/removeBg/brighten/outline，页面加控件透传即可 |
+| P3 | 去背景在 `N<=52` 时按设计跳过（走 `bgStatus='small'` 分支保留背景） | 非 bug。小程序默认板子 104，不受影响；但若产品要小板子也去背景，需改 `pipeline-core.js` L458 阈值 |
+| P3 | web 的 `srcRGB` 由 canvas 降采样生成，mini 由 `sampleCellRGB` 生成 | 两者路径不同，抖动结果可能有极微差异。未统一是为了不动网页既有行为，如需完全一致再议 |
 
 ---
 
 ## 6. 版本里程碑（git tag）
 
 `v6` `v45` `v87` `v100` `v117` `v124` `v132` `v137`(=v138) `v139` —— 均为历史导入。
-**v140 尚未打 tag**（建议双内核合并后再打）。
+
+**v140 尚未打 tag。** 双内核已于 2026-08-05 合并完成，打 tag 的前置条件已满足，建议在小程序真机验证一轮后打 `v140`。

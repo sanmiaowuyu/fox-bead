@@ -35,8 +35,9 @@ var JS_MODULES = [
   { dir: CORE, file: 'color.js' },
   { dir: CORE, file: 'state.js' },
   { dir: CORE, file: 'presets.js' },
-  { dir: CORE, file: 'pipeline.js' },
+  { dir: CORE, file: 'pipeline-core.js' },
   { dir: CORE, file: 'colors.js' },
+  { dir: CORE, file: 'pipeline.js' },
   { dir: WEB,  file: 'dom.js' },
   { dir: WEB,  file: 'render.js' },
   { dir: WEB,  file: 'editor.js' },
@@ -155,43 +156,84 @@ if (!fs.existsSync(DIST)) fs.mkdirSync(DIST, { recursive: true });
 var outPath = path.join(DIST, 'index.html');
 fs.writeFileSync(outPath, output, 'utf8');
 
-// ========== 7. 构建小程序核心算法包 ==========
+// ========== 7. 构建小程序核心算法包（单内核：直接复用 src/core/pipeline-core.js） ==========
 var MINIAPP = path.join(ROOT, 'miniapp');
 var MINIAPP_CORE = path.join(MINIAPP, 'utils', 'core.js');
 if (fs.existsSync(MINIAPP)) {
-  var mpModules = ['color.js', 'palette.js', 'state.js', 'presets.js', 'pipeline.js', 'colors.js'];
-  var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成\n// 版本: ' + (verMatch ? newVer : 'N/A') + '\n'];
+  // 仅打包纯模块（零 document / 零 $ / 零 canvas）：算法内核与网页版完全一致 = 单内核来源（解决 P0）
+  var mpModules = ['color.js', 'palette.js', 'state.js', 'pipeline-core.js'];
+  var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）\n// 版本: ' + (verMatch ? newVer : 'N/A') + '\n'];
   for (var mi = 0; mi < mpModules.length; mi++) {
     mpParts.push(readTrim(path.join(CORE, mpModules[mi])));
   }
-  // Add mini-program adapter: export functions for require()
-  mpParts.push('\n// 小程序适配层');
-  mpParts.push('function processImageMini(imgData, N) {');
-  mpParts.push('  // MVP: 简化管线 — 仅做颜色映射');
-  mpParts.push('  var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });');
-  mpParts.push('  var scale = Math.min(N / imgData.width, N / imgData.height);');
-  mpParts.push('  var counts = {};');
-  mpParts.push('  for (var y = 0; y < N; y++) {');
-  mpParts.push('    for (var x = 0; x < N; x++) {');
-  mpParts.push('      var sx = Math.floor(x / scale), sy = Math.floor(y / scale);');
-  mpParts.push('      if (sx >= imgData.width || sy >= imgData.height) continue;');
-  mpParts.push('      var i = (sy * imgData.width + sx) * 4;');
-  mpParts.push('      var rgb = { r: imgData.data[i], g: imgData.data[i+1], b: imgData.data[i+2] };');
-  mpParts.push('      if (imgData.data[i+3] < 128) continue;');
-  mpParts.push('      var id = mapToPalette(rgb);');
-  mpParts.push('      if (id) { grid[y][x] = id; counts[id] = (counts[id] || 0) + 1; }');
-  mpParts.push('    }');
-  mpParts.push('  }');
-  mpParts.push('  return { grid: grid, totalBeads: Object.values(counts).reduce(function(a,b){return a+b;},0), colorCount: Object.keys(counts).length };');
-  mpParts.push('}');
-  mpParts.push('module.exports = {');
-  mpParts.push('  PALETTE: PALETTE, PALETTE_BY_ID: PALETTE_BY_ID, PALETTE_LAB: PALETTE_LAB, LAB_BY_ID: LAB_BY_ID,');
-  mpParts.push('  BRAND_LABEL: BRAND_LABEL, state: state,');
-  mpParts.push('  hexToRgb: hexToRgb, rgbToOklab: rgbToOklab, oklabDist: oklabDist,');
-  mpParts.push('  mapToPalette: mapToPalette, reduceColors: reduceColors,');
-  mpParts.push('  buildBrightenMap: buildBrightenMap, updateBgIds: updateBgIds,');
-  mpParts.push('  processImageMini: processImageMini');
-  mpParts.push('};');
+  // 小程序适配层：processImageMini 复用同一套取色/抖动/降噪/减色/去背景算法（解决 P1），无 document 依赖（解决 P2）
+  var miniAdapter = [
+    '',
+    '// ========== 小程序适配层 ==========',
+    'function computeCropRect(w, h) {',
+    '  if (!state.crop) return { sx: 0, sy: 0, sw: w, sh: h };',
+    '  var side = Math.min(w, h);',
+    '  return { sx: (w - side) / 2, sy: (h - side) / 2, sw: side, sh: side };',
+    '}',
+    'function processImageMini(imgData, N, opts) {',
+    '  opts = opts || {};',
+    '  state.N = N;',
+    '  state.mode = opts.mode || \'average\';',
+    '  state.dither = !!opts.dither;',
+    '  state.cleanup = (opts.cleanup != null) ? opts.cleanup : 5;',
+    '  state.maxColors = (opts.maxColors != null) ? opts.maxColors : 24;',
+    '  state.removeBg = !!opts.removeBg;',
+    '  state.brighten = !!opts.brighten;',
+    '  state.outline = opts.outline || { on: false, strength: 50, colorId: \'H7\' };',
+    '  state.excluded = opts.excluded || new Set();',
+    '  var cr = computeCropRect(imgData.width, imgData.height);',
+    '  var scale = Math.min(N / cr.sw, N / cr.sh);',
+    '  var dw = Math.max(1, Math.round(cr.sw * scale));',
+    '  var dh = Math.max(1, Math.round(cr.sh * scale));',
+    '  var dx = Math.floor((N - dw) / 2), dy = Math.floor((N - dh) / 2);',
+    '  var cw = cr.sw / dw, ch = cr.sh / dh;',
+    '  var grid = Array.from({ length: N }, function () { return new Array(N).fill(null); });',
+    '  var srcRGB = Array.from({ length: N }, function () { return new Array(N).fill(null); });',
+    '  for (var idx = 0; idx < N * N; idx++) {',
+    '    var y = Math.floor(idx / N), x = idx % N;',
+    '    if (x < dx || x >= dx + dw || y < dy || y >= dy + dh) continue;',
+    '    var mx = x - dx, my = y - dy;',
+    '    var x0 = Math.floor(mx * cw), y0 = Math.floor(my * ch);',
+    '    var x1 = Math.max(x0 + 1, Math.floor((mx + 1) * cw));',
+    '    var y1 = Math.max(y0 + 1, Math.floor((my + 1) * ch));',
+    '    // 注意：必须用 sampleCellRGB 取原始 RGB，不能用 mapCell（它已经映射成色号了，再映射会得到 null）',
+    '    var rgb = sampleCellRGB(imgData, x0, y0, x1, y1, state.mode);',
+    '    if (rgb) { grid[y][x] = mapToPalette(rgb); srcRGB[y][x] = rgb; }',
+    '  }',
+    '  state.srcRGB = srcRGB;',
+    '  // 同步执行完整管线（小程序端直接返回结果，不依赖 setTimeout 分帧）',
+    '  if (state.dither) applyFloydSteinberg(grid, srcRGB, N);',
+    '  cleanupNoise(grid, state.cleanup);',
+    '  if (state.removeBg) { state.bgStatus = \'ok\'; removeBackground(grid); }',
+    '  else { state.bgMask = Array.from({ length: N }, function () { return new Array(N).fill(false); }); state.bgStatus = \'\'; }',
+    '  reduceColors(grid, state.maxColors);',
+    '  applyBrighten(grid);',
+    '  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId);',
+    '  state.grid = grid;',
+    '  var counts = {}; var total = 0;',
+    '  for (var yy = 0; yy < N; yy++) for (var xx = 0; xx < N; xx++) {',
+    '    var id = grid[yy][xx];',
+    '    if (id != null && !(state.bgMask && state.bgMask[yy][xx])) { counts[id] = (counts[id] || 0) + 1; total++; }',
+    '  }',
+    '  return { grid: grid, totalBeads: total, colorCount: Object.keys(counts).length };',
+    '}',
+    'module.exports = {',
+    '  PALETTE: PALETTE, PALETTE_BY_ID: PALETTE_BY_ID, PALETTE_LAB: PALETTE_LAB, LAB_BY_ID: LAB_BY_ID,',
+    '  BRAND_LABEL: BRAND_LABEL, state: state, BRIGHTEN_MAP: BRIGHTEN_MAP, BG_WHITE_ID: BG_WHITE_ID, BG_BLACK_ID: BG_BLACK_ID,',
+    '  hexToRgb: hexToRgb, rgbToOklab: rgbToOklab, oklabDist: oklabDist,',
+    '  mapToPalette: mapToPalette, mapCell: mapCell, sampleCellRGB: sampleCellRGB, reduceColors: reduceColors,',
+    '  buildBrightenMap: buildBrightenMap, updateBgIds: updateBgIds,',
+    '  applyFloydSteinberg: applyFloydSteinberg, cleanupNoise: cleanupNoise,',
+    '  removeBackground: removeBackground, applyOutline: applyOutline, applyBrighten: applyBrighten,',
+    '  computeMaxRegion: computeMaxRegion, processImageMini: processImageMini',
+    '};'
+  ];
+  mpParts.push(miniAdapter.join('\n'));
   fs.writeFileSync(MINIAPP_CORE, mpParts.join('\n'), 'utf8');
   console.log('Mini-app core: ' + MINIAPP_CORE + ' (' + Math.round(Buffer.byteLength(mpParts.join('\n'), 'utf8') / 1024) + ' KB)');
 }
