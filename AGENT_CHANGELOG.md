@@ -125,6 +125,7 @@ fox-bead/
 | 2026-08-07 | **去背景全面增强（算法层）**：①黑底自动识别——`_manualBgRGB` 与边界极性相反时回退自动判断，纯黑底图不再清不掉；②清理强度随板子自动调低（≤40→上限30 / ≤80→55 / 大板→80）防过度清理；③白底/黑底场景收紧 `BG_T`(0.05) 缓解浅色主体被误删 | 交接文档 §6.2 已知失效场景 + §十二「清理强度随板子自动调低」待办 | src/core/pipeline-core.js | ✅ |
 | 2026-08-07 | 扩展 `tools/smoke-mini.js`：新增 7 项去背景回归断言（黑底识别 + 逆极性取样回退 + 浅主体保护） | 防去背景改动回归 | tools/smoke-mini.js | ✅ |
 | 2026-08-07 | **描边体验增强**：`applyOutline` 加 `thickness` 参数（在边缘像素膨胀 t-1 圈实现 1~4 格宽描边）；`state.outline` 加 `thickness` 字段；网页端新增「描边粗细」滑块（1~4），miniapp 适配层同步透传 | 交接文档 §十二待办「描边粗细控制」 | src/core/pipeline-core.js、src/core/state.js、build.js §7、src/web/template.html、src/web/events.js | ✅ |
+| 2026-08-07 | **移动端深度适配（主预览画布触屏）**：新增双指 pinch 缩放（映射 `state.zoom`，rAF 节流重绘，居中缩放不引入 pan 状态）+ 单指轻点取样（消除 iOS 300ms 延迟）；双指 `preventDefault` 防页面缩放、单指不拦截以保留页面滚动 | 主预览画布此前仅按钮缩放/click 取样，手机无触屏交互（编辑画布 editor.js 已有完整触屏） | src/web/events.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 
