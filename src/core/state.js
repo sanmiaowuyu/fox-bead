@@ -14,7 +14,6 @@ const state = {
   showGrid: true,
   bgMode: 'white',       // 一键切换背景：'black' 黑底 / 'white' 白底（默认白底）
   removeBg: false,        // 自动去背景：默认关，整张图都参与拼豆（白色主体正常标色号）；纯色背景图才手动开
-  brighten: false,        // 提亮一档：默认关，开后每个色号替换成同系列更亮一档的真实色号
   outline: { on: false, strength: 50, colorId: 'H7', thickness: 1 }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。thickness=描边宽度(格数)。
   paletteView: 'grid',   // 右侧色板清单视图：'grid' 紧凑色块 / 'list' 行列表
   showCoords: true,      // 画布预览是否显示坐标数字（左侧/底部轴）
@@ -33,9 +32,6 @@ const state = {
   prep: { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 }, // 待烘焙的预处理参数
   prepBase: null,        // 图片处理面板打开时的基准图（用于取消/重置，不修改则回退到此）
   userCrop: null,        // 预处理裁切框 {sx,sy,sw,sh}（基于旋转/翻转后的预览坐标，烘焙后清空）
-  userMask: null,        // 手动去背景遮罩 N×N：'keep'(保留主体) | 'erase'(擦除背景) | null
-  brushMode: 'erase',    // 去背景笔刷类型：'erase' 擦除背景 / 'keep' 保留主体
-  brushSize: 14,         // 笔刷半径（源像素）
   // 豆仓库存（图片处理模块同级能力）：按色号记录手头豆数，对比当前图纸用量算缺口
   inventory: {},         // {colorId: stockCount} 豆仓库存，持久化 localStorage
   inventoryOpen: false,  // 豆仓弹窗是否打开

@@ -184,7 +184,6 @@ if (fs.existsSync(MINIAPP)) {
     '  state.cleanup = (opts.cleanup != null) ? opts.cleanup : 5;',
     '  state.maxColors = (opts.maxColors != null) ? opts.maxColors : 24;',
     '  state.removeBg = !!opts.removeBg;',
-    '  state.brighten = !!opts.brighten;',
     '  state.outline = opts.outline || { on: false, strength: 50, colorId: \'H7\', thickness: 1 };',
     '  state.excluded = opts.excluded || new Set();',
     '  var cr = computeCropRect(imgData.width, imgData.height);',
@@ -213,7 +212,6 @@ if (fs.existsSync(MINIAPP)) {
     '  if (state.removeBg) { state.bgStatus = \'ok\'; removeBackground(grid); }',
     '  else { state.bgMask = Array.from({ length: N }, function () { return new Array(N).fill(false); }); state.bgStatus = \'\'; }',
     '  reduceColors(grid, state.maxColors);',
-    '  applyBrighten(grid);',
     '  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);',
     '  state.grid = grid;',
     '  var counts = {}; var total = 0;',
@@ -230,7 +228,7 @@ if (fs.existsSync(MINIAPP)) {
     '  mapToPalette: mapToPalette, mapCell: mapCell, sampleCellRGB: sampleCellRGB, reduceColors: reduceColors,',
     '  buildBrightenMap: buildBrightenMap, updateBgIds: updateBgIds,',
     '  applyFloydSteinberg: applyFloydSteinberg, cleanupNoise: cleanupNoise,',
-    '  removeBackground: removeBackground, applyOutline: applyOutline, applyBrighten: applyBrighten,',
+    '  removeBackground: removeBackground, applyOutline: applyOutline,',
     '  computeMaxRegion: computeMaxRegion, processImageMini: processImageMini',
     '};'
   ];

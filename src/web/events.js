@@ -151,9 +151,6 @@ function bindEvents() {
   // 自动去背景开关（默认关，见 state.removeBg）
   const rb = $('toggle-removebg');
   if (rb) rb.addEventListener('change', e => { state.removeBg = e.target.checked; processImage(); });
-  // 提亮一档开关（默认关，见 state.brighten）
-  const bt = $('toggle-brighten');
-  if (bt) bt.addEventListener('change', function(e) { state.brighten = e.target.checked; processImage(); });
   // v140: Floyd-Steinberg 抖动开关
   const dt = $('toggle-dither');
   if (dt) dt.addEventListener('change', function(e) { state.dither = e.target.checked; processImage(); });
@@ -437,11 +434,9 @@ function bindEvents() {
 }
 
 /* ========== 图片处理模块：面板交互 ========== */
-var prepTool = 'brush';          // 'brush' 去背景笔刷 / 'crop' 裁剪
+// 注意：笔刷已移除（需求：不需要手动笔刷）。交互仅保留「拖动裁切」。
 var prepScale = 1;               // 预览显示缩放（源像素 → 显示像素）
-var prepW = 0, prepH = 0;        // 当前预处理画布（旋转/翻转后，未裁切）尺寸
-var prepPainting = false;
-var prepLast = null;             // 笔刷上一显示点
+var prepW = 0, prepH = 0;        // 当前预处理画布尺寸
 var prepCropStart = null;        // 裁剪起点（显示坐标）
 var prepCropDraft = null;        // 裁剪临时框（显示坐标）
 
@@ -450,16 +445,10 @@ function openPrepModal() {
   state.prepBase = state.sourceImage;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
-  prepTool = 'brush';
   var bd = $('prep-backdrop');
   if (bd) bd.hidden = false;
-  // 同步控件
   var rb = $('prep-removebg'); if (rb) rb.checked = !!state.removeBg;
-  var br = $('prep-brush-erase'); if (br) br.classList.add('active');
-  var bk = $('prep-brush-keep'); if (bk) bk.classList.remove('active');
-  var ts = $('prep-tool-seg'); if (ts) {
-    ts.querySelectorAll('.seg-item').forEach(function (s) { s.classList.toggle('active', s.dataset.tool === 'brush'); });
-  }
+  clearPrepResults();
   syncPrepSliders();
   renderPrepPreview();
 }
@@ -494,7 +483,7 @@ function renderPrepPreview() {
   rebuildPrepOverlay();
 }
 
-// 重绘叠加层（裁切框 + 笔刷遮罩）
+// 重绘叠加层（仅裁切框）
 function rebuildPrepOverlay() {
   var overlay = $('prep-overlay'); if (!overlay) return;
   var octx = overlay.getContext('2d');
@@ -507,47 +496,67 @@ function rebuildPrepOverlay() {
     octx.strokeRect(x, y, w, h);
     octx.setLineDash([]);
   }
-  // 笔刷遮罩（从 N×N userMask 反推显示坐标）
-  if (state.userMask) {
-    var N = state.N, cell = prepScale * (prepW / N);
-    for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) {
-      var t = state.userMask[y][x];
-      if (!t) continue;
-      octx.fillStyle = t === 'erase' ? 'rgba(192,57,43,0.45)' : 'rgba(46,139,87,0.45)';
-      octx.fillRect((x + 0.5) * cell - cell / 2, (y + 0.5) * cell - cell / 2, cell, cell);
-    }
-  }
 }
 
-// 几何变换后清空笔刷遮罩（坐标系已变，旧遮罩不再对齐）
-function prepGeomChanged() { clearUserMask(); renderPrepPreview(); }
+// 几何/调色变化：清空已抠结果（基于旧像素），重绘预览
+function prepGeomChanged() { clearPrepResults(); renderPrepPreview(); }
 
-// 在显示坐标 (dx,dy) 处落一笔，写入 userMask 并增量绘制
-function prepPaintAt(dx, dy) {
-  if (!state.userMask) {
-    var N = state.N;
-    state.userMask = Array.from({ length: N }, function () { return new Array(N).fill(null); });
+// 清空已抠结果（基于旧像素，几何/调色变化时失效）
+function clearPrepResults() {
+  var rs = $('prep-results'); if (rs) rs.hidden = true;
+  var list = $('prep-subjects'); if (list) list.innerHTML = '';
+  var st = $('prep-seg-status'); if (st) { st.hidden = true; st.textContent = ''; }
+}
+
+// 自动抠图：对当前预处理图（含旋转/翻转/调色/裁切）做多主体分离
+function runAutoSeg() {
+  var base = state.prepBase || state.sourceImage;
+  var cv = computePrepCanvas(base, state.prep, state.userCrop);
+  if (!cv) return;
+  var ctx = cv.getContext('2d');
+  var id = ctx.getImageData(0, 0, cv.width, cv.height);
+  var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, {});
+  renderPrepSubjects(subs);
+}
+
+// 渲染抠出的主体缩略图，每个带「转为像素图」
+function renderPrepSubjects(subs) {
+  var box = $('prep-results'), list = $('prep-subjects'), st = $('prep-seg-status');
+  if (!box || !list) return;
+  list.innerHTML = '';
+  if (st) {
+    if (!subs.length) { st.hidden = false; st.textContent = '未检出明显主体，可先旋转/调色或拖动裁切后再试。'; }
+    else { st.hidden = true; st.textContent = ''; }
   }
-  // 显示坐标 → 源像素 → 格子
-  var sx = dx / prepScale, sy = dy / prepScale;
-  var cellX = Math.floor(sx * state.N / prepW), cellY = Math.floor(sy * state.N / prepH);
-  var radius = Math.max(1, Math.round(state.brushSize / prepW * state.N));
-  var type = state.brushMode;
-  for (var y = cellY - radius; y <= cellY + radius; y++) {
-    for (var x = cellX - radius; x <= cellX + radius; x++) {
-      if (x < 0 || x >= state.N || y < 0 || y >= state.N) continue;
-      var ddx = x - cellX, ddy = y - cellY;
-      if (ddx * ddx + ddy * ddy > radius * radius) continue;
-      state.userMask[y][x] = type;
-    }
-  }
-  // 增量绘制当前点
-  var overlay = $('prep-overlay'); if (overlay) {
-    var octx = overlay.getContext('2d');
-    octx.fillStyle = type === 'erase' ? 'rgba(192,57,43,0.45)' : 'rgba(46,139,87,0.45)';
-    var r = state.brushSize * prepScale;
-    octx.beginPath(); octx.arc(dx, dy, r, 0, Math.PI * 2); octx.fill();
-  }
+  if (!subs.length) { box.hidden = true; return; }
+  box.hidden = false;
+  subs.forEach(function (sub) {
+    var item = document.createElement('div'); item.className = 'subject-thumb';
+    var c = document.createElement('canvas');
+    c.width = sub.w; c.height = sub.h; c.className = 'subject-canvas';
+    try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
+    var btn = document.createElement('button');
+    btn.className = 'prep-btn subject-to-pixel';
+    btn.textContent = '转为像素图';
+    btn.addEventListener('click', function () { applySubjectAsPixel(sub); });
+    item.appendChild(c); item.appendChild(btn);
+    list.appendChild(item);
+  });
+}
+
+// 将某个主体作为拼豆源图：透明底已是抠出主体，无需再去背景
+function applySubjectAsPixel(sub) {
+  var c = document.createElement('canvas');
+  c.width = sub.w; c.height = sub.h;
+  try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
+  state.sourceImage = c;       // canvas 可当 Image 用
+  state.crop = false;
+  var tc = document.getElementById('toggle-crop'); if (tc) tc.checked = false;
+  state.removeBg = false;      // 主体已抠出，透明区域即空
+  state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
+  state.userCrop = null;
+  closePrepModal();
+  processImage();
 }
 
 function prepOverlayPoint(e) {
@@ -573,7 +582,7 @@ function bindPrepModal() {
     state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
     state.userCrop = null;
     if (state.prepBase) state.sourceImage = state.prepBase; // 回退到打开时的图
-    clearUserMask();
+    clearPrepResults();
     syncPrepSliders();
     renderPrepPreview();
   });
@@ -591,6 +600,7 @@ function bindPrepModal() {
     el.addEventListener('input', function () {
       state.prep[key] = +el.value;
       if (v) v.textContent = el.value;
+      clearPrepResults();
       renderPrepPreview();
     });
   };
@@ -598,57 +608,27 @@ function bindPrepModal() {
   bindSlider('prep-contrast', 'contrast', 'prep-contrast-val');
   bindSlider('prep-sat', 'saturation', 'prep-sat-val');
 
-  // 去背景笔刷模式
-  var be = $('prep-brush-erase'); if (be) be.addEventListener('click', function () { state.brushMode = 'erase'; be.classList.add('active'); var bk2 = $('prep-brush-keep'); if (bk2) bk2.classList.remove('active'); });
-  var bk = $('prep-brush-keep'); if (bk) bk.addEventListener('click', function () { state.brushMode = 'keep'; bk.classList.add('active'); if (be) be.classList.remove('active'); });
-  var bc = $('prep-brush-clear'); if (bc) bc.addEventListener('click', function () { clearUserMask(); rebuildPrepOverlay(); });
-  var bs = $('prep-brush-size'); if (bs) bs.addEventListener('input', function () { state.brushSize = +bs.value; var bsv = $('prep-brush-val'); if (bsv) bsv.textContent = bs.value; });
+  // 自动抠图
+  var autoSeg = $('prep-auto-seg'); if (autoSeg) autoSeg.addEventListener('click', runAutoSeg);
 
-  // 工具切换（笔刷 / 裁剪）
-  var tseg = $('prep-tool-seg'); if (tseg) tseg.addEventListener('click', function (e) {
-    var b = e.target.closest('.seg-item'); if (!b) return;
-    tseg.querySelectorAll('.seg-item').forEach(function (s) { s.classList.remove('active'); });
-    b.classList.add('active');
-    prepTool = b.dataset.tool;
-    var ov = $('prep-overlay'); if (ov) ov.style.cursor = prepTool === 'crop' ? 'crosshair' : 'crosshair';
-  });
-
-  // 预览画布交互（笔刷 / 裁剪）
+  // 预览画布：仅裁切拖拽（无笔刷）
   var overlay = $('prep-overlay');
   if (overlay) {
+    overlay.style.cursor = 'crosshair';
     var startHandler = function (e) {
       e.preventDefault();
       var p = prepOverlayPoint(e); if (!p) return;
-      if (prepTool === 'brush') {
-        // 落笔即自动开启去背景，避免遮罩被忽略
-        if (!state.removeBg) { state.removeBg = true; var rb2 = $('prep-removebg'); if (rb2) rb2.checked = true; }
-        prepPainting = true; prepLast = p; prepPaintAt(p.x, p.y);
-      } else {
-        prepCropStart = p; prepCropDraft = { x: p.x, y: p.y, w: 0, h: 0 };
-      }
+      prepCropStart = p; prepCropDraft = { x: p.x, y: p.y, w: 0, h: 0 };
     };
     var moveHandler = function (e) {
-      if (!prepPainting && !prepCropDraft) return;
+      if (!prepCropDraft) return;
       e.preventDefault();
       var p = prepOverlayPoint(e); if (!p) return;
-      if (prepTool === 'brush' && prepPainting) {
-        // 连线补足，避免快速拖动断点
-        if (prepLast) {
-          var steps = Math.max(1, Math.round(Math.hypot(p.x - prepLast.x, p.y - prepLast.y) / 4));
-          for (var i = 1; i <= steps; i++) {
-            var t = i / steps;
-            prepPaintAt(prepLast.x + (p.x - prepLast.x) * t, prepLast.y + (p.y - prepLast.y) * t);
-          }
-        }
-        prepLast = p;
-      } else if (prepTool === 'crop' && prepCropDraft) {
-        prepCropDraft.w = p.x - prepCropStart.x; prepCropDraft.h = p.y - prepCropStart.y;
-        drawCropDraft();
-      }
+      prepCropDraft.w = p.x - prepCropStart.x; prepCropDraft.h = p.y - prepCropStart.y;
+      drawCropDraft();
     };
-    var endHandler = function (e) {
-      if (prepTool === 'brush') { prepPainting = false; prepLast = null; }
-      else if (prepCropDraft) {
+    var endHandler = function () {
+      if (prepCropDraft) {
         // 提交裁切框（显示坐标 → 源坐标）
         var x0 = Math.min(prepCropStart.x, prepCropStart.x + prepCropDraft.w);
         var y0 = Math.min(prepCropStart.y, prepCropStart.y + prepCropDraft.h);
@@ -658,9 +638,9 @@ function bindPrepModal() {
             sx: Math.round(x0 / prepScale), sy: Math.round(y0 / prepScale),
             sw: Math.round(w / prepScale), sh: Math.round(h / prepScale)
           };
-          clearUserMask(); // 几何变化清空旧遮罩
         }
         prepCropDraft = null;
+        clearPrepResults();
         rebuildPrepOverlay();
       }
     };
@@ -929,9 +909,6 @@ function syncUI() {
   // 自动去背景开关状态
   const rb = $('toggle-removebg');
   if (rb) rb.checked = !!state.removeBg;
-  // 提亮一档开关状态
-  const bt = $('toggle-brighten');
-  if (bt) bt.checked = !!state.brighten;
   // v123: 像素描边开关/强度/颜色同步
   const ot = $('toggle-outline');
   if (ot) ot.checked = !!state.outline.on;

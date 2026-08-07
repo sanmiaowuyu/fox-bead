@@ -134,7 +134,6 @@ function resetPrep() {
   processImage();
 }
 
-// 清空手动去背景遮罩
+// 清空手动去背景遮罩（笔刷已移除，保留空实现避免散落调用报错）
 function clearUserMask() {
-  state.userMask = null;
 }

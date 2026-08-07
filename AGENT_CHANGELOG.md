@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -224,3 +224,16 @@ fox-bead/
 - 验证：`node tools/smoke-mini.js` 全 PASS（含去背景/描边新增回归）；`docs/index.html` ?.=0、`miniapp/utils/core.js` DOM=0
 
 > 注：小程序真机手感（pinch 缩放/轻点取样）需余总本机验收。完整自由平移(pan)已于 **#21** 实现（主预览画布单指 CSS transform 平移 + `clampMainPan` 边界夹取，与 pinch 缩放协同）。
+
+**v141**（2026-08-07，SeniorDeveloper）：图片处理模块重构——自动抠图 + 多主体分张 + 像素图转换；移除手动笔刷与「提亮一档」。
+
+需求背景：用户实际图片常杂乱无章，需要自动抠出主体并转为拼豆像素图；原「手动笔刷 + 提亮一档」方案不符使用场景。
+
+- 抠图（需求1）：新增 `segmentSubjects`（image-prep.js，零 DOM，web/小程序共用）。边界 Oklab 中位数估背景 + 4-连通分量分离多主体，**无 ML 模型**（守住离线/旧移动端铁律）。一张图多个主体 → 各生成一张透明底独立图。
+- 像素图（需求2）：弹窗新增「自动抠图」按钮，运行后列出抠出的主体缩略图，每张配「转为像素图」→ 设为 `state.sourceImage`（透明底）并 `processImage()`，即拼豆化。
+- 去笔刷（需求3）：彻底移除手动去背景笔刷——`state.js` 删 `userMask/brushMode/brushSize`、`pipeline-core.js` 的 `removeBackground` 删 `userMask` 分支、`events.js` 删 `prepPaintAt` 及笔刷 UI、`template.html` 删笔刷区块；预览仅保留「拖动裁切」。
+- 拖拽条（需求4）：对比度/饱和度本就是 range 拖拽条（与亮度一致），沿用无需改动。
+- 删提亮（需求5）：删除 `brighten` 状态与 `applyBrighten`（`state.js`/`pipeline-core.js`/`build.js` 适配器/`events.js` 同步清理）。
+- UI：新增 `prep-auto-seg` / `prep-results` / `subject-thumb`（透明棋盘格）/「转为像素图」按钮，浅/深主题可读；`prep-tool-seg` 工具栏与笔刷样式移除。
+- 验证：`node --check` 全过；`docs/index.html` `?.`=0 / `Object.fromEntries`=0；`miniapp/utils/core.js` DOM=0；`node tools/smoke-mini.js` 全 PASS（导出清单去掉 `applyBrighten`）；合成双主体图实测 `segmentSubjects` 返回 2 个主体。
+> 注：真实照片抠图精度受限于无模型算法（浅色主体/杂乱背景可能需多试旋转+调色/裁切）；彻底 AI 分割见文档 §9 生图模块（需后端+付费）。

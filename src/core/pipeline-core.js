@@ -196,8 +196,6 @@ function _finishAfter(grid, N) {
   }
   // 颜色数量上限：合并肉眼难分的相近色
   reduceColors(grid, state.maxColors);
-  // 提亮一档
-  applyBrighten(grid);
   // v123: 像素描边（后处理）
   if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId);
   state.grid = grid;
@@ -493,7 +491,7 @@ function removeBackground(grid = state.grid) {
       }
     }
   }
-  if (!mainGate && !cornerGate && !manualBg && !state.userMask) {
+  if (!mainGate && !cornerGate && !manualBg) {
     state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -502,7 +500,7 @@ function removeBackground(grid = state.grid) {
     }
     return;
   }
-  if (N <= 52 && !state.userMask) {
+  if (N <= 52) {
     state.bgStatus = 'small';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -537,17 +535,6 @@ function removeBackground(grid = state.grid) {
         isBgArr[y][x] = true;
       } else {
         cover[y][x] = true;
-      }
-    }
-  }
-  // 手动遮罩（userMask，由图片处理模块的笔刷生成）：'keep' 强制保留主体、'erase' 强制当背景。
-  // 在色彩距离判定之上叠加，使洪水填充尊重用户笔触，无需改动种子/安全逻辑。
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        var _um = state.userMask[y][x];
-        if (_um === 'keep') { cover[y][x] = true; isBgArr[y][x] = false; }
-        else if (_um === 'erase') { isBgArr[y][x] = true; if (grid[y][x] == null) grid[y][x] = bgColorId; }
       }
     }
   }
@@ -592,10 +579,6 @@ function removeBackground(grid = state.grid) {
   };
   for (let x = 0; x < N; x++) { seed(x, 0); seed(x, N - 1); }
   for (let y = 0; y < N; y++) { seed(0, y); seed(N - 1, y); }
-  // 手动 erase 笔触也作为种子，使没有背景边界的主体贴边区域也能被抠掉
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (state.userMask[y][x] === 'erase') seed(x, y);
-  }
   while (queue.length) {
     const [x, y] = queue.pop();
     toFill.push([x, y]);
@@ -605,14 +588,8 @@ function removeBackground(grid = state.grid) {
   var gateConfident = (mL > 0.95 && vL < 0.05) || (mL < 0.08 && vL < 0.05) ||
                       (midL > 0.95 && vL < 0.06) || (midL < 0.06 && vL < 0.06);
   var safetyLimit = gateConfident ? 0.98 : 0.85;
-  if (nonNull && toFill.length / nonNull > safetyLimit && !state.userMask) { state.bgStatus = 'full'; return; }
+  if (nonNull && toFill.length / nonNull > safetyLimit) { state.bgStatus = 'full'; return; }
   for (const [x, y] of toFill) { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
-  // 强制应用 erase 笔触（即便未被洪水覆盖，用户明确要抠掉的区域也置为背景）
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (state.userMask[y][x] === 'erase') { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
-    }
-  }
   {
     const visited2 = Array.from({ length: N }, () => new Array(N).fill(false));
     for (let y = minY; y <= maxY; y++) {
@@ -852,21 +829,6 @@ function reduceColors(grid, maxColors) {
       if (id && mapping[id] !== id) {
         if (state.bgMask && state.bgMask[y][x]) continue;
         grid[y][x] = mapping[id];
-      }
-    }
-  }
-}
-function applyBrighten(grid) {
-  if (!state.brighten) return;
-  var N = grid.length;
-  for (var y = 0; y < N; y++) {
-    for (var x = 0; x < N; x++) {
-      var id = grid[y][x];
-      if (!id) continue;
-      if (state.bgMask && state.bgMask[y][x]) continue;
-      var brighter = BRIGHTEN_MAP[id];
-      if (brighter && brighter !== id && !state.excluded.has(brighter)) {
-        grid[y][x] = brighter;
       }
     }
   }

@@ -150,11 +150,6 @@
         </div>
         <div class="help-text tight">默认关：整张图都拼豆。打开后自动识别并抠掉纯色背景（白底/黑底均可自动识别），只保留主体豆子。<br>自动识别失败时，点下方按钮后在画布背景区域点一下即可手动指定背景色。</div>
         <button id="btn-sample-bg" class="btn-ghost full" style="margin-top:4px;padding:6px 12px;font-size:12px;">手动取样背景色</button>
-        <div class="toggle-row" style="margin-top:14px;">
-          <span class="toggle-name">提亮一档</span>
-          <label class="switch"><input id="toggle-brighten" type="checkbox" /><span class="knob"></span></label>
-        </div>
-        <div class="help-text tight">把每个色号替换成同色系里更亮一档的真实色号，适合原图偏暗、想整体提亮的场景。关闭则用原始配色。</div>
     </section>
 
     <section class="block collapsible collapsed">
@@ -436,14 +431,15 @@
       <div class="prep-preview-wrap" id="prep-preview-wrap">
         <canvas id="prep-canvas"></canvas>
         <canvas id="prep-overlay"></canvas>
-        <div class="prep-preview-hint" id="prep-preview-hint">拖动选择裁切区域 · 笔刷涂抹去背景</div>
+        <div class="prep-preview-hint" id="prep-preview-hint">拖动选择裁切区域（可留空，整图参与抠图）</div>
       </div>
 
-      <div class="prep-toolbar">
-        <div class="seg" id="prep-tool-seg">
-          <button class="seg-item active" data-tool="brush">去背景笔刷</button>
-          <button class="seg-item" data-tool="crop">裁剪</button>
-        </div>
+      <button class="prep-btn prep-auto-seg" id="prep-auto-seg">✨ 自动抠图（自动分离多个主体）</button>
+      <div class="prep-seg-status" id="prep-seg-status" hidden></div>
+
+      <div class="prep-results" id="prep-results" hidden>
+        <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
+        <div class="prep-subjects" id="prep-subjects"></div>
       </div>
 
       <div class="prep-section">
@@ -476,21 +472,12 @@
       </div>
 
       <div class="prep-section">
-        <div class="prep-section-title">去背景（手动笔刷）</div>
+        <div class="prep-section-title">整图去背景（一键）</div>
         <div class="toggle-row">
           <span class="toggle-name">自动去背景</span>
           <label class="switch"><input id="prep-removebg" type="checkbox" /><span class="knob"></span></label>
         </div>
-        <div class="prep-btn-row">
-          <button class="prep-btn active" id="prep-brush-erase">🩹 擦除背景</button>
-          <button class="prep-btn" id="prep-brush-keep">✋ 保留主体</button>
-          <button class="prep-btn" id="prep-brush-clear">清除笔刷</button>
-        </div>
-        <div class="slider-row">
-          <div class="slider-top"><span class="slider-name">笔刷大小</span><span id="prep-brush-val" class="slider-val">14</span></div>
-          <input id="prep-brush-size" type="range" min="4" max="60" value="14" step="1" />
-        </div>
-        <div class="help-text tight">选「擦除背景」沿要抠掉的区域涂抹；若算法误删了主体，切「保留主体」涂抹补回。笔刷按当前网格尺寸生效，改网格尺寸会清空笔刷。</div>
+        <div class="help-text tight">开启后「应用到图纸」会把整张图（含所有主体）按边缘色自动去背景，适合单主体或一次性拼整张。多主体分张请用上方「自动抠图」。</div>
       </div>
 
       <div class="modal-btns">
