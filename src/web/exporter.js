@@ -274,6 +274,7 @@ async function buildShareCanvas() {
 
 function buildExportCanvas(opts) {
   const N = state.N;
+  if (!state.displayRect || !state.grid) return null;
   // v100: 导出固定 (N-4)×(N-4) 正方形，内容居中、四周填背景色（适配电子拼豆板导入）
   const dr = state.displayRect;
   const M = dr.M;
@@ -289,14 +290,7 @@ function buildExportCanvas(opts) {
   if (isMobileDevice() && N * cell > MAX_MOBILE) cell = Math.floor(MAX_MOBILE / N);
   if (isWeixin() && N * cell > MAX_WEIXIN) cell = Math.floor(MAX_WEIXIN / N);
   cell = Math.max(10, cell);
-  const k = cell / 24;
-  const pad = Math.round(20 * k);                    // 图案区内边距
-  const titleH = Math.round(300 * k);                 // 标题栏高度（两行信息，v138 放大3倍字体）
-  const gap = 1;                     // 图案与色板间距线
-  const labelH = Math.round(80 * k);                 // "用料详情"标签高度（v138 放大3倍）
-
-  // ===== 统计色号（跳过背景填充格）=====
-  // v98: 按 subject（主体边界）统计，排除四周背景留白豆子
+  // ===== 统计色号（跳过背景填充格，不依赖 cell，先算）=====
   const counts = {};
   let totalBeads = 0;
   var sub = state.subject || state.effective;
@@ -309,7 +303,6 @@ function buildExportCanvas(opts) {
     if (id && !(state.bgMask && state.bgMask[y][x])) { counts[id] = (counts[id] || 0) + 1; totalBeads++; }
   }
   const sorted = Object.entries(counts).sort((a, b) => {
-    // v90: 按色号字母+数字升序排序，方便拼豆时按字母系一次性找完
     const ma = a[0].match(/^([A-Za-z]+)(\d+)$/);
     const mb = b[0].match(/^([A-Za-z]+)(\d+)$/);
     if (!ma || !mb) return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
@@ -317,21 +310,37 @@ function buildExportCanvas(opts) {
     return parseInt(ma[2], 10) - parseInt(mb[2], 10);
   });
 
-  // ===== 色板区布局计算 =====
-  const showStats = opts.stats !== false;  // 默认显示
-  const palPad = 14;                        // 色板区内边距
-  const palEntryW = Math.round(280 * k);    // 每个色号条目宽度 — v138 放大3倍(100→280)
-  const palCellH = Math.round(120 * k);      // 每个色号条目高度 — v138 放大3倍
-
-  // ===== 总画布尺寸 =====（v100: 图案区固定 M×M 正方形）
-  const patternW = pad * 2 + M * cell;
-  const patternH = pad * 2 + M * cell;
-  const W = patternW;   // 整图宽度以图案区为准，用料详情横向铺满此宽度
-  // 关键修复：按可用宽度自动计算列数，横向填满后自动换行（不再固定 8 列挤在左侧）
-  const palCols = showStats ? Math.max(1, Math.floor((W - palPad * 2) / palEntryW)) : 0;
-  const palRows = showStats ? Math.ceil(sorted.length / palCols) : 0;
-  const palH = showStats ? (labelH + palPad + palRows * palCellH + palPad) : 0;
-  const H = titleH + patternH + gap + palH;
+  // ===== 派生尺寸 + 总高度钳制（关键修复：旧逻辑只钳宽度，色板区高使 H 超 16384
+  //       浏览器 canvas 上限 -> toBlob 静默失败 -> 弹"生成失败"。现按 H 比例缩 cell 重算）=====
+  const showStats = opts.stats !== false;
+  const palPad = 14;
+  const sortedLen = sorted.length;
+  let k, pad, titleH, labelH, patternW, patternH, W, palEntryW, palCellH, palCols, palRows, palH, H;
+  const gap = 1;
+  function _recalcLayout() {
+    k = cell / 24;
+    pad = Math.round(20 * k);
+    titleH = Math.round(300 * k);
+    labelH = Math.round(80 * k);
+    patternW = pad * 2 + M * cell;
+    patternH = pad * 2 + M * cell;
+    W = patternW;
+    palEntryW = Math.round(280 * k);
+    palCellH = Math.round(120 * k);
+    palCols = showStats ? Math.max(1, Math.floor((W - palPad * 2) / palEntryW)) : 0;
+    palRows = showStats ? Math.ceil(sortedLen / palCols) : 0;
+    palH = showStats ? (labelH + palPad + palRows * palCellH + palPad) : 0;
+    H = titleH + patternH + gap + palH;
+  }
+  // 钳制上限兼容移动端/微信（单边更严），避免这些环境 H 仍超限
+  var HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
+  _recalcLayout();
+  let _guard = 0;
+  while (H > HARD && cell > 10 && _guard < 40) {
+    cell = Math.max(10, Math.floor(cell * (HARD - gap) / H));
+    _recalcLayout();
+    _guard++;
+  }
 
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -374,7 +383,7 @@ function buildExportCanvas(opts) {
       var sy = dr.srcMinY + (gy - dr.offY);
       var tid = state.grid[sy][sx];
       var tbg = state.bgMask && state.bgMask[sy][sx];
-      return { id: tid, bg: tbg, hex: (tid && !tbg) ? PALETTE_BY_ID[tid].hex : '#FFFFFF' };
+      var _pp = (tid && !tbg && PALETTE_BY_ID[tid]) ? PALETTE_BY_ID[tid] : null; return { id: tid, bg: tbg, hex: _pp ? _pp.hex : '#FFFFFF' };
     }
     return { id: null, bg: false, hex: '#FFFFFF' };
   };
@@ -677,7 +686,7 @@ function buildExportSVG(opts) {
         var sy = dr.srcMinY + (gy - dr.offY);
         var tid = state.grid[sy][sx];
         var tbg = state.bgMask && state.bgMask[sy][sx];
-        return { id: tid, bg: tbg, hex: (tid && !tbg) ? PALETTE_BY_ID[tid].hex : '#FFFFFF' };
+        var _pp = (tid && !tbg && PALETTE_BY_ID[tid]) ? PALETTE_BY_ID[tid] : null; return { id: tid, bg: tbg, hex: _pp ? _pp.hex : '#FFFFFF' };
       }
       return { id: null, bg: false, hex: '#FFFFFF' };
     };
