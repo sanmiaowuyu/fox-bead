@@ -151,6 +151,21 @@ console.log('--- 6. 不同尺寸 ---');
      'beads=' + r.totalBeads);
 });
 
+console.log('--- 8. 描边粗细 (thickness) ---');
+function countColor(grid, id) {
+  var n = 0;
+  for (var y = 0; y < grid.length; y++) for (var x = 0; x < grid[y].length; x++) if (grid[y][x] === id) n++;
+  return n;
+}
+core.state.sourceImage = { width: W, height: H };
+var o1 = core.processImageMini(circleImg, 64, { outline: { on: true, strength: 50, colorId: 'H7', thickness: 1 } });
+var o4 = core.processImageMini(circleImg, 64, { outline: { on: true, strength: 50, colorId: 'H7', thickness: 4 } });
+var c1 = countColor(o1.grid, 'H7');
+var c4 = countColor(o4.grid, 'H7');
+ok('描边 thickness=1 产生描边格', c1 > 0, 'c1=' + c1);
+ok('描边 thickness=4 格数 > thickness=1', c4 > c1, 'c1=' + c1 + ' c4=' + c4);
+ok('thickness=4 描边约为1的1.5倍以上', c4 >= c1 * 1.5, 'c1=' + c1 + ' c4=' + c4);
+
 console.log('');
 console.log(failed === 0 ? '>>> 全部通过' : '>>> 失败 ' + failed + ' 项');
 process.exit(failed === 0 ? 0 : 1);

@@ -124,6 +124,7 @@ fox-bead/
 | 2026-08-05 | 修正 miniapp/pages/index/index.js 过时注释（管线已非「简化 MVP」） | 注释误导 | miniapp/pages/index/index.js | ✅ |
 | 2026-08-07 | **去背景全面增强（算法层）**：①黑底自动识别——`_manualBgRGB` 与边界极性相反时回退自动判断，纯黑底图不再清不掉；②清理强度随板子自动调低（≤40→上限30 / ≤80→55 / 大板→80）防过度清理；③白底/黑底场景收紧 `BG_T`(0.05) 缓解浅色主体被误删 | 交接文档 §6.2 已知失效场景 + §十二「清理强度随板子自动调低」待办 | src/core/pipeline-core.js | ✅ |
 | 2026-08-07 | 扩展 `tools/smoke-mini.js`：新增 7 项去背景回归断言（黑底识别 + 逆极性取样回退 + 浅主体保护） | 防去背景改动回归 | tools/smoke-mini.js | ✅ |
+| 2026-08-07 | **描边体验增强**：`applyOutline` 加 `thickness` 参数（在边缘像素膨胀 t-1 圈实现 1~4 格宽描边）；`state.outline` 加 `thickness` 字段；网页端新增「描边粗细」滑块（1~4），miniapp 适配层同步透传 | 交接文档 §十二待办「描边粗细控制」 | src/core/pipeline-core.js、src/core/state.js、build.js §7、src/web/template.html、src/web/events.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 

@@ -15,7 +15,7 @@ const state = {
   bgMode: 'white',       // 一键切换背景：'black' 黑底 / 'white' 白底（默认白底）
   removeBg: false,        // 自动去背景：默认关，整张图都参与拼豆（白色主体正常标色号）；纯色背景图才手动开
   brighten: false,        // 提亮一档：默认关，开后每个色号替换成同系列更亮一档的真实色号
-  outline: { on: false, strength: 50, colorId: 'H7' }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。
+  outline: { on: false, strength: 50, colorId: 'H7', thickness: 1 }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。thickness=描边宽度(格数)。
   paletteView: 'grid',   // 右侧色板清单视图：'grid' 紧凑色块 / 'list' 行列表
   showCoords: true,      // 画布预览是否显示坐标数字（左侧/底部轴）
   excluded: new Set(),   // 用户排除的颜色

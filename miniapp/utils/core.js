@@ -312,7 +312,7 @@ const state = {
   bgMode: 'white',       // 一键切换背景：'black' 黑底 / 'white' 白底（默认白底）
   removeBg: false,        // 自动去背景：默认关，整张图都参与拼豆（白色主体正常标色号）；纯色背景图才手动开
   brighten: false,        // 提亮一档：默认关，开后每个色号替换成同系列更亮一档的真实色号
-  outline: { on: false, strength: 50, colorId: 'H7' }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。
+  outline: { on: false, strength: 50, colorId: 'H7', thickness: 1 }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。thickness=描边宽度(格数)。
   paletteView: 'grid',   // 右侧色板清单视图：'grid' 紧凑色块 / 'list' 行列表
   showCoords: true,      // 画布预览是否显示坐标数字（左侧/底部轴）
   excluded: new Set(),   // 用户排除的颜色
@@ -659,8 +659,9 @@ function cleanupNoise(grid, threshold) {
   }
 }
 // v123: 像素描边（后处理）
-function applyOutline(grid, strength, colorId) {
+function applyOutline(grid, strength, colorId, thickness) {
   if (!colorId || !LAB_BY_ID[colorId]) return;
+  if (!thickness || thickness < 1) thickness = 1;
   const N = grid.length;
   const thr = 0.20 - (strength / 100) * 0.18;
   const lab = new Array(N * N);
@@ -685,8 +686,27 @@ function applyOutline(grid, strength, colorId) {
       if (isEdge) edge[y * N + x] = 1;
     }
   }
+  // 描边粗细：在边缘像素基础上膨胀 (thickness-1) 圈，使轮廓更宽更醒目（thickness=1 等同原单格描边）
+  let curEdge = edge;
+  for (let t = 1; t < thickness; t++) {
+    const next = new Uint8Array(N * N);
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        if (curEdge[y * N + x]) { next[y * N + x] = 1; continue; }
+        let hit = false;
+        const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (let k = 0; k < 4; k++) {
+          const nx = x + nb[k][0], ny = y + nb[k][1];
+          if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+          if (curEdge[ny * N + nx]) { hit = true; break; }
+        }
+        if (hit) next[y * N + x] = 1;
+      }
+    }
+    curEdge = next;
+  }
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    if (edge[y * N + x]) grid[y][x] = colorId;
+    if (curEdge[y * N + x]) grid[y][x] = colorId;
   }
 }
 function removeBackground(grid = state.grid) {
@@ -1156,7 +1176,7 @@ function processImageMini(imgData, N, opts) {
   state.maxColors = (opts.maxColors != null) ? opts.maxColors : 24;
   state.removeBg = !!opts.removeBg;
   state.brighten = !!opts.brighten;
-  state.outline = opts.outline || { on: false, strength: 50, colorId: 'H7' };
+  state.outline = opts.outline || { on: false, strength: 50, colorId: 'H7', thickness: 1 };
   state.excluded = opts.excluded || new Set();
   var cr = computeCropRect(imgData.width, imgData.height);
   var scale = Math.min(N / cr.sw, N / cr.sh);
@@ -1185,7 +1205,7 @@ function processImageMini(imgData, N, opts) {
   else { state.bgMask = Array.from({ length: N }, function () { return new Array(N).fill(false); }); state.bgStatus = ''; }
   reduceColors(grid, state.maxColors);
   applyBrighten(grid);
-  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId);
+  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);
   state.grid = grid;
   var counts = {}; var total = 0;
   for (var yy = 0; yy < N; yy++) for (var xx = 0; xx < N; xx++) {

@@ -333,8 +333,9 @@ function cleanupNoise(grid, threshold) {
   }
 }
 // v123: 像素描边（后处理）
-function applyOutline(grid, strength, colorId) {
+function applyOutline(grid, strength, colorId, thickness) {
   if (!colorId || !LAB_BY_ID[colorId]) return;
+  if (!thickness || thickness < 1) thickness = 1;
   const N = grid.length;
   const thr = 0.20 - (strength / 100) * 0.18;
   const lab = new Array(N * N);
@@ -359,8 +360,27 @@ function applyOutline(grid, strength, colorId) {
       if (isEdge) edge[y * N + x] = 1;
     }
   }
+  // 描边粗细：在边缘像素基础上膨胀 (thickness-1) 圈，使轮廓更宽更醒目（thickness=1 等同原单格描边）
+  let curEdge = edge;
+  for (let t = 1; t < thickness; t++) {
+    const next = new Uint8Array(N * N);
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        if (curEdge[y * N + x]) { next[y * N + x] = 1; continue; }
+        let hit = false;
+        const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (let k = 0; k < 4; k++) {
+          const nx = x + nb[k][0], ny = y + nb[k][1];
+          if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+          if (curEdge[ny * N + nx]) { hit = true; break; }
+        }
+        if (hit) next[y * N + x] = 1;
+      }
+    }
+    curEdge = next;
+  }
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    if (edge[y * N + x]) grid[y][x] = colorId;
+    if (curEdge[y * N + x]) grid[y][x] = colorId;
   }
 }
 function removeBackground(grid = state.grid) {

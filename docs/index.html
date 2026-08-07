@@ -671,6 +671,15 @@ body {
           <div class="slider-scale"><span>弱</span><span>强</span></div>
           <div class="help-text tight">数值越大描出的轮廓越多越明显；越小只保留最强烈的边界。</div>
         </div>
+        <div class="slider-row" style="margin-top:12px;">
+          <div class="slider-top">
+            <span class="slider-name">描边粗细</span>
+            <span id="outline-thickness-val" class="slider-val">1</span>
+          </div>
+          <input id="outline-thickness" class="range" type="range" min="1" max="4" value="1" step="1" />
+          <div class="slider-scale"><span>细</span><span>粗</span></div>
+          <div class="help-text tight">描边线条宽度（格数），1=单格细线，4=粗描边更醒目。</div>
+        </div>
         <div class="field" style="margin-top:12px;">
           <span class="field-name">描边颜色</span>
           <select id="outline-color" class="select">
@@ -1162,7 +1171,7 @@ const state = {
   bgMode: 'white',       // 一键切换背景：'black' 黑底 / 'white' 白底（默认白底）
   removeBg: false,        // 自动去背景：默认关，整张图都参与拼豆（白色主体正常标色号）；纯色背景图才手动开
   brighten: false,        // 提亮一档：默认关，开后每个色号替换成同系列更亮一档的真实色号
-  outline: { on: false, strength: 50, colorId: 'H7' }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。
+  outline: { on: false, strength: 50, colorId: 'H7', thickness: 1 }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。thickness=描边宽度(格数)。
   paletteView: 'grid',   // 右侧色板清单视图：'grid' 紧凑色块 / 'list' 行列表
   showCoords: true,      // 画布预览是否显示坐标数字（左侧/底部轴）
   excluded: new Set(),   // 用户排除的颜色
@@ -1538,8 +1547,9 @@ function cleanupNoise(grid, threshold) {
   }
 }
 
-function applyOutline(grid, strength, colorId) {
+function applyOutline(grid, strength, colorId, thickness) {
   if (!colorId || !LAB_BY_ID[colorId]) return;
+  if (!thickness || thickness < 1) thickness = 1;
   const N = grid.length;
   const thr = 0.20 - (strength / 100) * 0.18;
   const lab = new Array(N * N);
@@ -1564,8 +1574,27 @@ function applyOutline(grid, strength, colorId) {
       if (isEdge) edge[y * N + x] = 1;
     }
   }
+
+  let curEdge = edge;
+  for (let t = 1; t < thickness; t++) {
+    const next = new Uint8Array(N * N);
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        if (curEdge[y * N + x]) { next[y * N + x] = 1; continue; }
+        let hit = false;
+        const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (let k = 0; k < 4; k++) {
+          const nx = x + nb[k][0], ny = y + nb[k][1];
+          if (nx < 0 || ny < 0 || nx >= N || ny >= N) continue;
+          if (curEdge[ny * N + nx]) { hit = true; break; }
+        }
+        if (hit) next[y * N + x] = 1;
+      }
+    }
+    curEdge = next;
+  }
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-    if (edge[y * N + x]) grid[y][x] = colorId;
+    if (curEdge[y * N + x]) grid[y][x] = colorId;
   }
 }
 function removeBackground(grid = state.grid) {
@@ -4023,6 +4052,8 @@ function bindEvents() {
   if (os) os.addEventListener('input', e => { state.outline.strength = +e.target.value; const osv = $('outline-strength-val'); if (osv) osv.textContent = state.outline.strength; debounceProcessImage(); });
   const oc = $('outline-color');
   if (oc) oc.addEventListener('change', e => { state.outline.colorId = e.target.value; processImage(); });
+  const otk = $('outline-thickness');
+  if (otk) otk.addEventListener('input', e => { state.outline.thickness = +e.target.value; const otkv = $('outline-thickness-val'); if (otkv) otkv.textContent = state.outline.thickness; debounceProcessImage(); });
 
   $('view-seg').addEventListener('click', e => {
     const b = e.target.closest('.seg-item'); if (!b) return;
@@ -4214,6 +4245,10 @@ function syncUI() {
   if (osvt) osvt.textContent = state.outline.strength;
   const ocs = $('outline-color');
   if (ocs) ocs.value = state.outline.colorId;
+  const otk = $('outline-thickness');
+  if (otk) otk.value = state.outline.thickness;
+  const otkv = $('outline-thickness-val');
+  if (otkv) otkv.textContent = state.outline.thickness;
 
   document.querySelectorAll('#board-pills .board-card').forEach(p => p.classList.toggle('active', +p.dataset.board === state.N));
 

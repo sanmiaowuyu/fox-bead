@@ -192,6 +192,8 @@ function bindEvents() {
   if (os) os.addEventListener('input', e => { state.outline.strength = +e.target.value; const osv = $('outline-strength-val'); if (osv) osv.textContent = state.outline.strength; debounceProcessImage(); });
   const oc = $('outline-color');
   if (oc) oc.addEventListener('change', e => { state.outline.colorId = e.target.value; processImage(); });
+  const otk = $('outline-thickness');
+  if (otk) otk.addEventListener('input', e => { state.outline.thickness = +e.target.value; const otkv = $('outline-thickness-val'); if (otkv) otkv.textContent = state.outline.thickness; debounceProcessImage(); });
 
   // 视图切换
   $('view-seg').addEventListener('click', e => {
@@ -400,6 +402,10 @@ function syncUI() {
   if (osvt) osvt.textContent = state.outline.strength;
   const ocs = $('outline-color');
   if (ocs) ocs.value = state.outline.colorId;
+  const otk = $('outline-thickness');
+  if (otk) otk.value = state.outline.thickness;
+  const otkv = $('outline-thickness-val');
+  if (otkv) otkv.textContent = state.outline.thickness;
   // 拼豆板规格
   document.querySelectorAll('#board-pills .board-card').forEach(p => p.classList.toggle('active', +p.dataset.board === state.N));
   // 网格尺寸 slider 与显示值

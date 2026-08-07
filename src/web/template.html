@@ -210,6 +210,15 @@
           <div class="slider-scale"><span>弱</span><span>强</span></div>
           <div class="help-text tight">数值越大描出的轮廓越多越明显；越小只保留最强烈的边界。</div>
         </div>
+        <div class="slider-row" style="margin-top:12px;">
+          <div class="slider-top">
+            <span class="slider-name">描边粗细</span>
+            <span id="outline-thickness-val" class="slider-val">1</span>
+          </div>
+          <input id="outline-thickness" class="range" type="range" min="1" max="4" value="1" step="1" />
+          <div class="slider-scale"><span>细</span><span>粗</span></div>
+          <div class="help-text tight">描边线条宽度（格数），1=单格细线，4=粗描边更醒目。</div>
+        </div>
         <div class="field" style="margin-top:12px;">
           <span class="field-name">描边颜色</span>
           <select id="outline-color" class="select">
