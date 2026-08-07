@@ -485,4 +485,31 @@ body {
 }
 /* v139: board-card 按下反馈 */
 .board-card:active { transform: scale(0.98); }
+
+/* ===== 图片处理模块弹窗 ===== */
+.prep-card { max-width: 460px; }
+.prep-preview-wrap {
+  position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 360px;
+  background: repeating-conic-gradient(#f0ecf6 0% 25%, #faf8fd 0% 50%) 50% / 22px 22px;
+  border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  touch-action: none; user-select: none;
+}
+.prep-preview-wrap canvas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; }
+#prep-overlay { cursor: crosshair; }
+.prep-preview-hint {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  background: rgba(40,30,60,.55); color: #fff; font-size: 11px; padding: 3px 10px; border-radius: 999px;
+  pointer-events: none; white-space: nowrap;
+}
+.prep-toolbar { display: flex; justify-content: center; margin: 14px 0 4px; }
+.prep-section { margin-top: 14px; }
+.prep-section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.prep-btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.prep-btn {
+  flex: 1 1 auto; min-width: 88px; padding: 8px 10px; font-size: 12px; border-radius: 9px;
+  border: 1px solid var(--border); background: var(--bg-card); color: var(--text-soft);
+  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+}
+.prep-btn:hover { background: var(--accent-soft); }
+.prep-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .board-card { transition: all .15s, transform .08s; }

@@ -28,7 +28,7 @@ function bindEvents() {
     reader.onload = ev => {
       const img = new Image();
       img.onerror = () => setUploadError('图片解析失败，请换张图重试');
-      img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); clearUploadError(); };
+      img.onload = () => { resetMainPan(); state.originalImage = img; state.sourceImage = img; clearUserMask(); processImage(); clearUploadError(); };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(f);
@@ -39,7 +39,7 @@ function bindEvents() {
   uz.addEventListener('drop', e => {
     const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); }; img.src = ev.target.result; };
+    reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.originalImage = img; state.sourceImage = img; clearUserMask(); processImage(); }; img.src = ev.target.result; };
     reader.readAsDataURL(f);
   });
   // 兜底：粘贴图片也能上传（v133 新增）。某些托管平台把页面包进 iframe 且沙箱禁止文件选择框时，
@@ -50,7 +50,7 @@ function bindEvents() {
       if (it.type && it.type.startsWith('image/')) {
         const f = it.getAsFile(); if (!f) continue;
         const reader = new FileReader();
-        reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); clearUploadError(); }; img.src = ev.target.result; };
+        reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.originalImage = img; state.sourceImage = img; clearUserMask(); processImage(); clearUploadError(); }; img.src = ev.target.result; };
         reader.readAsDataURL(f);
         e.preventDefault();
         return;
@@ -63,6 +63,7 @@ function bindEvents() {
     state.N = +e.target.value;
     $('grid-size-val').textContent = `${state.N} × ${state.N}`;
     document.querySelectorAll('#board-pills .board-card').forEach(p => p.classList.remove('active')); // 手动滑动视为自定义
+    clearUserMask(); // 手动遮罩按当前 N 构建，改 N 需清空重画
     updateUploadHint();
     debounceProcessImage();
   });
@@ -426,6 +427,256 @@ function bindEvents() {
   document.title = isOnline
     ? '狐狸爱拼豆 ｜ i 喵绘工坊 · 一键生成拼豆图纸'
     : '狐狸爱拼豆 v' + APP_VERSION + ' ｜ i 喵绘工坊 · 一键生成拼豆图纸';
+
+  // 图片处理模块
+  bindPrepModal();
+}
+
+/* ========== 图片处理模块：面板交互 ========== */
+var prepTool = 'brush';          // 'brush' 去背景笔刷 / 'crop' 裁剪
+var prepScale = 1;               // 预览显示缩放（源像素 → 显示像素）
+var prepW = 0, prepH = 0;        // 当前预处理画布（旋转/翻转后，未裁切）尺寸
+var prepPainting = false;
+var prepLast = null;             // 笔刷上一显示点
+var prepCropStart = null;        // 裁剪起点（显示坐标）
+var prepCropDraft = null;        // 裁剪临时框（显示坐标）
+
+function openPrepModal() {
+  if (!state.sourceImage) return;
+  state.prepBase = state.sourceImage;
+  state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
+  state.userCrop = null;
+  prepTool = 'brush';
+  var bd = $('prep-backdrop');
+  if (bd) bd.hidden = false;
+  // 同步控件
+  var rb = $('prep-removebg'); if (rb) rb.checked = !!state.removeBg;
+  var br = $('prep-brush-erase'); if (br) br.classList.add('active');
+  var bk = $('prep-brush-keep'); if (bk) bk.classList.remove('active');
+  var ts = $('prep-tool-seg'); if (ts) {
+    ts.querySelectorAll('.seg-item').forEach(function (s) { s.classList.toggle('active', s.dataset.tool === 'brush'); });
+  }
+  syncPrepSliders();
+  renderPrepPreview();
+}
+function closePrepModal() { var bd = $('prep-backdrop'); if (bd) bd.hidden = true; }
+
+function syncPrepSliders() {
+  var b = $('prep-bright'); if (b) b.value = state.prep.brightness;
+  var bv = $('prep-bright-val'); if (bv) bv.textContent = state.prep.brightness;
+  var c = $('prep-contrast'); if (c) c.value = state.prep.contrast;
+  var cv = $('prep-contrast-val'); if (cv) cv.textContent = state.prep.contrast;
+  var s = $('prep-sat'); if (s) s.value = state.prep.saturation;
+  var sv = $('prep-sat-val'); if (sv) sv.textContent = state.prep.saturation;
+}
+
+// 渲染预览（显示旋转/翻转/调色后的全图，叠加裁切框与笔刷遮罩）
+function renderPrepPreview() {
+  var canvas = $('prep-canvas'), overlay = $('prep-overlay'), wrap = $('prep-preview-wrap');
+  if (!canvas || !overlay || !wrap) return;
+  var base = state.prepBase || state.sourceImage;
+  var prepCanvas = computePrepCanvas(base, state.prep, null); // 不过滤裁切，方便调整
+  if (!prepCanvas) return;
+  prepW = prepCanvas.width; prepH = prepCanvas.height;
+  var maxW = wrap.clientWidth || 360, maxH = wrap.clientHeight || 360;
+  var scale = Math.min(maxW / prepW, maxH / prepH);
+  if (scale > 1) scale = 1; // 不放大，避免模糊
+  var dw = Math.max(1, Math.round(prepW * scale)), dh = Math.max(1, Math.round(prepH * scale));
+  prepScale = dw / prepW;
+  canvas.width = dw; canvas.height = dh;
+  canvas.getContext('2d').drawImage(prepCanvas, 0, 0, dw, dh);
+  overlay.width = dw; overlay.height = dh;
+  rebuildPrepOverlay();
+}
+
+// 重绘叠加层（裁切框 + 笔刷遮罩）
+function rebuildPrepOverlay() {
+  var overlay = $('prep-overlay'); if (!overlay) return;
+  var octx = overlay.getContext('2d');
+  octx.clearRect(0, 0, overlay.width, overlay.height);
+  // 裁切框
+  if (state.userCrop && state.userCrop.sw > 0 && state.userCrop.sh > 0) {
+    var x = state.userCrop.sx * prepScale, y = state.userCrop.sy * prepScale;
+    var w = state.userCrop.sw * prepScale, h = state.userCrop.sh * prepScale;
+    octx.strokeStyle = '#6A4C93'; octx.lineWidth = 2; octx.setLineDash([6, 4]);
+    octx.strokeRect(x, y, w, h);
+    octx.setLineDash([]);
+  }
+  // 笔刷遮罩（从 N×N userMask 反推显示坐标）
+  if (state.userMask) {
+    var N = state.N, cell = prepScale * (prepW / N);
+    for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) {
+      var t = state.userMask[y][x];
+      if (!t) continue;
+      octx.fillStyle = t === 'erase' ? 'rgba(192,57,43,0.45)' : 'rgba(46,139,87,0.45)';
+      octx.fillRect((x + 0.5) * cell - cell / 2, (y + 0.5) * cell - cell / 2, cell, cell);
+    }
+  }
+}
+
+// 几何变换后清空笔刷遮罩（坐标系已变，旧遮罩不再对齐）
+function prepGeomChanged() { clearUserMask(); renderPrepPreview(); }
+
+// 在显示坐标 (dx,dy) 处落一笔，写入 userMask 并增量绘制
+function prepPaintAt(dx, dy) {
+  if (!state.userMask) {
+    var N = state.N;
+    state.userMask = Array.from({ length: N }, function () { return new Array(N).fill(null); });
+  }
+  // 显示坐标 → 源像素 → 格子
+  var sx = dx / prepScale, sy = dy / prepScale;
+  var cellX = Math.floor(sx * state.N / prepW), cellY = Math.floor(sy * state.N / prepH);
+  var radius = Math.max(1, Math.round(state.brushSize / prepW * state.N));
+  var type = state.brushMode;
+  for (var y = cellY - radius; y <= cellY + radius; y++) {
+    for (var x = cellX - radius; x <= cellX + radius; x++) {
+      if (x < 0 || x >= state.N || y < 0 || y >= state.N) continue;
+      var ddx = x - cellX, ddy = y - cellY;
+      if (ddx * ddx + ddy * ddy > radius * radius) continue;
+      state.userMask[y][x] = type;
+    }
+  }
+  // 增量绘制当前点
+  var overlay = $('prep-overlay'); if (overlay) {
+    var octx = overlay.getContext('2d');
+    octx.fillStyle = type === 'erase' ? 'rgba(192,57,43,0.45)' : 'rgba(46,139,87,0.45)';
+    var r = state.brushSize * prepScale;
+    octx.beginPath(); octx.arc(dx, dy, r, 0, Math.PI * 2); octx.fill();
+  }
+}
+
+function prepOverlayPoint(e) {
+  var overlay = $('prep-overlay'); if (!overlay) return null;
+  var rect = overlay.getBoundingClientRect();
+  var cx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+  var cy = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+  return { x: cx, y: cy };
+}
+
+function bindPrepModal() {
+  var btn = $('btn-prep'); if (btn) btn.addEventListener('click', openPrepModal);
+  var close = $('prep-close'); if (close) close.addEventListener('click', closePrepModal);
+  var cancel = $('prep-cancel'); if (cancel) cancel.addEventListener('click', closePrepModal);
+  var bd = $('prep-backdrop'); if (bd) bd.addEventListener('click', function (e) { if (e.target === bd) closePrepModal(); });
+  var apply = $('prep-apply'); if (apply) apply.addEventListener('click', function () {
+    // 去背景开关同步到主状态
+    var rb = $('prep-removebg'); if (rb) state.removeBg = rb.checked;
+    bakePrep();
+    closePrepModal();
+  });
+  var reset = $('prep-reset'); if (reset) reset.addEventListener('click', function () {
+    state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
+    state.userCrop = null;
+    if (state.prepBase) state.sourceImage = state.prepBase; // 回退到打开时的图
+    clearUserMask();
+    syncPrepSliders();
+    renderPrepPreview();
+  });
+
+  // 旋转 / 翻转
+  var rl = $('prep-rotL'); if (rl) rl.addEventListener('click', function () { state.prep.rotate = (state.prep.rotate + 270) % 360; prepGeomChanged(); });
+  var rr = $('prep-rotR'); if (rr) rr.addEventListener('click', function () { state.prep.rotate = (state.prep.rotate + 90) % 360; prepGeomChanged(); });
+  var fh = $('prep-flipH'); if (fh) fh.addEventListener('click', function () { state.prep.flipH = !state.prep.flipH; prepGeomChanged(); });
+  var fv = $('prep-flipV'); if (fv) fv.addEventListener('click', function () { state.prep.flipV = !state.prep.flipV; prepGeomChanged(); });
+
+  // 调色滑块
+  var bindSlider = function (id, key, valId) {
+    var el = $(id), v = $(valId);
+    if (!el) return;
+    el.addEventListener('input', function () {
+      state.prep[key] = +el.value;
+      if (v) v.textContent = el.value;
+      renderPrepPreview();
+    });
+  };
+  bindSlider('prep-bright', 'brightness', 'prep-bright-val');
+  bindSlider('prep-contrast', 'contrast', 'prep-contrast-val');
+  bindSlider('prep-sat', 'saturation', 'prep-sat-val');
+
+  // 去背景笔刷模式
+  var be = $('prep-brush-erase'); if (be) be.addEventListener('click', function () { state.brushMode = 'erase'; be.classList.add('active'); var bk2 = $('prep-brush-keep'); if (bk2) bk2.classList.remove('active'); });
+  var bk = $('prep-brush-keep'); if (bk) bk.addEventListener('click', function () { state.brushMode = 'keep'; bk.classList.add('active'); if (be) be.classList.remove('active'); });
+  var bc = $('prep-brush-clear'); if (bc) bc.addEventListener('click', function () { clearUserMask(); rebuildPrepOverlay(); });
+  var bs = $('prep-brush-size'); if (bs) bs.addEventListener('input', function () { state.brushSize = +bs.value; var bsv = $('prep-brush-val'); if (bsv) bsv.textContent = bs.value; });
+
+  // 工具切换（笔刷 / 裁剪）
+  var tseg = $('prep-tool-seg'); if (tseg) tseg.addEventListener('click', function (e) {
+    var b = e.target.closest('.seg-item'); if (!b) return;
+    tseg.querySelectorAll('.seg-item').forEach(function (s) { s.classList.remove('active'); });
+    b.classList.add('active');
+    prepTool = b.dataset.tool;
+    var ov = $('prep-overlay'); if (ov) ov.style.cursor = prepTool === 'crop' ? 'crosshair' : 'crosshair';
+  });
+
+  // 预览画布交互（笔刷 / 裁剪）
+  var overlay = $('prep-overlay');
+  if (overlay) {
+    var startHandler = function (e) {
+      e.preventDefault();
+      var p = prepOverlayPoint(e); if (!p) return;
+      if (prepTool === 'brush') {
+        // 落笔即自动开启去背景，避免遮罩被忽略
+        if (!state.removeBg) { state.removeBg = true; var rb2 = $('prep-removebg'); if (rb2) rb2.checked = true; }
+        prepPainting = true; prepLast = p; prepPaintAt(p.x, p.y);
+      } else {
+        prepCropStart = p; prepCropDraft = { x: p.x, y: p.y, w: 0, h: 0 };
+      }
+    };
+    var moveHandler = function (e) {
+      if (!prepPainting && !prepCropDraft) return;
+      e.preventDefault();
+      var p = prepOverlayPoint(e); if (!p) return;
+      if (prepTool === 'brush' && prepPainting) {
+        // 连线补足，避免快速拖动断点
+        if (prepLast) {
+          var steps = Math.max(1, Math.round(Math.hypot(p.x - prepLast.x, p.y - prepLast.y) / 4));
+          for (var i = 1; i <= steps; i++) {
+            var t = i / steps;
+            prepPaintAt(prepLast.x + (p.x - prepLast.x) * t, prepLast.y + (p.y - prepLast.y) * t);
+          }
+        }
+        prepLast = p;
+      } else if (prepTool === 'crop' && prepCropDraft) {
+        prepCropDraft.w = p.x - prepCropStart.x; prepCropDraft.h = p.y - prepCropStart.y;
+        drawCropDraft();
+      }
+    };
+    var endHandler = function (e) {
+      if (prepTool === 'brush') { prepPainting = false; prepLast = null; }
+      else if (prepCropDraft) {
+        // 提交裁切框（显示坐标 → 源坐标）
+        var x0 = Math.min(prepCropStart.x, prepCropStart.x + prepCropDraft.w);
+        var y0 = Math.min(prepCropStart.y, prepCropStart.y + prepCropDraft.h);
+        var w = Math.abs(prepCropDraft.w), h = Math.abs(prepCropDraft.h);
+        if (w > 6 && h > 6) {
+          state.userCrop = {
+            sx: Math.round(x0 / prepScale), sy: Math.round(y0 / prepScale),
+            sw: Math.round(w / prepScale), sh: Math.round(h / prepScale)
+          };
+          clearUserMask(); // 几何变化清空旧遮罩
+        }
+        prepCropDraft = null;
+        rebuildPrepOverlay();
+      }
+    };
+    overlay.addEventListener('mousedown', startHandler);
+    overlay.addEventListener('mousemove', moveHandler);
+    window.addEventListener('mouseup', endHandler);
+    overlay.addEventListener('touchstart', startHandler, { passive: false });
+    overlay.addEventListener('touchmove', moveHandler, { passive: false });
+    overlay.addEventListener('touchend', endHandler);
+  }
+}
+
+function drawCropDraft() {
+  var overlay = $('prep-overlay'); if (!overlay || !prepCropDraft || !prepCropStart) return;
+  rebuildPrepOverlay(); // 先重绘底层（含已有遮罩/旧框）
+  var octx = overlay.getContext('2d');
+  var x = Math.min(prepCropStart.x, prepCropStart.x + prepCropDraft.w);
+  var y = Math.min(prepCropStart.y, prepCropStart.y + prepCropDraft.h);
+  octx.strokeStyle = '#6A4C93'; octx.lineWidth = 2; octx.setLineDash([6, 4]);
+  octx.strokeRect(x, y, Math.abs(prepCropDraft.w), Math.abs(prepCropDraft.h));
+  octx.setLineDash([]);
 }
 /* 手机端一键导出：跳过设置弹窗，直接生成并弹出保存浮层（避免二次点击误以为没反应） */
 function mobileQuickExport() {
@@ -470,12 +721,12 @@ function loadSamplePhoto() {
     const url = URL.createObjectURL(blob);
 
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resetMainPan(); state.sourceImage = img; processImage(); };
+    img.onload = () => { URL.revokeObjectURL(url); resetMainPan(); state.originalImage = img; state.sourceImage = img; clearUserMask(); processImage(); };
     img.onerror = () => {
       URL.revokeObjectURL(url);
       // Blob 方式也失败 → 回退到直接 data URI（部分环境支持）
       const fallback = new Image();
-      fallback.onload = () => { resetMainPan(); state.sourceImage = fallback; processImage(); };
+      fallback.onload = () => { resetMainPan(); state.originalImage = fallback; state.sourceImage = fallback; clearUserMask(); processImage(); };
       fallback.onerror = () => {
         const hint = document.getElementById('canvas-hint');
         if (hint) { hint.textContent = '示例图加载失败，请点击上传图片或 Ctrl+V 粘贴'; hint.style.display = 'block'; }
@@ -486,7 +737,7 @@ function loadSamplePhoto() {
   } catch(e) {
     // atob/Blob 不支持的极端环境 → 直接 data URI
     const fb = new Image();
-    fb.onload = () => { resetMainPan(); state.sourceImage = fb; processImage(); };
+    fb.onload = () => { resetMainPan(); state.originalImage = fb; state.sourceImage = fb; clearUserMask(); processImage(); };
     fb.src = SAMPLE_DATA_URI;
   }
 }

@@ -66,6 +66,7 @@
           <div class="upload-hint" id="upload-hint">支持 JPG / PNG / WebP · 建议 ≥ 480×480 像素 · 也可 Ctrl+V 粘贴</div>
         </label>
         <input id="file-input" type="file" accept="image/*" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;left:-9999px;" />
+        <button id="btn-prep" class="btn-outline full" style="margin-top:10px;">🖼 图片处理（旋转/裁剪/调色/去背景）</button>
       </section>
 
       <section class="block primary">
@@ -394,6 +395,80 @@
   </div>
 
   <!-- 品牌色卡弹窗已下线（白块 bug 待修，下周开放）；放大预览弹窗也已移除（暂缓）；使用说明弹窗已移除（用户不需要） -->
+
+  <!-- ===== 图片处理模块弹窗 ===== -->
+  <div class="modal-backdrop" id="prep-backdrop" hidden>
+    <div class="modal-card prep-card">
+      <div class="modal-head">
+        <span class="modal-title">图片处理</span>
+        <button class="modal-close" id="prep-close">✕</button>
+      </div>
+      <div class="modal-div"></div>
+
+      <div class="prep-preview-wrap" id="prep-preview-wrap">
+        <canvas id="prep-canvas"></canvas>
+        <canvas id="prep-overlay"></canvas>
+        <div class="prep-preview-hint" id="prep-preview-hint">拖动选择裁切区域 · 笔刷涂抹去背景</div>
+      </div>
+
+      <div class="prep-toolbar">
+        <div class="seg" id="prep-tool-seg">
+          <button class="seg-item active" data-tool="brush">去背景笔刷</button>
+          <button class="seg-item" data-tool="crop">裁剪</button>
+        </div>
+      </div>
+
+      <div class="prep-section">
+        <div class="prep-section-title">旋转 / 翻转</div>
+        <div class="prep-btn-row">
+          <button class="prep-btn" id="prep-rotL">↺ 左转90°</button>
+          <button class="prep-btn" id="prep-rotR">↻ 右转90°</button>
+          <button class="prep-btn" id="prep-flipH">⇋ 水平翻转</button>
+          <button class="prep-btn" id="prep-flipV">⇅ 垂直翻转</button>
+        </div>
+      </div>
+
+      <div class="prep-section">
+        <div class="prep-section-title">调色</div>
+        <div class="slider-row">
+          <div class="slider-top"><span class="slider-name">亮度</span><span id="prep-bright-val" class="slider-val">0</span></div>
+          <input id="prep-bright" class="range" type="range" min="-100" max="100" value="0" step="1" />
+        </div>
+        <div class="slider-row">
+          <div class="slider-top"><span class="slider-name">对比度</span><span id="prep-contrast-val" class="slider-val">0</span></div>
+          <input id="prep-contrast" class="range" min="-100" max="100" value="0" step="1" />
+        </div>
+        <div class="slider-row">
+          <div class="slider-top"><span class="slider-name">饱和度</span><span id="prep-sat-val" class="slider-val">0</span></div>
+          <input id="prep-sat" class="range" min="-100" max="100" value="0" step="1" />
+        </div>
+      </div>
+
+      <div class="prep-section">
+        <div class="prep-section-title">去背景（手动笔刷）</div>
+        <div class="toggle-row">
+          <span class="toggle-name">自动去背景</span>
+          <label class="switch"><input id="prep-removebg" type="checkbox" /><span class="knob"></span></label>
+        </div>
+        <div class="prep-btn-row">
+          <button class="prep-btn active" id="prep-brush-erase">🩹 擦除背景</button>
+          <button class="prep-btn" id="prep-brush-keep">✋ 保留主体</button>
+          <button class="prep-btn" id="prep-brush-clear">清除笔刷</button>
+        </div>
+        <div class="slider-row">
+          <div class="slider-top"><span class="slider-name">笔刷大小</span><span id="prep-brush-val" class="slider-val">14</span></div>
+          <input id="prep-brush-size" type="range" min="4" max="60" value="14" step="1" />
+        </div>
+        <div class="help-text tight">选「擦除背景」沿要抠掉的区域涂抹；若算法误删了主体，切「保留主体」涂抹补回。笔刷按当前网格尺寸生效，改网格尺寸会清空笔刷。</div>
+      </div>
+
+      <div class="modal-btns">
+        <button id="prep-reset" class="btn-ghost">重置</button>
+        <button id="prep-cancel" class="btn-ghost">取消</button>
+        <button id="prep-apply" class="btn-primary">应用到图纸</button>
+      </div>
+    </div>
+  </div>
 
   <script>
 /* BUILD:JS */

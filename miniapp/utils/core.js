@@ -325,7 +325,51 @@ const state = {
   editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）
   editTool: 'select',    // 编辑工具：'select' 选格换色 / 'paint' 手绘刷色
   selectedColor: 'H7',   // 手绘画笔色 / 当前选中色（默认白色系）
+  // 图片处理模块（通用预处理）
+  originalImage: null,   // 上传原图（首次载入时记录，用于重置预处理）
+  prep: { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 }, // 待烘焙的预处理参数
+  prepBase: null,        // 图片处理面板打开时的基准图（用于取消/重置，不修改则回退到此）
+  userCrop: null,        // 预处理裁切框 {sx,sy,sw,sh}（基于旋转/翻转后的预览坐标，烘焙后清空）
+  userMask: null,        // 手动去背景遮罩 N×N：'keep'(保留主体) | 'erase'(擦除背景) | null
+  brushMode: 'erase',    // 去背景笔刷类型：'erase' 擦除背景 / 'keep' 保留主体
+  brushSize: 14,         // 笔刷半径（源像素）
 };
+/* ---------- image-prep.js：图片预处理纯函数（零 DOM，web / 小程序共用） ---------- */
+/* 仅做像素级亮度/对比度/饱和度调整。旋转/翻转/裁剪的栅格化在网页端 pipeline.js（canvas）完成，
+   不进入小程序构建（小程序由 build.js §7 仅打包纯模块）。本文件不含任何 document/window/canvas 引用。
+   兼容旧移动端：不使用 ?. / Object.fromEntries / spread。 */
+
+function clamp255(v) { return v < 0 ? 0 : (v > 255 ? 255 : v); }
+
+// 对 ImageData 的 data（Uint8ClampedArray）做亮度/对比度/饱和度调整，原地修改并返回。
+// opt: { brightness:-100..100, contrast:-100..100, saturation:-100..100 }，0 为不变。
+function adjustImageData(data, w, h, opt) {
+  var brightness = opt && opt.brightness ? opt.brightness : 0;
+  var contrast = opt && opt.contrast ? opt.contrast : 0;
+  var saturation = opt && opt.saturation ? opt.saturation : 0;
+  var b = brightness * 2.55;          // -255..255
+  var c = (contrast + 100) / 100;     // 0..2（1=不变）
+  var s = (saturation + 100) / 100;   // 0..2（1=不变）
+  for (var i = 0; i < data.length; i += 4) {
+    if (data[i + 3] === 0) continue;  // 跳过透明像素
+    var r = data[i], g = data[i + 1], bl = data[i + 2];
+    // 亮度
+    r += b; g += b; bl += b;
+    // 对比度（围绕 128）
+    r = (r - 128) * c + 128;
+    g = (g - 128) * c + 128;
+    bl = (bl - 128) * c + 128;
+    // 饱和度（围绕亮度）
+    var lum = 0.299 * r + 0.587 * g + 0.114 * bl;
+    r = lum + (r - lum) * s;
+    g = lum + (g - lum) * s;
+    bl = lum + (bl - lum) * s;
+    data[i] = clamp255(r);
+    data[i + 1] = clamp255(g);
+    data[i + 2] = clamp255(bl);
+  }
+  return data;
+}
 /* ---------- 5. 图片处理管线（纯算法内核，零 DOM 依赖，web / 小程序共用） ---------- */
 /* 本文件不含任何 document / window / canvas 引用，可由 build.js 同时打入网页版与小程序版。
    平台相关的像素获取在 web 端由 src/web 的 canvas 完成，小程序端由 processImageMini 直接消费 ImageData。 */
@@ -821,7 +865,7 @@ function removeBackground(grid = state.grid) {
       }
     }
   }
-  if (!mainGate && !cornerGate && !manualBg) {
+  if (!mainGate && !cornerGate && !manualBg && !state.userMask) {
     state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -830,7 +874,7 @@ function removeBackground(grid = state.grid) {
     }
     return;
   }
-  if (N <= 52) {
+  if (N <= 52 && !state.userMask) {
     state.bgStatus = 'small';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -865,6 +909,17 @@ function removeBackground(grid = state.grid) {
         isBgArr[y][x] = true;
       } else {
         cover[y][x] = true;
+      }
+    }
+  }
+  // 手动遮罩（userMask，由图片处理模块的笔刷生成）：'keep' 强制保留主体、'erase' 强制当背景。
+  // 在色彩距离判定之上叠加，使洪水填充尊重用户笔触，无需改动种子/安全逻辑。
+  if (state.userMask) {
+    for (let y = 0; y < N; y++) {
+      for (let x = 0; x < N; x++) {
+        var _um = state.userMask[y][x];
+        if (_um === 'keep') { cover[y][x] = true; isBgArr[y][x] = false; }
+        else if (_um === 'erase') { isBgArr[y][x] = true; if (grid[y][x] == null) grid[y][x] = bgColorId; }
       }
     }
   }
@@ -909,6 +964,10 @@ function removeBackground(grid = state.grid) {
   };
   for (let x = 0; x < N; x++) { seed(x, 0); seed(x, N - 1); }
   for (let y = 0; y < N; y++) { seed(0, y); seed(N - 1, y); }
+  // 手动 erase 笔触也作为种子，使没有背景边界的主体贴边区域也能被抠掉
+  if (state.userMask) {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (state.userMask[y][x] === 'erase') seed(x, y);
+  }
   while (queue.length) {
     const [x, y] = queue.pop();
     toFill.push([x, y]);
@@ -918,8 +977,14 @@ function removeBackground(grid = state.grid) {
   var gateConfident = (mL > 0.95 && vL < 0.05) || (mL < 0.08 && vL < 0.05) ||
                       (midL > 0.95 && vL < 0.06) || (midL < 0.06 && vL < 0.06);
   var safetyLimit = gateConfident ? 0.98 : 0.85;
-  if (nonNull && toFill.length / nonNull > safetyLimit) { state.bgStatus = 'full'; return; }
+  if (nonNull && toFill.length / nonNull > safetyLimit && !state.userMask) { state.bgStatus = 'full'; return; }
   for (const [x, y] of toFill) { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
+  // 强制应用 erase 笔触（即便未被洪水覆盖，用户明确要抠掉的区域也置为背景）
+  if (state.userMask) {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      if (state.userMask[y][x] === 'erase') { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
+    }
+  }
   {
     const visited2 = Array.from({ length: N }, () => new Array(N).fill(false));
     for (let y = minY; y <= maxY; y++) {

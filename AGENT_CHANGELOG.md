@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -130,6 +130,7 @@ fox-bead/
 | 2026-08-07 | **#19 小程序管线 UI 开关**：`index.js` 透传 mode/removeBg/dither/brighten/maxColors(4-64)/outline(on+strength) 到 `processImageMini` 第三参 `opts`；`index.wxml/wxss` 加控制面板（模式 picker、去背景/抖动/提亮/描边 switch、减色上限/描边强度 slider），复用缓存 `_imgData` 重跑 `_reprocess` | §5.2 P3「小程序页面缺开关 UI」待办闭环 | miniapp/pages/index/index.js、index.wxml、index.wxss | ✅ |
 | 2026-08-07 | **#20 编辑器拖拽手绘改色**：`state.editTool('select'\|'paint')` + `selectedColor`；`editor.js` 单指拖拽连续刷色，复用增量重绘 `_patchEditCell`/`patchMainCell`，单次手势一次撤销（`_pushUndo` 在 `startPaint`）；`template.html`/`events.js` 加工具切换分段控件 + 画笔色显示；`css` 加 `.edit-tool`/`.edit-paint-color` 等样式 | 用户要「拖拽手绘改色」体验 | src/core/state.js、src/web/editor.js、src/web/template.html、src/web/events.js、src/web/css/style.css | ✅ |
 | 2026-08-07 | **#21 移动端主预览画布单指平移**：`events.js` 主画布触屏加单指拖拽平移（CSS `transform: translate`，仅在画布溢出容器时启用），`clampMainPan` 边界夹取防拖飞，与双指 pinch 缩放协同（缩放后重新夹取），`resetMainPan` 在导入新图/示例/粘贴/URL 加载时清零；不侵入 render.js 重绘模型 | §6 注「完整自由平移(pan)为已知待办」闭环 | src/web/events.js | ✅ |
+| 2026-08-07 | **图片处理模块（通用预处理 + 去背景笔刷）**：新增「🖼 图片处理」弹窗，含 旋转(±90°)/翻转(水平垂直)/自由裁剪/调色(亮度·对比度·饱和度) 与 去背景手动笔刷（擦除背景/保留主体，按当前 N 构建 N×N 遮罩）；纯函数 `adjustImageData` 入 `image-prep.js`（零 DOM，web+小程序共用），栅格化 `computePrepCanvas`/`bakePrep`/`resetPrep` 入 `pipeline.js`（web 专属）；遮罩经 `state.userMask` 注入 `removeBackground`（复用洪水填充，无需大模型） | 用户问「去背景留主体是否要接大模型」→ 结论：常见拼豆素材无需模型，增强现有无模型算法 + 手动笔刷即可，离线零成本保铁律 | src/core/image-prep.js、src/core/pipeline-core.js、src/core/pipeline.js、src/core/state.js、src/web/template.html、src/web/events.js、src/web/css/style.css、build.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 

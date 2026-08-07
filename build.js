@@ -34,6 +34,7 @@ var JS_MODULES = [
   { dir: CORE, file: 'palette.js' },
   { dir: CORE, file: 'color.js' },
   { dir: CORE, file: 'state.js' },
+  { dir: CORE, file: 'image-prep.js' },
   { dir: CORE, file: 'presets.js' },
   { dir: CORE, file: 'pipeline-core.js' },
   { dir: CORE, file: 'colors.js' },
@@ -161,7 +162,7 @@ var MINIAPP = path.join(ROOT, 'miniapp');
 var MINIAPP_CORE = path.join(MINIAPP, 'utils', 'core.js');
 if (fs.existsSync(MINIAPP)) {
   // 仅打包纯模块（零 document / 零 $ / 零 canvas）：算法内核与网页版完全一致 = 单内核来源（解决 P0）
-  var mpModules = ['color.js', 'palette.js', 'state.js', 'pipeline-core.js'];
+  var mpModules = ['color.js', 'palette.js', 'state.js', 'image-prep.js', 'pipeline-core.js'];
   var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）\n// 版本: ' + (verMatch ? newVer : 'N/A') + '\n'];
   for (var mi = 0; mi < mpModules.length; mi++) {
     mpParts.push(readTrim(path.join(CORE, mpModules[mi])));

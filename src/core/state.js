@@ -28,5 +28,13 @@ const state = {
   editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）
   editTool: 'select',    // 编辑工具：'select' 选格换色 / 'paint' 手绘刷色
   selectedColor: 'H7',   // 手绘画笔色 / 当前选中色（默认白色系）
+  // 图片处理模块（通用预处理）
+  originalImage: null,   // 上传原图（首次载入时记录，用于重置预处理）
+  prep: { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 }, // 待烘焙的预处理参数
+  prepBase: null,        // 图片处理面板打开时的基准图（用于取消/重置，不修改则回退到此）
+  userCrop: null,        // 预处理裁切框 {sx,sy,sw,sh}（基于旋转/翻转后的预览坐标，烘焙后清空）
+  userMask: null,        // 手动去背景遮罩 N×N：'keep'(保留主体) | 'erase'(擦除背景) | null
+  brushMode: 'erase',    // 去背景笔刷类型：'erase' 擦除背景 / 'keep' 保留主体
+  brushSize: 14,         // 笔刷半径（源像素）
 };
 
