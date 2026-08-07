@@ -8,7 +8,16 @@ Page({
     hasImage: false,
     canvasSize: 300,
     beadCount: 0,
-    colorCount: 0
+    colorCount: 0,
+    // 管线开关（与网页端 processImage 同一套内核参数，透传给 processImageMini）
+    modeNames: ['真实', '卡通'],
+    modeIdx: 0,          // 0=真实(average) / 1=卡通(cartoon)，默认真实
+    removeBg: false,     // 去背景
+    dither: false,       // Floyd-Steinberg 抖动
+    brighten: false,     // 提亮一档
+    maxColors: 24,       // 减色上限
+    outlineOn: false,    // 像素描边
+    outlineStrength: 50  // 描边强度
   },
 
   onLoad: function() {
@@ -60,6 +69,7 @@ Page({
     var that = this;
     var N = this.data.boardN;
     var img = this._sourceImage;
+    if (!img) return;
 
     // Create offscreen canvas to get pixel data
     var query = wx.createSelectorQuery();
@@ -73,10 +83,17 @@ Page({
       image.onload = function() {
         ctx.drawImage(image, 0, 0);
         var imgData = ctx.getImageData(0, 0, img.width, img.height);
+        that._imgData = imgData;   // 缓存，开关切换时无需重新读图
+        that._imgInfo = img;
         that._runPipeline(imgData, img);
       };
       image.src = img.path;
     });
+  },
+
+  // 开关切换：直接复用缓存的 imgData 重跑管线（不同步重新读文件）
+  _reprocess: function() {
+    if (this._imgData) this._runPipeline(this._imgData, this._imgInfo);
   },
 
   _processFallback: function() {
@@ -95,9 +112,17 @@ Page({
 
     // processImageMini 与网页版 processImage 共用 src/core 同一套算法内核
     // （取色 / 抖动 / 降噪 / 去背景 / 减色 / 提亮 / 描边），非简化版。
-    // 第三参数 opts 可选，缺省即：average 取色、不抖动、cleanup 5、maxColors 24、
-    // 不去背景、不提亮、不描边。后续页面加开关时按需透传即可。
-    var result = core.processImageMini(imgData, N);
+    // 把页面开关全部透传为 opts，手机端即可用上完整管线。
+    var d = this.data;
+    var opts = {
+      mode: d.modeIdx === 0 ? 'average' : 'cartoon',
+      dither: d.dither,
+      removeBg: d.removeBg,
+      brighten: d.brighten,
+      maxColors: d.maxColors,
+      outline: { on: d.outlineOn, strength: d.outlineStrength, colorId: 'H7', thickness: 1 }
+    };
+    var result = core.processImageMini(imgData, N, opts);
 
     if (result) {
       this._grid = result.grid;
@@ -108,6 +133,36 @@ Page({
       });
       this._renderCanvas();
     }
+  },
+
+  // ---- 管线开关处理器 ----
+  onModeChange: function(e) {
+    this.setData({ modeIdx: parseInt(e.detail.value) });
+    this._reprocess();
+  },
+  onRemoveBg: function(e) {
+    this.setData({ removeBg: e.detail.value });
+    this._reprocess();
+  },
+  onDither: function(e) {
+    this.setData({ dither: e.detail.value });
+    this._reprocess();
+  },
+  onBrighten: function(e) {
+    this.setData({ brighten: e.detail.value });
+    this._reprocess();
+  },
+  onMaxColors: function(e) {
+    this.setData({ maxColors: e.detail.value });
+    this._reprocess();
+  },
+  onOutline: function(e) {
+    this.setData({ outlineOn: e.detail.value });
+    this._reprocess();
+  },
+  onOutlineStrength: function(e) {
+    this.setData({ outlineStrength: e.detail.value });
+    this._reprocess();
   },
 
   _renderCanvas: function() {

@@ -11,6 +11,39 @@
     </picker>
   </view>
 
+  <view class="panel" wx:if="{{hasImage}}">
+    <view class="row">
+      <text class="label">模式</text>
+      <picker mode="selector" range="{{modeNames}}" value="{{modeIdx}}" bindchange="onModeChange">
+        <view class="picker sm">{{modeNames[modeIdx]}}</view>
+      </picker>
+    </view>
+    <view class="row">
+      <text class="label">去背景</text>
+      <switch checked="{{removeBg}}" bindchange="onRemoveBg" color="#6A4C93"/>
+    </view>
+    <view class="row">
+      <text class="label">抖动</text>
+      <switch checked="{{dither}}" bindchange="onDither" color="#6A4C93"/>
+    </view>
+    <view class="row">
+      <text class="label">提亮</text>
+      <switch checked="{{brighten}}" bindchange="onBrighten" color="#6A4C93"/>
+    </view>
+    <view class="row col">
+      <text class="label">减色上限 {{maxColors}}</text>
+      <slider min="4" max="64" value="{{maxColors}}" bindchange="onMaxColors" activeColor="#6A4C93" block-size="18"/>
+    </view>
+    <view class="row">
+      <text class="label">描边</text>
+      <switch checked="{{outlineOn}}" bindchange="onOutline" color="#6A4C93"/>
+    </view>
+    <view class="row col" wx:if="{{outlineOn}}">
+      <text class="label">描边强度 {{outlineStrength}}</text>
+      <slider min="10" max="100" value="{{outlineStrength}}" bindchange="onOutlineStrength" activeColor="#6A4C93" block-size="18"/>
+    </view>
+  </view>
+
   <view class="actions">
     <button class="btn" bindtap="chooseImage">选择图片</button>
     <button class="btn outline" bindtap="useSample">示例图片</button>
