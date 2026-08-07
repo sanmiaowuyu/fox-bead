@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-05（P0/P1/P2 已全部解决）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -95,7 +95,7 @@ fox-bead/
 | GitHub Pages | `https://sanmiaowuyu.github.io/fox-bead/` | ✅ 运行中 | 源 = docs/index.html |
 | CloudStudio（旧） | `…sh4.agentos-app.net` | ❌ 指向已删 fox_v139_upload | 建议删除 |
 | CloudStudio（新） | `…bj2.agentos-app.net` | 待确认 | |
-| Gitee Pages | — | 待用户开 2FA 后做镜像 | |
+| Gitee Pages | `https://gitee.com/three-little-kitty/fox-bead` | ✅ 仓库已推送（main + 11 tags）；Gitee Pages 服务待用户在 Gitee 开启 | 国内镜像，外网不稳时兜底 |
 
 ---
 
@@ -126,6 +126,10 @@ fox-bead/
 | 2026-08-07 | 扩展 `tools/smoke-mini.js`：新增 7 项去背景回归断言（黑底识别 + 逆极性取样回退 + 浅主体保护） | 防去背景改动回归 | tools/smoke-mini.js | ✅ |
 | 2026-08-07 | **描边体验增强**：`applyOutline` 加 `thickness` 参数（在边缘像素膨胀 t-1 圈实现 1~4 格宽描边）；`state.outline` 加 `thickness` 字段；网页端新增「描边粗细」滑块（1~4），miniapp 适配层同步透传 | 交接文档 §十二待办「描边粗细控制」 | src/core/pipeline-core.js、src/core/state.js、build.js §7、src/web/template.html、src/web/events.js | ✅ |
 | 2026-08-07 | **移动端深度适配（主预览画布触屏）**：新增双指 pinch 缩放（映射 `state.zoom`，rAF 节流重绘，居中缩放不引入 pan 状态）+ 单指轻点取样（消除 iOS 300ms 延迟）；双指 `preventDefault` 防页面缩放、单指不拦截以保留页面滚动 | 主预览画布此前仅按钮缩放/click 取样，手机无触屏交互（编辑画布 editor.js 已有完整触屏） | src/web/events.js | ✅ |
+| 2026-08-07 | **#18 去背景鲁棒增强（渐变/浅水印）**：`removeBackground` 背景色估计从 RGB 中点改为边界采样点的 Oklab 中位数（`medianLab`），不再被单边明暗带偏置；对渐变背景/浅水印更稳 | 交接文档 §9 / §6.2 非纯色背景为已知失效场景；纯前端渐变背景此前易把主体当背景 | src/core/pipeline-core.js、tools/smoke-mini.js(新增 7d 渐变背景用例) | ✅ |
+| 2026-08-07 | **#19 小程序管线 UI 开关**：`index.js` 透传 mode/removeBg/dither/brighten/maxColors(4-64)/outline(on+strength) 到 `processImageMini` 第三参 `opts`；`index.wxml/wxss` 加控制面板（模式 picker、去背景/抖动/提亮/描边 switch、减色上限/描边强度 slider），复用缓存 `_imgData` 重跑 `_reprocess` | §5.2 P3「小程序页面缺开关 UI」待办闭环 | miniapp/pages/index/index.js、index.wxml、index.wxss | ✅ |
+| 2026-08-07 | **#20 编辑器拖拽手绘改色**：`state.editTool('select'\|'paint')` + `selectedColor`；`editor.js` 单指拖拽连续刷色，复用增量重绘 `_patchEditCell`/`patchMainCell`，单次手势一次撤销（`_pushUndo` 在 `startPaint`）；`template.html`/`events.js` 加工具切换分段控件 + 画笔色显示；`css` 加 `.edit-tool`/`.edit-paint-color` 等样式 | 用户要「拖拽手绘改色」体验 | src/core/state.js、src/web/editor.js、src/web/template.html、src/web/events.js、src/web/css/style.css | ✅ |
+| 2026-08-07 | **#21 移动端主预览画布单指平移**：`events.js` 主画布触屏加单指拖拽平移（CSS `transform: translate`，仅在画布溢出容器时启用），`clampMainPan` 边界夹取防拖飞，与双指 pinch 缩放协同（缩放后重新夹取），`resetMainPan` 在导入新图/示例/粘贴/URL 加载时清零；不侵入 render.js 重绘模型 | §6 注「完整自由平移(pan)为已知待办」闭环 | src/web/events.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 
@@ -196,7 +200,7 @@ fox-bead/
 | 优先级 | 事项 | 说明 |
 |--------|------|------|
 | P3 | `miniapp/utils/core.js` 已是产物，建议加入 `.gitignore`？ | 暂**保留在 git**——小程序开发者工具需要它，且方便对端 Agent 直接 checkout 就能跑。但**禁止手改**（见 C5 同理） |
-| P3 | 小程序页面缺开关 UI | `processImageMini` 第三参 `opts` 已支持 mode/dither/cleanup/maxColors/removeBg/brighten/outline，页面加控件透传即可 |
+| P3 | ~~小程序页面缺开关 UI~~ → **✅ 已解决（#19）** | `processImageMini` 第三参 `opts` 已支持 mode/dither/cleanup/maxColors/removeBg/brighten/outline，`miniapp/pages/index` 已加控制面板透传 |
 | P3 | 去背景在 `N<=52` 时按设计跳过（走 `bgStatus='small'` 分支保留背景） | 非 bug。小程序默认板子 104，不受影响；但若产品要小板子也去背景，需改 `pipeline-core.js` L458 阈值 |
 | P3 | web 的 `srcRGB` 由 canvas 降采样生成，mini 由 `sampleCellRGB` 生成 | 两者路径不同，抖动结果可能有极微差异。未统一是为了不动网页既有行为，如需完全一致再议 |
 | P3 | 浅色主体（白猫脸/白衣物）误删为已知限制，需 AI 分割根治 | 2026-08-07 收紧 `BG_T` 仅缓解明显浅主体；彻底解决见文档 §9 生图模块（需加后端+付费） |
@@ -214,4 +218,4 @@ fox-bead/
 - 移动端：主预览画布补双指 pinch 缩放 + 轻点取样触屏
 - 验证：`node tools/smoke-mini.js` 全 PASS（含去背景/描边新增回归）；`docs/index.html` ?.=0、`miniapp/utils/core.js` DOM=0
 
-> 注：小程序真机手感（pinch 缩放/轻点取样）需余总本机验收；完整自由平移(pan)为已知待办，需引入 pan 状态后实现。
+> 注：小程序真机手感（pinch 缩放/轻点取样）需余总本机验收。完整自由平移(pan)已于 **#21** 实现（主预览画布单指 CSS transform 平移 + `clampMainPan` 边界夹取，与 pinch 缩放协同）。
