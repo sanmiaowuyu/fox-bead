@@ -177,6 +177,7 @@ body {
 .slider-top { display: flex; justify-content: space-between; align-items: center; }
 .slider-name { font-size: 13px; color: var(--ink); font-weight: 500; }
 .slider-val { font-size: 13px; font-weight: 600; color: var(--accent-ink); font-family: var(--mono); }
+.slider-hint { font-size: 11px; color: var(--ink3); line-height: 1.45; padding: 2px 0 0; }
 .slider-scale { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--ink3); }
 .range { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: var(--line); outline: none; }
 .range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid var(--accent-ink); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,.18); }
@@ -502,13 +503,14 @@ body {
 .board-card:active { transform: scale(0.98); }
 
 /* ===== 图片处理模块弹窗 ===== */
-.prep-card { max-width: 460px; }
+.prep-card { max-width: 520px; }
 .prep-preview-wrap {
-  position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 360px;
+  position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 460px;
   background: repeating-conic-gradient(#f0ecf6 0% 25%, #faf8fd 0% 50%) 50% / 22px 22px;
   border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center;
   touch-action: none; user-select: none;
 }
+.prep-preview-wrap canvas { image-rendering: auto; }
 .prep-preview-wrap canvas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; }
 #prep-overlay { cursor: crosshair; }
 .prep-preview-hint {

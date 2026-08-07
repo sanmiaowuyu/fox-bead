@@ -184,6 +184,7 @@ body {
 .slider-top { display: flex; justify-content: space-between; align-items: center; }
 .slider-name { font-size: 13px; color: var(--ink); font-weight: 500; }
 .slider-val { font-size: 13px; font-weight: 600; color: var(--accent-ink); font-family: var(--mono); }
+.slider-hint { font-size: 11px; color: var(--ink3); line-height: 1.45; padding: 2px 0 0; }
 .slider-scale { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 11px; color: var(--ink3); }
 .range { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 3px; background: var(--line); outline: none; }
 .range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid var(--accent-ink); cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,.18); }
@@ -494,13 +495,14 @@ body {
 
 .board-card:active { transform: scale(0.98); }
 
-.prep-card { max-width: 460px; }
+.prep-card { max-width: 520px; }
 .prep-preview-wrap {
-  position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 360px;
+  position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 460px;
   background: repeating-conic-gradient(#f0ecf6 0% 25%, #faf8fd 0% 50%) 50% / 22px 22px;
   border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center;
   touch-action: none; user-select: none;
 }
+.prep-preview-wrap canvas { image-rendering: auto; }
 .prep-preview-wrap canvas { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; }
 #prep-overlay { cursor: crosshair; }
 .prep-preview-hint {
@@ -634,7 +636,7 @@ body {
 (function(){
   try {
     var t = localStorage.getItem('foxbead-theme');
-    if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'light';
+    if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'dark';
     var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     var resolved = (t === 'dark') || (t === 'system' && dark) ? 'dark' : 'light';
     var el = document.documentElement;
@@ -1054,14 +1056,17 @@ body {
         <div class="slider-row">
           <div class="slider-top"><span class="slider-name">亮度</span><span id="prep-bright-val" class="slider-val">0</span></div>
           <input id="prep-bright" class="range" type="range" min="-100" max="100" value="0" step="1" />
+          <div class="slider-hint">调高 → 整体更亮更白，适合偏暗的原图；调低 → 变暗，可用来压暗背景</div>
         </div>
         <div class="slider-row">
           <div class="slider-top"><span class="slider-name">对比度</span><span id="prep-contrast-val" class="slider-val">0</span></div>
           <input id="prep-contrast" class="range" min="-100" max="100" value="0" step="1" />
+          <div class="slider-hint">调高 → 明暗差异更强、边缘更锐利清晰；调低 → 灰蒙蒙、更柔和发灰</div>
         </div>
         <div class="slider-row">
           <div class="slider-top"><span class="slider-name">饱和度</span><span id="prep-sat-val" class="slider-val">0</span></div>
           <input id="prep-sat" class="range" min="-100" max="100" value="0" step="1" />
+          <div class="slider-hint">调高 → 颜色更鲜艳浓郁；调低 → 逐渐接近灰阶，可用来弱化杂色干扰</div>
         </div>
       </div>
 
@@ -3591,10 +3596,15 @@ function showMobileSaveOverlay(src, failMsg) {
     return;
   }
   const title = document.createElement('div');
-  title.textContent = '长按图片 → 保存到相册';
-  title.style.cssText = 'color:#fff;font-size:17px;line-height:1.4;margin-bottom:6px;text-align:center;font-weight:600;';
   const sub = document.createElement('div');
-  sub.textContent = '（若长按没出现菜单，点下方「在新窗口打开」再保存）';
+  if (isMobileDevice()) {
+    title.textContent = '长按图片 → 保存到相册';
+    sub.textContent = '（若长按没出现菜单，点下方「在新窗口打开」再保存）';
+  } else {
+    title.textContent = '右键图片 → 选择「图片另存为」';
+    sub.textContent = '（或点下方「在新窗口打开」后保存）';
+  }
+  title.style.cssText = 'color:#fff;font-size:17px;line-height:1.4;margin-bottom:6px;text-align:center;font-weight:600;';
   sub.style.cssText = 'color:#bbb;font-size:13px;margin-bottom:12px;text-align:center;';
   const img = document.createElement('img');
   img.src = url;
@@ -3614,17 +3624,24 @@ function showMobileSaveOverlay(src, failMsg) {
 }
 
 function downloadCanvasPNG(cv, name) {
-  if (isMobileDevice()) {
-    genPNGSource(cv, src => showMobileSaveOverlay(src));
-    return;
-  }
-  cv.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }, 'image/png');
+  genPNGSource(cv, function (src) {
+    if (!src) { alert('生成失败，请重试'); return; }
+
+    var inIframe = (window.self !== window.top);
+    if (!inIframe) {
+      try {
+        var a = document.createElement('a');
+        if (src instanceof Blob) a.href = URL.createObjectURL(src); else a.href = src;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { document.body.removeChild(a); if (src instanceof Blob) URL.revokeObjectURL(a.href); }, 1500);
+        return;
+      } catch (e) {  }
+    }
+
+    showMobileSaveOverlay(src);
+  });
 }
 
 function loadImage(src) {
@@ -4813,8 +4830,9 @@ function renderPrepPreview() {
   if (!prepCanvas) return;
   prepW = prepCanvas.width; prepH = prepCanvas.height;
   var maxW = wrap.clientWidth || 360, maxH = wrap.clientHeight || 360;
+
   var scale = Math.min(maxW / prepW, maxH / prepH);
-  if (scale > 1) scale = 1; // 不放大，避免模糊
+  if (scale > 4) scale = 4;
   var dw = Math.max(1, Math.round(prepW * scale)), dh = Math.max(1, Math.round(prepH * scale));
   prepScale = dw / prepW;
   canvas.width = dw; canvas.height = dh;

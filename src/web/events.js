@@ -483,8 +483,9 @@ function renderPrepPreview() {
   if (!prepCanvas) return;
   prepW = prepCanvas.width; prepH = prepCanvas.height;
   var maxW = wrap.clientWidth || 360, maxH = wrap.clientHeight || 360;
+  // 允许放大填充预览框（笔刷在显示坐标作画，prepScale 已正确处理放大映射），上限 4x 防极小图撑爆内存
   var scale = Math.min(maxW / prepW, maxH / prepH);
-  if (scale > 1) scale = 1; // 不放大，避免模糊
+  if (scale > 4) scale = 4;
   var dw = Math.max(1, Math.round(prepW * scale)), dh = Math.max(1, Math.round(prepH * scale));
   prepScale = dw / prepW;
   canvas.width = dw; canvas.height = dh;

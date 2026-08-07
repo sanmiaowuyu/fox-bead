@@ -41,7 +41,7 @@
 (function(){
   try {
     var t = localStorage.getItem('foxbead-theme');
-    if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'light';
+    if (t !== 'light' && t !== 'dark' && t !== 'system') t = 'dark';
     var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     var resolved = (t === 'dark') || (t === 'system' && dark) ? 'dark' : 'light';
     var el = document.documentElement;
@@ -461,14 +461,17 @@
         <div class="slider-row">
           <div class="slider-top"><span class="slider-name">亮度</span><span id="prep-bright-val" class="slider-val">0</span></div>
           <input id="prep-bright" class="range" type="range" min="-100" max="100" value="0" step="1" />
+          <div class="slider-hint">调高 → 整体更亮更白，适合偏暗的原图；调低 → 变暗，可用来压暗背景</div>
         </div>
         <div class="slider-row">
           <div class="slider-top"><span class="slider-name">对比度</span><span id="prep-contrast-val" class="slider-val">0</span></div>
           <input id="prep-contrast" class="range" min="-100" max="100" value="0" step="1" />
+          <div class="slider-hint">调高 → 明暗差异更强、边缘更锐利清晰；调低 → 灰蒙蒙、更柔和发灰</div>
         </div>
         <div class="slider-row">
           <div class="slider-top"><span class="slider-name">饱和度</span><span id="prep-sat-val" class="slider-val">0</span></div>
           <input id="prep-sat" class="range" min="-100" max="100" value="0" step="1" />
+          <div class="slider-hint">调高 → 颜色更鲜艳浓郁；调低 → 逐渐接近灰阶，可用来弱化杂色干扰</div>
         </div>
       </div>
 

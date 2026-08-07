@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -134,6 +134,7 @@ fox-bead/
 | 2026-08-07 | **视觉升级（清晰度 + 浅/深/跟随系统三态主题）**：①浅色层次增强——加深辅助文字（`--ink2`/`--ink3`）、左右栏加边框分隔、卡片加轻投影、顶栏改毛玻璃渐变、主按钮改品牌紫渐变、画布区加径向渐变「影棚」背景；②新增深色主题（`[data-resolved="dark"]` 重映射全部变量 + 棋盘格/遮罩/弹窗等硬编码白色元素重映射）；③顶栏加三态主题切换（太阳/月亮/显示器 SVG），`localStorage` 记忆，内联脚本防闪屏，「跟随系统」用 `matchMedia` 实时切换；④修复图片处理按钮 `prep-btn` 原引用未定义变量 `--bg-card/--text` 导致样式失效 | 用户反馈「目前是纯白的，看起来很不清晰」 | src/web/css/style.css、src/web/template.html、src/web/events.js | ✅ |
 | 2026-08-07 | **豆仓库存模块（用量统计 + 缺口提醒）**：左栏新增「📦 豆仓库存」按钮→弹窗按当前图纸统计每色「需要/库存/缺口」，缺口色号标红；`state.inventory` 持久化 `localStorage`（key `foxbead-inventory-v1`）；工具栏「按用量一键填 / 全部+100 / 清空库存 / 视图切换(仅用到的·全部221)」；`computeUsage()` 复用 `subject`/`excluded`/`bgMask` 排除背景统计口径；`renderAll` 末尾派发 `fb:render-done` 事件，弹窗打开时自动重算 | 竞品调研（pindouwuxian 豆仓管理）启发；用户要「图片处理模块」同时选了「做豆仓」+「写竞品对比清单」 | src/core/state.js、src/web/render.js、src/web/template.html、src/web/events.js、src/web/css/style.css | ✅ |
 | 2026-08-07 | **竞品分析文档**：新增 `竞品分析_可借鉴清单.md`，对比 pindouwuxian/Zippland/PixelBead/Jett-Wu 等 8 个项目，给出 P0(豆仓+分块多板PDF)/P1(多色板+补货清单)/P2(3D预览·多图层，需降级) 路线；结论：狐狸去背景算法/移动端/离线单文件已领先，AI 类不建议接（破铁律） | 用户问「Gitee/论坛有什么好的可学习」+ 明确要「做豆仓 + 写对比清单」 | 竞品分析_可借鉴清单.md | ✅ |
+| 2026-08-07 | **修复三处体验问题（用户反馈）**：①**下载修复**——`downloadCanvasPNG` 改用 `genPNGSource`（带 5s 超时回退 dataURL）；顶层页面走 `a.download` 直接下载，iframe/沙箱环境（预览面板、CloudStudio）改弹窗让用户右键/长按保存，`showMobileSaveOverlay` 文案按设备区分（桌面「右键另存为」/移动「长按存相册」）；②**图片处理预览放大**——`renderPrepPreview` 去掉 `scale>1` 上限（允许放大填充预览框，上限 4x 防内存爆），笔刷在显示坐标作画、`prepScale` 已正确处理放大映射；`.prep-card` 宽度 460→520、`.prep-preview-wrap` max-height 360→460；③**调色注释**——亮度/对比度/饱和度滑块下加 `.slider-hint` 说明高低影响；④**默认深色**——内联 head 脚本首次访问默认 `dark` | 用户反馈「下载不了 / 示例图太小笔刷看不清 / 默认暗色」 | src/web/exporter.js、src/web/events.js、src/web/template.html、src/web/css/style.css | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 

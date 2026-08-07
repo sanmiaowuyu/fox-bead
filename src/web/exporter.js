@@ -80,10 +80,15 @@ function showMobileSaveOverlay(src, failMsg) {
     return;
   }
   const title = document.createElement('div');
-  title.textContent = '长按图片 → 保存到相册';
-  title.style.cssText = 'color:#fff;font-size:17px;line-height:1.4;margin-bottom:6px;text-align:center;font-weight:600;';
   const sub = document.createElement('div');
-  sub.textContent = '（若长按没出现菜单，点下方「在新窗口打开」再保存）';
+  if (isMobileDevice()) {
+    title.textContent = '长按图片 → 保存到相册';
+    sub.textContent = '（若长按没出现菜单，点下方「在新窗口打开」再保存）';
+  } else {
+    title.textContent = '右键图片 → 选择「图片另存为」';
+    sub.textContent = '（或点下方「在新窗口打开」后保存）';
+  }
+  title.style.cssText = 'color:#fff;font-size:17px;line-height:1.4;margin-bottom:6px;text-align:center;font-weight:600;';
   sub.style.cssText = 'color:#bbb;font-size:13px;margin-bottom:12px;text-align:center;';
   const img = document.createElement('img');
   img.src = url;
@@ -103,17 +108,24 @@ function showMobileSaveOverlay(src, failMsg) {
 }
 
 function downloadCanvasPNG(cv, name) {
-  if (isMobileDevice()) {
-    genPNGSource(cv, src => showMobileSaveOverlay(src));
-    return;
-  }
-  cv.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }, 'image/png');
+  genPNGSource(cv, function (src) {
+    if (!src) { alert('生成失败，请重试'); return; }
+    // 顶层页面：直接触发下载（普通浏览器/已部署站点）
+    var inIframe = (window.self !== window.top);
+    if (!inIframe) {
+      try {
+        var a = document.createElement('a');
+        if (src instanceof Blob) a.href = URL.createObjectURL(src); else a.href = src;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { document.body.removeChild(a); if (src instanceof Blob) URL.revokeObjectURL(a.href); }, 1500);
+        return;
+      } catch (e) { /* 落到下方弹窗兜底 */ }
+    }
+    // iframe 内（预览面板 / 部分托管沙箱）或下载被拦截：弹窗让用户右键/长按保存
+    showMobileSaveOverlay(src);
+  });
 }
 
 /**
