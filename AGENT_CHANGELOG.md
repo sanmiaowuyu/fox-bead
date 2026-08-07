@@ -207,4 +207,11 @@ fox-bead/
 
 `v6` `v45` `v87` `v100` `v117` `v124` `v132` `v137`(=v138) `v139` —— 均为历史导入。
 
-**v140 尚未打 tag。** 双内核已于 2026-08-05 合并完成，打 tag 的前置条件已满足，建议在小程序真机验证一轮后打 `v140`。
+**v140**（2026-08-07，SeniorDeveloper）：双内核合并里程碑闭环 + 三项体验增强。
+- 架构：算法单一真源 `src/core/pipeline-core.js`，小程序 `miniapp/utils/core.js` 为构建产物（P0/P1/P2 全解决）；修复双重映射致命 bug
+- 去背景增强：黑底自动识别 / 清理强度随板子自适应 / 浅色主体阈值收紧
+- 描边增强：`applyOutline` 加 `thickness`（1~4 格宽），网页端新增「描边粗细」滑块
+- 移动端：主预览画布补双指 pinch 缩放 + 轻点取样触屏
+- 验证：`node tools/smoke-mini.js` 全 PASS（含去背景/描边新增回归）；`docs/index.html` ?.=0、`miniapp/utils/core.js` DOM=0
+
+> 注：小程序真机手感（pinch 缩放/轻点取样）需余总本机验收；完整自由平移(pan)为已知待办，需引入 pan 状态后实现。
