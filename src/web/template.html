@@ -435,10 +435,18 @@
       </div>
 
       <button class="prep-btn prep-auto-seg" id="prep-auto-seg">✨ 自动抠图（自动分离多个主体）</button>
+      <div class="slider-row prep-seg-strength-row">
+        <div class="slider-top"><span class="slider-name">抠图强度</span><span id="prep-seg-val" class="slider-val">自动</span></div>
+        <input id="prep-seg-strength" class="range" type="range" min="4" max="22" value="10" step="1" />
+        <div class="slider-hint">默认「自动」最稳；照片抠不净（留背景边）往右调，抠过头（主体缺角）往左调。</div>
+      </div>
       <div class="prep-seg-status" id="prep-seg-status" hidden></div>
 
       <div class="prep-results" id="prep-results" hidden>
-        <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
+        <div class="prep-results-head">
+          <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
+          <button class="prep-btn prep-seg-all" id="prep-seg-all" hidden>全部拼成一张</button>
+        </div>
         <div class="prep-subjects" id="prep-subjects"></div>
       </div>
 

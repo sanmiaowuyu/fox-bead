@@ -543,7 +543,11 @@ body {
 .prep-auto-seg:active { transform: translateY(0); }
 .prep-seg-status { margin-top: 10px; font-size: 12px; color: var(--ink3); text-align: center; }
 .prep-results { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
-.prep-results-title { font-size: 13px; font-weight: 600; color: var(--ink2); margin-bottom: 10px; }
+.prep-results-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.prep-results-title { font-size: 13px; font-weight: 600; color: var(--ink2); }
+.prep-seg-all { padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 9px; border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent-ink); cursor: pointer; transition: transform .12s, filter .12s; }
+.prep-seg-all:hover { transform: translateY(-1px); filter: brightness(1.03); }
+.prep-seg-all:active { transform: translateY(0); }
 .prep-subjects { display: flex; flex-wrap: wrap; gap: 12px; }
 .subject-thumb {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -554,6 +558,7 @@ body {
   background: repeating-conic-gradient(#f0ecf6 0% 25%, #faf8fd 0% 50%) 50% / 16px 16px;
   border-radius: 8px;
 }
+.subject-label { font-size: 11px; color: var(--ink3); text-align: center; margin-bottom: 2px; }
 .subject-to-pixel { width: 100%; min-width: 0; }
 .prep-section { margin-top: 14px; }
 .prep-section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
@@ -1079,10 +1084,18 @@ body {
       </div>
 
       <button class="prep-btn prep-auto-seg" id="prep-auto-seg">✨ 自动抠图（自动分离多个主体）</button>
+      <div class="slider-row prep-seg-strength-row">
+        <div class="slider-top"><span class="slider-name">抠图强度</span><span id="prep-seg-val" class="slider-val">自动</span></div>
+        <input id="prep-seg-strength" class="range" type="range" min="4" max="22" value="10" step="1" />
+        <div class="slider-hint">默认「自动」最稳；照片抠不净（留背景边）往右调，抠过头（主体缺角）往左调。</div>
+      </div>
       <div class="prep-seg-status" id="prep-seg-status" hidden></div>
 
       <div class="prep-results" id="prep-results" hidden>
-        <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
+        <div class="prep-results-head">
+          <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
+          <button class="prep-btn prep-seg-all" id="prep-seg-all" hidden>全部拼成一张</button>
+        </div>
         <div class="prep-subjects" id="prep-subjects"></div>
       </div>
 
@@ -4694,11 +4707,14 @@ var prepW = 0, prepH = 0;        // 当前预处理画布尺寸
 var prepCropStart = null;        // 裁剪起点（显示坐标）
 var prepCropDraft = null;        // 裁剪临时框（显示坐标）
 
+var prepSegSubs = [], prepSegW = 0, prepSegH = 0, prepSegStrength = null;
+
 function openPrepModal() {
   if (!state.sourceImage) return;
   state.prepBase = state.sourceImage;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
+  prepSegSubs = []; prepSegW = 0; prepSegH = 0; prepSegStrength = null;
   var bd = $('prep-backdrop');
   if (bd) bd.hidden = false;
   var rb = $('prep-removebg'); if (rb) rb.checked = !!state.removeBg;
@@ -4715,6 +4731,8 @@ function syncPrepSliders() {
   var cv = $('prep-contrast-val'); if (cv) cv.textContent = state.prep.contrast;
   var s = $('prep-sat'); if (s) s.value = state.prep.saturation;
   var sv = $('prep-sat-val'); if (sv) sv.textContent = state.prep.saturation;
+  var ss = $('prep-seg-strength'); if (ss) ss.value = 10;
+  var ssv = $('prep-seg-val'); if (ssv) ssv.textContent = prepSegStrength == null ? '自动' : prepSegStrength.toFixed(2);
 }
 function renderPrepPreview() {
   var canvas = $('prep-canvas'), overlay = $('prep-overlay'), wrap = $('prep-preview-wrap');
@@ -4750,14 +4768,19 @@ function clearPrepResults() {
   var rs = $('prep-results'); if (rs) rs.hidden = true;
   var list = $('prep-subjects'); if (list) list.innerHTML = '';
   var st = $('prep-seg-status'); if (st) { st.hidden = true; st.textContent = ''; }
+  var allb = $('prep-seg-all'); if (allb) allb.hidden = true;
+  prepSegSubs = [];
 }
 function runAutoSeg() {
   var base = state.prepBase || state.sourceImage;
   var cv = computePrepCanvas(base, state.prep, state.userCrop);
   if (!cv) return;
+  prepSegW = cv.width; prepSegH = cv.height;
   var ctx = cv.getContext('2d');
   var id = ctx.getImageData(0, 0, cv.width, cv.height);
-  var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, {});
+  var opts = prepSegStrength != null ? { bgT: prepSegStrength } : {};
+  var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
+  prepSegSubs = subs;
   renderPrepSubjects(subs);
 }
 function renderPrepSubjects(subs) {
@@ -4770,8 +4793,11 @@ function renderPrepSubjects(subs) {
   }
   if (!subs.length) { box.hidden = true; return; }
   box.hidden = false;
-  subs.forEach(function (sub) {
+  var allb = $('prep-seg-all'); if (allb) allb.hidden = !(subs.length >= 1);
+  subs.forEach(function (sub, idx) {
     var item = document.createElement('div'); item.className = 'subject-thumb';
+    var label = document.createElement('div'); label.className = 'subject-label';
+    label.textContent = (idx + 1) + ' · ' + sub.w + '×' + sub.h;
     var c = document.createElement('canvas');
     c.width = sub.w; c.height = sub.h; c.className = 'subject-canvas';
     try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
@@ -4779,7 +4805,7 @@ function renderPrepSubjects(subs) {
     btn.className = 'prep-btn subject-to-pixel';
     btn.textContent = '转为像素图';
     btn.addEventListener('click', function () { applySubjectAsPixel(sub); });
-    item.appendChild(c); item.appendChild(btn);
+    item.appendChild(label); item.appendChild(c); item.appendChild(btn);
     list.appendChild(item);
   });
 }
@@ -4791,6 +4817,24 @@ function applySubjectAsPixel(sub) {
   state.crop = false;
   var tc = document.getElementById('toggle-crop'); if (tc) tc.checked = false;
   state.removeBg = false;      // 主体已抠出，透明区域即空
+  state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
+  state.userCrop = null;
+  closePrepModal();
+  processImage();
+}
+function applyAllAsOne() {
+  if (!prepSegSubs.length) return;
+  var big = document.createElement('canvas'); big.width = prepSegW; big.height = prepSegH;
+  var bctx = big.getContext('2d');
+  prepSegSubs.forEach(function (sub) {
+    var c = document.createElement('canvas'); c.width = sub.w; c.height = sub.h;
+    try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
+    bctx.drawImage(c, sub.x, sub.y);
+  });
+  state.sourceImage = big;
+  state.crop = false;
+  var tc = document.getElementById('toggle-crop'); if (tc) tc.checked = false;
+  state.removeBg = false;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
   closePrepModal();
@@ -4841,6 +4885,13 @@ function bindPrepModal() {
   bindSlider('prep-contrast', 'contrast', 'prep-contrast-val');
   bindSlider('prep-sat', 'saturation', 'prep-sat-val');
   var autoSeg = $('prep-auto-seg'); if (autoSeg) autoSeg.addEventListener('click', runAutoSeg);
+  var segStrength = $('prep-seg-strength');
+  if (segStrength) segStrength.addEventListener('input', function () {
+    prepSegStrength = +segStrength.value / 100;
+    var v = $('prep-seg-val'); if (v) v.textContent = prepSegStrength.toFixed(2);
+    var st = $('prep-seg-status'); if (st) { st.hidden = false; st.textContent = '已调整抠图强度，点「自动抠图」重新分离'; }
+  });
+  var segAll = $('prep-seg-all'); if (segAll) segAll.addEventListener('click', applyAllAsOne);
   var overlay = $('prep-overlay');
   if (overlay) {
     overlay.style.cursor = 'crosshair';

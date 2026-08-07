@@ -237,3 +237,15 @@ fox-bead/
 - UI：新增 `prep-auto-seg` / `prep-results` / `subject-thumb`（透明棋盘格）/「转为像素图」按钮，浅/深主题可读；`prep-tool-seg` 工具栏与笔刷样式移除。
 - 验证：`node --check` 全过；`docs/index.html` `?.`=0 / `Object.fromEntries`=0；`miniapp/utils/core.js` DOM=0；`node tools/smoke-mini.js` 全 PASS（导出清单去掉 `applyBrighten`）；合成双主体图实测 `segmentSubjects` 返回 2 个主体。
 > 注：真实照片抠图精度受限于无模型算法（浅色主体/杂乱背景可能需多试旋转+调色/裁切）；彻底 AI 分割见文档 §9 生图模块（需后端+付费）。
+
+## ⚠️ 后续部署注意
+- v141 已推 Gitee main；Gitee Pages 部署目录 `/docs`，改代码后需在 Pages 页点「更新」重新部署（免费版仅公开仓库）
+- 分支陷阱仍在：本地 `master` → 远端 `main`，推送 `git push origin master:main`
+
+## 图片处理模块体验补强（v141 补强，未 bump；2026-08-07 15:16）
+- 用户指令「继续优化吧」→ 聚焦刚交付的 v141 图片模块，三项低风险体验增强。按版本纪律**不 bump**（APP_VERSION 保持 141，仅记此条）。
+- ① **抠图强度滑块**：暴露 `segmentSubjects` 的 `bgT` 容差（默认 `null`=算法自适应最稳；用户可调 0.04~0.22，解决真实照片「扣不净留边」往右调、「抠过头缺角」往左调）。`runAutoSeg` 传 `opts.bgT`；弹窗加 `prep-seg-strength` 滑块 + `prep-seg-val` 显示「自动」或数值。
+- ② **主体缩略图标注**：每个主体显示 `序号 · 宽×高`（如 `① 120×80`），多主体一眼分清谁是谁。
+- ③ **「全部拼成一张」按钮**：所有主体按原构图 `drawImage` 合成一张透明底大图 → `processImage()` 一次出含全部主体的拼豆总稿；分张仍用逐个「转为像素图」。`applyAllAsOne` 复用 `prepSegSubs` 缓存。
+- 改动文件：`src/web/template.html`（滑块+结果区标题栏+全部按钮）、`src/web/events.js`（变量/重置/传参/标注/滑块+全部绑定/合成函数）、`src/web/css/style.css`（head/all/label 样式）。
+- 验证：node --check 过；docs ?.=0 / Object.fromEntries=0 / mini DOM=0；smoke-mini 全 PASS；新控件已进产物。
