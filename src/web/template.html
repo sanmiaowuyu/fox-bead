@@ -94,6 +94,7 @@
         </label>
         <input id="file-input" type="file" accept="image/*" style="position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0;left:-9999px;" />
         <button id="btn-prep" class="btn-outline full" style="margin-top:10px;">🖼 图片处理（旋转/裁剪/调色/去背景）</button>
+        <button id="btn-inventory" class="btn-outline full" style="margin-top:8px;">📦 豆仓库存（用量 / 缺口）</button>
       </section>
 
       <section class="block primary">
@@ -493,6 +494,36 @@
         <button id="prep-reset" class="btn-ghost">重置</button>
         <button id="prep-cancel" class="btn-ghost">取消</button>
         <button id="prep-apply" class="btn-primary">应用到图纸</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 豆仓库存弹窗 ===== -->
+  <div class="modal-backdrop" id="inv-backdrop" hidden>
+    <div class="modal-card inv-card">
+      <div class="modal-head">
+        <span class="modal-title">📦 豆仓库存</span>
+        <button class="modal-close" id="inv-close">✕</button>
+      </div>
+      <div class="modal-div"></div>
+
+      <div class="inv-summary" id="inv-summary">请先生成图纸…</div>
+
+      <div class="inv-toolbar">
+        <button class="btn-ghost" id="inv-fill">按用量一键填</button>
+        <button class="btn-ghost" id="inv-add100">全部 +100</button>
+        <button class="btn-ghost" id="inv-clear">清空库存</button>
+        <div class="seg seg-sm" id="inv-view-seg" style="margin-left:auto;">
+          <button class="seg-item active" data-view="used">仅用到的</button>
+          <button class="seg-item" data-view="all">全部 221</button>
+        </div>
+      </div>
+
+      <div class="inv-list" id="inv-list"></div>
+
+      <div class="modal-btns">
+        <span class="inv-hint">库存保存在本机浏览器，换设备不共享。缺口色号会标红提醒。</span>
+        <button id="inv-close2" class="btn-primary">完成</button>
       </div>
     </div>
   </div>

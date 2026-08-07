@@ -595,3 +595,30 @@ body {
 }
 [data-resolved="dark"] .theme-seg { background: var(--accent-soft); }
 [data-resolved="dark"] .theme-opt.active { background: var(--white); }
+
+/* ===== 豆仓库存模块 ===== */
+.inv-card { max-width: 480px; }
+.inv-summary { font-size: 14px; color: var(--ink2); padding: 11px 13px; background: var(--card); border: 1px solid var(--line2); border-radius: 10px; }
+.inv-summary b { color: var(--ink); font-family: var(--mono); }
+.inv-bad { color: #D6453E; font-weight: 700; }
+.inv-ok { color: #2E9E5B; font-weight: 700; }
+.inv-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.inv-toolbar .btn-ghost { padding: 7px 12px; font-size: 13px; }
+.inv-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; padding-right: 4px; }
+.inv-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; background: var(--white); border: 1px solid var(--line2); border-left: 3px solid transparent; border-radius: 8px; transition: background .12s; }
+.inv-row.inv-deficit { border-left-color: #D6453E; background: rgba(214,69,62,0.07); }
+.inv-swatch { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(0,0,0,0.18); flex: none; }
+.inv-id { font-family: var(--mono); font-weight: 700; color: var(--ink); width: 42px; flex: none; }
+.inv-need { font-size: 13px; color: var(--ink2); width: 96px; flex: none; }
+.inv-need b { color: var(--ink); }
+.inv-stock { width: 76px; padding: 5px 8px; border: 1px solid var(--line2); border-radius: 6px; background: var(--bg); color: var(--ink); font-family: var(--mono); font-size: 13px; }
+.inv-stock:focus { outline: none; border-color: var(--accent-ink); }
+.inv-gap { margin-left: auto; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.inv-gap.bad { color: #D6453E; }
+.inv-gap.ok { color: #2E9E5B; }
+.inv-gap.na { color: var(--ink3); font-weight: 400; }
+.inv-empty { color: var(--ink3); padding: 22px; text-align: center; }
+.inv-hint { font-size: 12px; color: var(--ink3); margin-right: auto; line-height: 1.5; }
+[data-resolved="dark"] .inv-swatch { border-color: rgba(255,255,255,0.25); }
+[data-resolved="dark"] .inv-row.inv-deficit { background: rgba(214,69,62,0.16); }
+[data-resolved="dark"] .inv-stock { background: var(--bg); }

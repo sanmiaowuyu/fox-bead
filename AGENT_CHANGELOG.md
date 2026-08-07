@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -132,6 +132,8 @@ fox-bead/
 | 2026-08-07 | **#21 移动端主预览画布单指平移**：`events.js` 主画布触屏加单指拖拽平移（CSS `transform: translate`，仅在画布溢出容器时启用），`clampMainPan` 边界夹取防拖飞，与双指 pinch 缩放协同（缩放后重新夹取），`resetMainPan` 在导入新图/示例/粘贴/URL 加载时清零；不侵入 render.js 重绘模型 | §6 注「完整自由平移(pan)为已知待办」闭环 | src/web/events.js | ✅ |
 | 2026-08-07 | **图片处理模块（通用预处理 + 去背景笔刷）**：新增「🖼 图片处理」弹窗，含 旋转(±90°)/翻转(水平垂直)/自由裁剪/调色(亮度·对比度·饱和度) 与 去背景手动笔刷（擦除背景/保留主体，按当前 N 构建 N×N 遮罩）；纯函数 `adjustImageData` 入 `image-prep.js`（零 DOM，web+小程序共用），栅格化 `computePrepCanvas`/`bakePrep`/`resetPrep` 入 `pipeline.js`（web 专属）；遮罩经 `state.userMask` 注入 `removeBackground`（复用洪水填充，无需大模型） | 用户问「去背景留主体是否要接大模型」→ 结论：常见拼豆素材无需模型，增强现有无模型算法 + 手动笔刷即可，离线零成本保铁律 | src/core/image-prep.js、src/core/pipeline-core.js、src/core/pipeline.js、src/core/state.js、src/web/template.html、src/web/events.js、src/web/css/style.css、build.js | ✅ |
 | 2026-08-07 | **视觉升级（清晰度 + 浅/深/跟随系统三态主题）**：①浅色层次增强——加深辅助文字（`--ink2`/`--ink3`）、左右栏加边框分隔、卡片加轻投影、顶栏改毛玻璃渐变、主按钮改品牌紫渐变、画布区加径向渐变「影棚」背景；②新增深色主题（`[data-resolved="dark"]` 重映射全部变量 + 棋盘格/遮罩/弹窗等硬编码白色元素重映射）；③顶栏加三态主题切换（太阳/月亮/显示器 SVG），`localStorage` 记忆，内联脚本防闪屏，「跟随系统」用 `matchMedia` 实时切换；④修复图片处理按钮 `prep-btn` 原引用未定义变量 `--bg-card/--text` 导致样式失效 | 用户反馈「目前是纯白的，看起来很不清晰」 | src/web/css/style.css、src/web/template.html、src/web/events.js | ✅ |
+| 2026-08-07 | **豆仓库存模块（用量统计 + 缺口提醒）**：左栏新增「📦 豆仓库存」按钮→弹窗按当前图纸统计每色「需要/库存/缺口」，缺口色号标红；`state.inventory` 持久化 `localStorage`（key `foxbead-inventory-v1`）；工具栏「按用量一键填 / 全部+100 / 清空库存 / 视图切换(仅用到的·全部221)」；`computeUsage()` 复用 `subject`/`excluded`/`bgMask` 排除背景统计口径；`renderAll` 末尾派发 `fb:render-done` 事件，弹窗打开时自动重算 | 竞品调研（pindouwuxian 豆仓管理）启发；用户要「图片处理模块」同时选了「做豆仓」+「写竞品对比清单」 | src/core/state.js、src/web/render.js、src/web/template.html、src/web/events.js、src/web/css/style.css | ✅ |
+| 2026-08-07 | **竞品分析文档**：新增 `竞品分析_可借鉴清单.md`，对比 pindouwuxian/Zippland/PixelBead/Jett-Wu 等 8 个项目，给出 P0(豆仓+分块多板PDF)/P1(多色板+补货清单)/P2(3D预览·多图层，需降级) 路线；结论：狐狸去背景算法/移动端/离线单文件已领先，AI 类不建议接（破铁律） | 用户问「Gitee/论坛有什么好的可学习」+ 明确要「做豆仓 + 写对比清单」 | 竞品分析_可借鉴清单.md | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 

@@ -36,5 +36,9 @@ const state = {
   userMask: null,        // 手动去背景遮罩 N×N：'keep'(保留主体) | 'erase'(擦除背景) | null
   brushMode: 'erase',    // 去背景笔刷类型：'erase' 擦除背景 / 'keep' 保留主体
   brushSize: 14,         // 笔刷半径（源像素）
+  // 豆仓库存（图片处理模块同级能力）：按色号记录手头豆数，对比当前图纸用量算缺口
+  inventory: {},         // {colorId: stockCount} 豆仓库存，持久化 localStorage
+  inventoryOpen: false,  // 豆仓弹窗是否打开
+  inventoryView: 'used', // 'used' 仅列当前图纸用到的色 / 'all' 列全部 221 色
 };
 

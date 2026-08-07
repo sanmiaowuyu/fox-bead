@@ -10,6 +10,10 @@ function renderAll() {
   if (cw) cw.classList.remove('processing');
   // v140: 去背景状态反馈
   updateBgHint();
+  // 豆仓库存：图纸刷新后通知其重算用量/缺口（仅打开时响应）
+  if (typeof window !== 'undefined' && window.dispatchEvent) {
+    try { window.dispatchEvent(new Event('fb:render-done')); } catch (e) {}
+  }
 }
 /** 给每颗豆子画极淡的间隔线，确保白色/浅色豆在白底上也能看出边界 */
 function drawBeadBorders(c, ox, oy, cols, rows, cell, color) {

@@ -432,6 +432,8 @@ function bindEvents() {
   bindTheme();
   // 图片处理模块
   bindPrepModal();
+  // 豆仓库存模块
+  bindInventory();
 }
 
 /* ========== 图片处理模块：面板交互 ========== */
@@ -668,6 +670,179 @@ function bindPrepModal() {
     overlay.addEventListener('touchmove', moveHandler, { passive: false });
     overlay.addEventListener('touchend', endHandler);
   }
+}
+
+/* ========== 豆仓库存模块：用量统计 + 缺口提醒 ========== */
+var INV_KEY = 'foxbead-inventory-v1';
+
+// 复用图纸统计口径：按 subject 边界，排除背景填充格与已排除颜色
+function computeUsage() {
+  var counts = {};
+  var beads = 0;
+  if (!state.grid) return { counts: counts, beads: beads };
+  var sub = state.subject || state.effective;
+  var yS = (sub && sub.cols > 0) ? sub.minY : 0;
+  var yE = (sub && sub.cols > 0) ? sub.maxY : state.N - 1;
+  var xS = (sub && sub.cols > 0) ? sub.minX : 0;
+  var xE = (sub && sub.cols > 0) ? sub.maxX : state.N - 1;
+  for (var y = yS; y <= yE; y++) {
+    for (var x = xS; x <= xE; x++) {
+      var id = state.grid[y][x];
+      if (id == null) continue;
+      if (state.excluded.has(id)) continue;
+      if (state.bgMask && state.bgMask[y][x]) continue;
+      counts[id] = (counts[id] || 0) + 1;
+      beads++;
+    }
+  }
+  return { counts: counts, beads: beads };
+}
+
+function loadInventory() {
+  try {
+    var s = localStorage.getItem(INV_KEY);
+    state.inventory = s ? JSON.parse(s) : {};
+  } catch (e) { state.inventory = {}; }
+  if (!state.inventory || typeof state.inventory !== 'object') state.inventory = {};
+}
+
+function saveInventory() {
+  try { localStorage.setItem(INV_KEY, JSON.stringify(state.inventory)); } catch (e) {}
+}
+
+function buildInvRow(id, need) {
+  var c = (typeof PALETTE_BY_ID !== 'undefined' && PALETTE_BY_ID[id]) ? PALETTE_BY_ID[id] : { hex: '#cccccc', name: '' };
+  var stock = state.inventory[id];
+  var isSet = (stock !== undefined && stock !== null && stock !== '');
+  var stockVal = isSet ? stock : '';
+  var gapHtml, deficitCls = '';
+  if (!isSet) {
+    gapHtml = '<span class="inv-gap na">未填</span>';
+  } else {
+    var gap = need - stock;
+    if (gap > 0) { deficitCls = ' inv-deficit'; gapHtml = '<span class="inv-gap bad">缺 ' + gap + '</span>'; }
+    else { gapHtml = '<span class="inv-gap ok">充足</span>'; }
+  }
+  var needHtml = (need > 0) ? ('需要 <b>' + need + '</b>') : '—';
+  return '<div class="inv-row' + deficitCls + '" data-id="' + id + '">' +
+    '<span class="inv-swatch" style="background:' + c.hex + '"></span>' +
+    '<span class="inv-id" title="' + (c.name || '') + '">' + id + '</span>' +
+    '<span class="inv-need">' + needHtml + '</span>' +
+    '<input class="inv-stock" type="number" min="0" step="1" placeholder="库存" value="' + stockVal + '" data-id="' + id + '" />' +
+    gapHtml +
+    '</div>';
+}
+
+function updateInvSummary(used, inv) {
+  var sumEl = $('inv-summary');
+  if (!sumEl) return;
+  var totalNeed = used.beads;
+  var deficitColors = 0, deficitBeads = 0;
+  Object.keys(used.counts).forEach(function (id) {
+    var stock = inv[id];
+    if (stock === undefined || stock === null || stock === '') return; // 未填不算缺口
+    var gap = used.counts[id] - stock;
+    if (gap > 0) { deficitColors++; deficitBeads += gap; }
+  });
+  sumEl.innerHTML = '当前图纸共需 <b>' + totalNeed + '</b> 颗' +
+    (deficitBeads > 0
+      ? (' · <span class="inv-bad">缺口 ' + deficitBeads + ' 颗（' + deficitColors + ' 色不足）</span>')
+      : ' · <span class="inv-ok">库存充足 ✓</span>');
+}
+
+function renderInventory() {
+  if (!state.inventoryOpen) return;
+  var used = computeUsage();
+  var listEl = $('inv-list');
+  if (!listEl) return;
+  if (!state.grid) { listEl.innerHTML = '<div class="inv-empty">请先生成图纸再管理豆仓。</div>'; updateInvSummary(used, state.inventory); return; }
+  var rows = [];
+  if (state.inventoryView === 'used') {
+    var ids = Object.keys(used.counts).sort(function (a, b) { return used.counts[b] - used.counts[a]; });
+    if (!ids.length) { listEl.innerHTML = '<div class="inv-empty">当前图纸没有可用豆格。</div>'; updateInvSummary(used, state.inventory); return; }
+    ids.forEach(function (id) { rows.push(buildInvRow(id, used.counts[id])); });
+  } else {
+    for (var i = 0; i < MARD_PALETTE.length; i++) {
+      var cid = MARD_PALETTE[i].id;
+      rows.push(buildInvRow(cid, used.counts[cid] || 0));
+    }
+  }
+  listEl.innerHTML = rows.join('');
+  var inputs = listEl.querySelectorAll('.inv-stock');
+  for (var k = 0; k < inputs.length; k++) inputs[k].addEventListener('change', onInvStockChange);
+  updateInvSummary(used, state.inventory);
+}
+
+function onInvStockChange(e) {
+  var inp = e.target;
+  var id = inp.getAttribute('data-id');
+  var v = inp.value.trim();
+  if (v === '') { delete state.inventory[id]; }
+  else { var n = parseInt(v, 10); state.inventory[id] = isNaN(n) ? 0 : n; }
+  saveInventory();
+  var row = inp.closest('.inv-row');
+  var needEl = row.querySelector('.inv-need');
+  var need = parseInt((needEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0;
+  var gapEl = row.querySelector('.inv-gap');
+  if (v === '') {
+    row.classList.remove('inv-deficit');
+    gapEl.className = 'inv-gap na'; gapEl.textContent = '未填';
+  } else {
+    var gap = need - state.inventory[id];
+    if (gap > 0) { row.classList.add('inv-deficit'); gapEl.className = 'inv-gap bad'; gapEl.textContent = '缺 ' + gap; }
+    else { row.classList.remove('inv-deficit'); gapEl.className = 'inv-gap ok'; gapEl.textContent = '充足'; }
+  }
+  updateInvSummary(computeUsage(), state.inventory);
+}
+
+function fillInventory() {
+  var used = computeUsage();
+  Object.keys(used.counts).forEach(function (id) { state.inventory[id] = used.counts[id]; });
+  saveInventory(); renderInventory();
+}
+
+function addInventory(delta) {
+  var used = computeUsage();
+  var ids = {};
+  Object.keys(used.counts).forEach(function (id) { ids[id] = true; });
+  Object.keys(state.inventory).forEach(function (id) { ids[id] = true; });
+  Object.keys(ids).forEach(function (id) {
+    var cur = state.inventory[id] || 0;
+    state.inventory[id] = cur + delta;
+  });
+  saveInventory(); renderInventory();
+}
+
+function openInventory() {
+  if (!state.grid) { alert('请先上传图片或载入示例，生成图纸后再管理豆仓'); return; }
+  state.inventoryOpen = true;
+  loadInventory();
+  $('inv-backdrop').hidden = false;
+  renderInventory();
+}
+
+function closeInventory() {
+  state.inventoryOpen = false;
+  $('inv-backdrop').hidden = true;
+}
+
+function bindInventory() {
+  var btn = $('btn-inventory'); if (btn) btn.addEventListener('click', openInventory);
+  var close = $('inv-close'); if (close) close.addEventListener('click', closeInventory);
+  var close2 = $('inv-close2'); if (close2) close2.addEventListener('click', closeInventory);
+  var reset = $('inv-fill'); if (reset) reset.addEventListener('click', fillInventory);
+  var add = $('inv-add100'); if (add) add.addEventListener('click', function () { addInventory(100); });
+  var clr = $('inv-clear'); if (clr) clr.addEventListener('click', function () { state.inventory = {}; saveInventory(); renderInventory(); });
+  var bd = $('inv-backdrop'); if (bd) bd.addEventListener('click', function (e) { if (e.target === this) closeInventory(); });
+  document.querySelectorAll('#inv-view-seg .seg-item').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('#inv-view-seg .seg-item').forEach(function (s) { s.classList.remove('active'); });
+      b.classList.add('active');
+      state.inventoryView = b.getAttribute('data-view');
+      renderInventory();
+    });
+  });
+  window.addEventListener('fb:render-done', function () { if (state.inventoryOpen) renderInventory(); });
 }
 
 function drawCropDraft() {
