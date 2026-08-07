@@ -3,15 +3,21 @@
   --accent-soft: #F6F2FC;
   --accent-line: #E2D8F2;
   --accent-hover: #EFE8F8;
+  --accent-grad: linear-gradient(135deg, #8B6FC0 0%, #6A4C93 100%);
   --bg: #FBF9FE;
-  --side: #F6F1FB;
-  --ink: #211E2B;
-  --ink2: #6B6675;
-  --ink3: #9A95A3;
-  --line: #EAE3F2;
-  --line2: #E2D8F2;
+  --bg-grad-1: #EFE7FA;
+  --bg-grad-2: #FBF9FE;
+  --side: #F4EEFB;
+  --ink: #1B1822;
+  --ink2: #574F63;
+  --ink3: #847E92;
+  --line: #E6DEF2;
+  --line2: #DBCFF2;
   --card: var(--accent-soft);
   --white: #FFFFFF;
+  --shadow-sm: 0 2px 10px rgba(33,30,43,.07);
+  --shadow-md: 0 10px 28px rgba(33,30,43,.09);
+  --shadow-lg: 0 22px 50px rgba(33,30,43,.12);
   --sans: 'Geist', 'Noto Sans SC', system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --mono: 'Geist Mono', 'SF Mono', ui-monospace, Consolas, monospace;
 }
@@ -20,7 +26,8 @@
 html, body { height: 100%; }
 body {
   font-family: var(--sans);
-  background: var(--bg);
+  background: radial-gradient(1000px 520px at 50% -8%, var(--bg-grad-1), transparent 62%), linear-gradient(180deg, var(--bg-grad-2), var(--bg));
+  background-attachment: fixed;
   color: var(--ink);
   display: flex;
   flex-direction: column;
@@ -32,12 +39,19 @@ body {
 /* ===== TopBar ===== */
 .topbar {
   height: 64px;
-  background: var(--white);
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(14px) saturate(160%);
+  -webkit-backdrop-filter: blur(14px) saturate(160%);
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.55), rgba(246,241,251,0.35));
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 6px 24px rgba(33,30,43,.07);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 28px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 20;
 }
 /* ===== Brand / Logo ===== */
 .brand { display: flex; align-items: center; gap: 12px; }
@@ -50,19 +64,19 @@ body {
 
 /* ===== Buttons ===== */
 .btn-primary {
-  background: var(--accent);
-  color: var(--accent-ink);
-  border: 1px solid #D9C9F2;
+  background: var(--accent-grad);
+  color: #fff;
+  border: 1px solid transparent;
   border-radius: 10px;
   padding: 12px 22px;
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
   font-family: var(--sans);
-  box-shadow: 0 6px 16px rgba(106, 76, 147, 0.20);
-  transition: filter .15s;
+  box-shadow: 0 8px 20px rgba(106, 76, 147, 0.28);
+  transition: transform .12s, box-shadow .15s, filter .15s;
 }
-.btn-primary:hover { filter: brightness(1.05); }
+.btn-primary:hover { filter: brightness(1.05); box-shadow: 0 12px 26px rgba(106, 76, 147, 0.34); transform: translateY(-1px); }
 .btn-primary.full, .btn-outline.full, .btn-ghost.full { width: 100%; justify-content: center; }
 .btn-ghost {
   background: transparent;
@@ -118,8 +132,8 @@ body {
 /* ===== Body layout ===== */
 .body { display: flex; flex: 1; min-height: 0; }
 .sidebar { overflow-y: auto; flex-shrink: 0; }
-.sidebar.left { width: 245px; background: var(--side); padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; }
-.sidebar.right { width: 265px; background: var(--white); padding: 24px 16px; display: flex; flex-direction: column; gap: 14px; }
+.sidebar.left { width: 245px; background: var(--side); padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; border-right: 1px solid var(--line); }
+.sidebar.right { width: 265px; background: var(--white); padding: 24px 16px; display: flex; flex-direction: column; gap: 14px; border-left: 1px solid var(--line); }
 
 /* ===== Blocks (left) ===== */
 .block {
@@ -130,6 +144,7 @@ body {
   border: 1px solid var(--accent-line);
   border-radius: 14px;
   padding: 16px;
+  box-shadow: var(--shadow-sm);
 }
 .block.primary { border-left: 3px solid var(--accent); padding-left: 13px; }
 .block-label { font-size: 15px; font-weight: 700; color: var(--ink); display: flex; align-items: center; gap: 8px; }
@@ -221,7 +236,7 @@ body {
 .board-card.active .board-card-use { color: var(--accent-ink); opacity: 0.9; }
 
 /* ===== Canvas area ===== */
-.canvas-area { flex: 1; display: flex; flex-direction: column; background: var(--bg); padding: 24px 28px; gap: 16px; min-width: 0; }
+.canvas-area { flex: 1; display: flex; flex-direction: column; background: radial-gradient(900px 520px at 50% 0%, var(--bg-grad-1), transparent 70%), var(--bg); padding: 24px 28px; gap: 16px; min-width: 0; }
 .canvas-toolbar { display: flex; justify-content: space-between; align-items: center; }
 .zoom { display: flex; align-items: center; gap: 10px; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line2); }
 .zoom-btn { width: 24px; height: 24px; border: none; background: transparent; font-size: 16px; font-weight: 600; color: var(--ink2); cursor: pointer; font-family: var(--sans); }
@@ -513,3 +528,70 @@ body {
 .prep-btn:hover { background: var(--accent-soft); }
 .prep-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 .board-card { transition: all .15s, transform .08s; }
+
+/* ===== 图片处理按钮修正（原规则引用了未定义变量 --bg-card/--text 等，导致样式失效） ===== */
+.prep-section-title { color: var(--ink2); }
+.prep-btn { background: var(--white); color: var(--ink2); border: 1px solid var(--line); }
+.prep-btn:hover { background: var(--accent-soft); }
+.prep-btn.active { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); font-weight: 600; }
+
+/* ===== 主题切换控件（浅/深/跟随系统） ===== */
+.theme-seg { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 10px; background: var(--accent-soft); border: 1px solid var(--accent-line); flex-shrink: 0; }
+.theme-opt { width: 32px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: none; background: transparent; border-radius: 7px; color: var(--ink3); cursor: pointer; transition: all .15s; }
+.theme-opt:hover { color: var(--accent-ink); background: var(--white); }
+.theme-opt.active { background: var(--white); color: var(--accent-ink); box-shadow: var(--shadow-sm); }
+
+/* ============================================================
+   主题系统：data-theme = 用户选择(light/dark/system)
+            data-resolved = 实际生效(light/dark)，由 JS 解析 system
+   ============================================================ */
+[data-resolved="dark"] {
+  color-scheme: dark;
+  --accent: #2C2444;
+  --accent-ink: #CDB8F2;
+  --accent-soft: #261E3C;
+  --accent-line: #3A3158;
+  --accent-hover: #322A4C;
+  --accent-grad: linear-gradient(135deg, #9A7BD8 0%, #7C5BB0 100%);
+  --bg: #120E1A;
+  --bg-grad-1: #1C1532;
+  --bg-grad-2: #120E1A;
+  --side: #191422;
+  --ink: #F2EEFA;
+  --ink2: #C8C0DC;
+  --ink3: #938BA4;
+  --line: #2E2740;
+  --line2: #3A3252;
+  --card: #211A30;
+  --white: #1E1828;
+  --shadow-sm: 0 2px 10px rgba(0,0,0,.35);
+  --shadow-md: 0 10px 28px rgba(0,0,0,.45);
+  --shadow-lg: 0 22px 50px rgba(0,0,0,.55);
+}
+/* 深色下硬编码白色的元素重映射为深色卡片 */
+[data-resolved="dark"] .seg,
+[data-resolved="dark"] .board-card,
+[data-resolved="dark"] .select,
+[data-resolved="dark"] .num-input,
+[data-resolved="dark"] .tool-btn,
+[data-resolved="dark"] .modal-card,
+[data-resolved="dark"] .palette-chip,
+[data-resolved="dark"] .edit-color-item,
+[data-resolved="dark"] .stat-card { background: var(--white); }
+[data-resolved="dark"] .pcx { background: rgba(40,32,60,.92); color: var(--accent-ink); }
+[data-resolved="dark"] .edit-view-hint { background: rgba(18,12,28,.72); color: var(--ink2); }
+[data-resolved="dark"] .edit-reset-btn { background: rgba(40,32,60,.92); color: var(--ink2); }
+[data-resolved="dark"] .canvas-wrap.processing::after { background: rgba(18,14,26,.45); }
+[data-resolved="dark"] .edit-canvas-viewport { background: repeating-conic-gradient(#221B33 0% 25%, #181222 0% 50%) 0 0 / 28px 28px; }
+[data-resolved="dark"] .prep-preview-wrap { background: repeating-conic-gradient(#221B33 0% 25%, #181222 0% 50%) 50% / 22px 22px; }
+[data-resolved="dark"] .switch .knob::before { background: #E7E1F2; }
+[data-resolved="dark"] .range::-webkit-slider-thumb { background: var(--accent-ink); border-color: #fff; }
+[data-resolved="dark"] .range::-moz-range-thumb { background: var(--accent-ink); }
+[data-resolved="dark"] .topbar {
+  background: rgba(30,24,40,0.72);
+  background-image: linear-gradient(180deg, rgba(40,32,58,0.55), rgba(25,20,36,0.35));
+  border-bottom-color: var(--line);
+  box-shadow: 0 6px 24px rgba(0,0,0,.4);
+}
+[data-resolved="dark"] .theme-seg { background: var(--accent-soft); }
+[data-resolved="dark"] .theme-opt.active { background: var(--white); }

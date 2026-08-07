@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -131,6 +131,7 @@ fox-bead/
 | 2026-08-07 | **#20 编辑器拖拽手绘改色**：`state.editTool('select'\|'paint')` + `selectedColor`；`editor.js` 单指拖拽连续刷色，复用增量重绘 `_patchEditCell`/`patchMainCell`，单次手势一次撤销（`_pushUndo` 在 `startPaint`）；`template.html`/`events.js` 加工具切换分段控件 + 画笔色显示；`css` 加 `.edit-tool`/`.edit-paint-color` 等样式 | 用户要「拖拽手绘改色」体验 | src/core/state.js、src/web/editor.js、src/web/template.html、src/web/events.js、src/web/css/style.css | ✅ |
 | 2026-08-07 | **#21 移动端主预览画布单指平移**：`events.js` 主画布触屏加单指拖拽平移（CSS `transform: translate`，仅在画布溢出容器时启用），`clampMainPan` 边界夹取防拖飞，与双指 pinch 缩放协同（缩放后重新夹取），`resetMainPan` 在导入新图/示例/粘贴/URL 加载时清零；不侵入 render.js 重绘模型 | §6 注「完整自由平移(pan)为已知待办」闭环 | src/web/events.js | ✅ |
 | 2026-08-07 | **图片处理模块（通用预处理 + 去背景笔刷）**：新增「🖼 图片处理」弹窗，含 旋转(±90°)/翻转(水平垂直)/自由裁剪/调色(亮度·对比度·饱和度) 与 去背景手动笔刷（擦除背景/保留主体，按当前 N 构建 N×N 遮罩）；纯函数 `adjustImageData` 入 `image-prep.js`（零 DOM，web+小程序共用），栅格化 `computePrepCanvas`/`bakePrep`/`resetPrep` 入 `pipeline.js`（web 专属）；遮罩经 `state.userMask` 注入 `removeBackground`（复用洪水填充，无需大模型） | 用户问「去背景留主体是否要接大模型」→ 结论：常见拼豆素材无需模型，增强现有无模型算法 + 手动笔刷即可，离线零成本保铁律 | src/core/image-prep.js、src/core/pipeline-core.js、src/core/pipeline.js、src/core/state.js、src/web/template.html、src/web/events.js、src/web/css/style.css、build.js | ✅ |
+| 2026-08-07 | **视觉升级（清晰度 + 浅/深/跟随系统三态主题）**：①浅色层次增强——加深辅助文字（`--ink2`/`--ink3`）、左右栏加边框分隔、卡片加轻投影、顶栏改毛玻璃渐变、主按钮改品牌紫渐变、画布区加径向渐变「影棚」背景；②新增深色主题（`[data-resolved="dark"]` 重映射全部变量 + 棋盘格/遮罩/弹窗等硬编码白色元素重映射）；③顶栏加三态主题切换（太阳/月亮/显示器 SVG），`localStorage` 记忆，内联脚本防闪屏，「跟随系统」用 `matchMedia` 实时切换；④修复图片处理按钮 `prep-btn` 原引用未定义变量 `--bg-card/--text` 导致样式失效 | 用户反馈「目前是纯白的，看起来很不清晰」 | src/web/css/style.css、src/web/template.html、src/web/events.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 

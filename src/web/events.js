@@ -428,6 +428,8 @@ function bindEvents() {
     ? '狐狸爱拼豆 ｜ i 喵绘工坊 · 一键生成拼豆图纸'
     : '狐狸爱拼豆 v' + APP_VERSION + ' ｜ i 喵绘工坊 · 一键生成拼豆图纸';
 
+  // 主题切换（浅/深/跟随系统）
+  bindTheme();
   // 图片处理模块
   bindPrepModal();
 }
@@ -782,4 +784,43 @@ function syncUI() {
   if (mc) mc.value = state.maxColors;
   const mcv = $('max-colors-val');
   if (mcv) mcv.textContent = state.maxColors;
+}
+
+/* ========== 主题切换：浅/深/跟随系统 ========== */
+function bindTheme() {
+  var seg = $('theme-seg');
+  if (!seg) return;
+  var opts = seg.querySelectorAll('.theme-opt');
+
+  function apply(theme) {
+    var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    var resolved = (theme === 'dark') || (theme === 'system' && dark) ? 'dark' : 'light';
+    var el = document.documentElement;
+    el.setAttribute('data-theme', theme);
+    el.setAttribute('data-resolved', resolved);
+    try { localStorage.setItem('foxbead-theme', theme); } catch (e) {}
+    opts.forEach(function (o) { o.classList.toggle('active', o.dataset.theme === theme); });
+  }
+
+  // 初始高亮（与内联 head 脚本写入的 data-theme 保持一致）
+  var cur = document.documentElement.getAttribute('data-theme') || 'light';
+  opts.forEach(function (o) { o.classList.toggle('active', o.dataset.theme === cur); });
+
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('.theme-opt');
+    if (!b) return;
+    apply(b.dataset.theme);
+  });
+
+  // 跟随系统模式：监听系统主题变化实时切换
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    var handler = function () {
+      if ((document.documentElement.getAttribute('data-theme') || 'light') === 'system') {
+        document.documentElement.setAttribute('data-resolved', mq.matches ? 'dark' : 'light');
+      }
+    };
+    if (mq.addEventListener) mq.addEventListener('change', handler);
+    else if (mq.addListener) mq.addListener(handler);
+  }
 }
