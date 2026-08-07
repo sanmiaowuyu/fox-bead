@@ -181,8 +181,10 @@ function _finishPipeline(grid, N, onDone) {
   if (onDone) onDone();
 }
 function _finishAfter(grid, N) {
-  // 清理去噪按常规执行（卡通/真实一致）
-  cleanupNoise(grid, state.cleanup);
+  // 清理去噪：清理强度随板子自动调低——小板每格覆盖更大图区、细节更珍贵，
+  // 设天花板防止过度清理吃掉细节；大板可稍激进（仅当用户设值高于天花板时才生效）
+  var cleanupCap = N <= 40 ? 30 : (N <= 80 ? 55 : 80);
+  cleanupNoise(grid, Math.min(state.cleanup, cleanupCap));
   // 去背景：默认关闭。关掉时整张图都参与拼豆，白色主体也正常标色号；
   // 只有用户明确要抠纯色背景时才在 UI 打开「自动去背景」。
   if (state.removeBg) {
@@ -386,12 +388,21 @@ function removeBackground(grid = state.grid) {
   const sorted = boundary.slice().sort((a, b) => (a.r + a.g + a.b) - (b.r + b.g + b.b));
   const mid = sorted[Math.floor(sorted.length / 2)];
   const bgLab = rgbToOklab({ r: mid.r, g: mid.g, b: mid.b });
+  // 自动判断背景极性（基于边界中位数亮度），除非用户取样色与边界极性一致才尊重取样
+  var autoDark = bgLab.L <= 0.5;
   var manualBg = state._manualBgRGB;
   if (manualBg) {
-    bgColorId = mapToPalette(manualBg);
+    var manualLab = rgbToOklab(manualBg);
+    var manualDark = manualLab.L <= 0.5;
+    // 取样色与边界极性一致 → 用取样精确色（尊重用户）；极性相反(如取白但图是黑底) → 回退自动，避免清不掉
+    if (manualDark === autoDark) {
+      bgColorId = mapToPalette(manualBg);
+    } else {
+      bgColorId = autoDark ? BG_BLACK_ID : BG_WHITE_ID;
+    }
     state._manualBgRGB = null;
   } else {
-    bgColorId = bgLab.L > 0.5 ? BG_WHITE_ID : BG_BLACK_ID;
+    bgColorId = autoDark ? BG_BLACK_ID : BG_WHITE_ID;
   }
   if (bgColorId == null) return;
   const topLab = boundary.map(s => rgbToOklab(s));
@@ -464,8 +475,12 @@ function removeBackground(grid = state.grid) {
     }
     return;
   }
-  var BG_T = 0.08;
-  if (vL < 0.05) BG_T = 0.12;
+  // 背景距离阈值：白底/黑底时浅色主体(白猫脸/黑衣物)易被误删，收紧阈值只清真正接近背景的像素；
+  // 中性灰底或背景带杂色时保持较宽松阈值以清除更多背景
+  var BG_T;
+  if (bgLab.L > 0.88 || bgLab.L < 0.18) {
+    BG_T = vL < 0.05 ? 0.06 : 0.05;
+  } else if (vL < 0.05) BG_T = 0.12;
   else if (vL < 0.10) BG_T = 0.10;
   else BG_T = 0.08;
   const isBg = (x, y) => {

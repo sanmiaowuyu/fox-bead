@@ -116,6 +116,34 @@ runCase('N32去背景(设计上跳过)', { removeBg: true }, function (r) {
 runCase('全开', { dither: true, removeBg: true, brighten: true, maxColors: 12,
                   outline: { on: true, strength: 60, colorId: 'H7' } }, null, 64);
 
+console.log('--- 7. 去背景增强回归 (黑底识别 / 浅主体保护) ---');
+// 7a. 黑底居中红圆：验证纯黑底也能正确识别并去除（改动 A）
+var blackBg = makeImage(function (x, y) {
+  var dx = x - CX, dy = y - CY;
+  return (dx * dx + dy * dy <= R * R) ? [220, 30, 30] : [12, 12, 12];
+});
+core.state.sourceImage = { width: W, height: H };
+var rb = core.processImageMini(blackBg, 64, { removeBg: true });
+ok('黑底图去背景 bgStatus=ok', core.state.bgStatus === 'ok', String(core.state.bgStatus));
+ok('黑底图去背景生效(珠数<全图90%)', rb.totalBeads < 64 * 64 * 0.9, 'beads=' + rb.totalBeads);
+ok('黑底图去背景保留主体(>500珠)', rb.totalBeads > 500, 'beads=' + rb.totalBeads);
+
+// 7b. 逆极性取样：图是黑底但用户误取白底 —— 必须回退自动识别，不能清不掉（改动 A 核心回归）
+core.state._manualBgRGB = { r: 250, g: 250, b: 250 };
+var rb2 = core.processImageMini(blackBg, 64, { removeBg: true });
+ok('逆极性取样仍回退识别黑底 bgStatus=ok', core.state.bgStatus === 'ok', String(core.state.bgStatus));
+ok('逆极性取样去背景仍生效(珠数<全图90%)', rb2.totalBeads < 64 * 64 * 0.9, 'beads=' + rb2.totalBeads);
+
+// 7c. 白底 + 浅灰主体：验证浅主体不被当背景全删（改动 C 收紧阈值）
+var lightSubj = makeImage(function (x, y) {
+  var dx = x - CX, dy = y - CY;
+  return (dx * dx + dy * dy <= R * R) ? [210, 210, 210] : [250, 250, 250];
+});
+core.state._manualBgRGB = null;
+var rl = core.processImageMini(lightSubj, 64, { removeBg: true });
+ok('白底+浅灰主体去背景后保留主体(>500珠)', rl.totalBeads > 500, 'beads=' + rl.totalBeads);
+ok('白底+浅灰主体 bgStatus=ok', core.state.bgStatus === 'ok', String(core.state.bgStatus));
+
 console.log('--- 6. 不同尺寸 ---');
 [16, 48, 64].forEach(function (n) {
   var r = core.processImageMini(circleImg, n, {});

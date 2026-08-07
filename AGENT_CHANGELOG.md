@@ -122,6 +122,8 @@ fox-bead/
 | 2026-08-05 | 🐛 **修复双重映射致命 bug**：适配层误用 `mapCell()`（已返回色号）当原始 RGB 再喂 `mapToPalette()`，导致 grid 全 null、珠数 0；且 srcRGB 存成色号字符串，连带抖动/去背景失效 | 冒烟测试暴露 | 抽出共用 `sampleCellRGB()`，web `_processChunk` 与 mini 适配层共用同一采样器 | ✅ |
 | 2026-08-05 | 新增 `tools/smoke-mini.js` 无 DOM 冒烟测试：44 项断言（色板 221 / 导出完整性 / 采样器契约 / 7 种参数组合 / 3 种尺寸） | 双端共内核后需要回归防线 | tools/smoke-mini.js | ✅ |
 | 2026-08-05 | 修正 miniapp/pages/index/index.js 过时注释（管线已非「简化 MVP」） | 注释误导 | miniapp/pages/index/index.js | ✅ |
+| 2026-08-07 | **去背景全面增强（算法层）**：①黑底自动识别——`_manualBgRGB` 与边界极性相反时回退自动判断，纯黑底图不再清不掉；②清理强度随板子自动调低（≤40→上限30 / ≤80→55 / 大板→80）防过度清理；③白底/黑底场景收紧 `BG_T`(0.05) 缓解浅色主体被误删 | 交接文档 §6.2 已知失效场景 + §十二「清理强度随板子自动调低」待办 | src/core/pipeline-core.js | ✅ |
+| 2026-08-07 | 扩展 `tools/smoke-mini.js`：新增 7 项去背景回归断言（黑底识别 + 逆极性取样回退 + 浅主体保护） | 防去背景改动回归 | tools/smoke-mini.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 
@@ -165,6 +167,18 @@ fox-bead/
 | **P1** | 小程序只有颜色映射，缺去背景 / 抖动 / 降噪 | `processImageMini` 接入完整管线，与网页同算法 | 7 种参数组合冒烟全 PASS |
 | **P2** | 小程序产物 5 处 `document`/`getContext` 依赖 | §7 只打包零 DOM 的纯模块 | `grep -cE "document\.\|window\.\|\.getContext\|createElement"` = **0** |
 
+#### 5.1.1 去背景算法增强（2026-08-07 · SeniorDeveloper）
+
+针对交接文档 §6.2 已知失效场景 + §十二待办，对 `removeBackground` / `cleanupNoise` 做了三处增强（均位于 `src/core/pipeline-core.js`，web 与小程序共用）：
+
+| 改动 | 内容 | 解决的问题 |
+|------|------|-----------|
+| A 黑底自动识别 | `removeBackground` 先算边界中位数亮度定极性；若用户取样色（`_manualBgRGB`）与边界极性相反（如取白但图是黑底），回退自动判断，用 `BG_BLACK_ID` | 纯黑底图此前因取白而清不掉 |
+| B 清理强度自适应 | `_finishAfter` 按 N 设清理天花板（≤40→30 / ≤80→55 / 大板→80），`Math.min(state.cleanup, cap)` | 小板每格覆盖大图区、细节珍贵，原固定阈值易过度清理吃掉细节 |
+| C 浅主体阈值收紧 | 白底/黑底（`bgLab.L>0.88` 或 `<0.18`）时 `BG_T` 收紧到 0.05，中性灰底保持 0.08 | 白猫脸/浅灰主体距白底仅 0.04~0.06 易被当背景误删（缓解，非根治——彻底解决需 AI 分割） |
+
+> ⚠️ 非纯色背景（渐变/网格/水印/杂色）仍无法纯前端可靠去除，文档 §6.2 / §9 已定位为需接 AI 分割，本次未解。
+
 **回归结果**（`node tools/smoke-mini.js`，纯 Node 无 DOM）：
 
 | 场景 | N | 珠数 | 用色 | 耗时 |
@@ -183,6 +197,7 @@ fox-bead/
 | P3 | 小程序页面缺开关 UI | `processImageMini` 第三参 `opts` 已支持 mode/dither/cleanup/maxColors/removeBg/brighten/outline，页面加控件透传即可 |
 | P3 | 去背景在 `N<=52` 时按设计跳过（走 `bgStatus='small'` 分支保留背景） | 非 bug。小程序默认板子 104，不受影响；但若产品要小板子也去背景，需改 `pipeline-core.js` L458 阈值 |
 | P3 | web 的 `srcRGB` 由 canvas 降采样生成，mini 由 `sampleCellRGB` 生成 | 两者路径不同，抖动结果可能有极微差异。未统一是为了不动网页既有行为，如需完全一致再议 |
+| P3 | 浅色主体（白猫脸/白衣物）误删为已知限制，需 AI 分割根治 | 2026-08-07 收紧 `BG_T` 仅缓解明显浅主体；彻底解决见文档 §9 生图模块（需加后端+付费） |
 
 ---
 

@@ -1389,7 +1389,8 @@ function _finishPipeline(grid, N, onDone) {
 }
 function _finishAfter(grid, N) {
 
-  cleanupNoise(grid, state.cleanup);
+  var cleanupCap = N <= 40 ? 30 : (N <= 80 ? 55 : 80);
+  cleanupNoise(grid, Math.min(state.cleanup, cleanupCap));
 
   if (state.removeBg) {
     state.bgStatus = 'ok'; // will be overwritten if a gate fails
@@ -1592,12 +1593,21 @@ function removeBackground(grid = state.grid) {
   const sorted = boundary.slice().sort((a, b) => (a.r + a.g + a.b) - (b.r + b.g + b.b));
   const mid = sorted[Math.floor(sorted.length / 2)];
   const bgLab = rgbToOklab({ r: mid.r, g: mid.g, b: mid.b });
+
+  var autoDark = bgLab.L <= 0.5;
   var manualBg = state._manualBgRGB;
   if (manualBg) {
-    bgColorId = mapToPalette(manualBg);
+    var manualLab = rgbToOklab(manualBg);
+    var manualDark = manualLab.L <= 0.5;
+
+    if (manualDark === autoDark) {
+      bgColorId = mapToPalette(manualBg);
+    } else {
+      bgColorId = autoDark ? BG_BLACK_ID : BG_WHITE_ID;
+    }
     state._manualBgRGB = null;
   } else {
-    bgColorId = bgLab.L > 0.5 ? BG_WHITE_ID : BG_BLACK_ID;
+    bgColorId = autoDark ? BG_BLACK_ID : BG_WHITE_ID;
   }
   if (bgColorId == null) return;
   const topLab = boundary.map(s => rgbToOklab(s));
@@ -1670,8 +1680,11 @@ function removeBackground(grid = state.grid) {
     }
     return;
   }
-  var BG_T = 0.08;
-  if (vL < 0.05) BG_T = 0.12;
+
+  var BG_T;
+  if (bgLab.L > 0.88 || bgLab.L < 0.18) {
+    BG_T = vL < 0.05 ? 0.06 : 0.05;
+  } else if (vL < 0.05) BG_T = 0.12;
   else if (vL < 0.10) BG_T = 0.10;
   else BG_T = 0.08;
   const isBg = (x, y) => {
