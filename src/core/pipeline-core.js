@@ -383,6 +383,18 @@ function applyOutline(grid, strength, colorId, thickness) {
     if (curEdge[y * N + x]) grid[y][x] = colorId;
   }
 }
+// v(本版): 取一组 Oklab 各通道中位数（对离群边缘像素稳健，适合估计背景主色）
+function medianLab(labs) {
+  if (!labs || !labs.length) return null;
+  var n = labs.length;
+  var Ls = labs.map(function (l) { return l.L; }).sort(function (a, b) { return a - b; });
+  var as = labs.map(function (l) { return l.a; }).sort(function (a, b) { return a - b; });
+  var bs = labs.map(function (l) { return l.b; }).sort(function (a, b) { return a - b; });
+  var mid = Math.floor(n / 2);
+  var pick = function (arr) { return n % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2; };
+  return { L: pick(Ls), a: pick(as), b: pick(bs) };
+}
+
 function removeBackground(grid = state.grid) {
   if (!grid || !state.srcRGB) return;
   const N = grid.length;
@@ -407,7 +419,11 @@ function removeBackground(grid = state.grid) {
   if (!boundary.length) return;
   const sorted = boundary.slice().sort((a, b) => (a.r + a.g + a.b) - (b.r + b.g + b.b));
   const mid = sorted[Math.floor(sorted.length / 2)];
-  const bgLab = rgbToOklab({ r: mid.r, g: mid.g, b: mid.b });
+  // v(本版): 边界 Oklab 各通道中位数 作为背景色估计——比"RGB 中点"更鲁棒：
+  // 渐变/浅水印/轻微杂色背景下，中位数≈代表性背景色，不受个别离群边缘像素干扰；
+  // 同时与下方 flood/edge-contrast 门逻辑解耦，不动种子/安全逻辑。
+  const topLabs = boundary.map(s => rgbToOklab(s));
+  const bgLab = medianLab(topLabs);
   // 自动判断背景极性（基于边界中位数亮度），除非用户取样色与边界极性一致才尊重取样
   var autoDark = bgLab.L <= 0.5;
   var manualBg = state._manualBgRGB;
@@ -425,7 +441,7 @@ function removeBackground(grid = state.grid) {
     bgColorId = autoDark ? BG_BLACK_ID : BG_WHITE_ID;
   }
   if (bgColorId == null) return;
-  const topLab = boundary.map(s => rgbToOklab(s));
+  const topLab = topLabs;
   let mL = 0;
   for (var ti = 0; ti < topLab.length; ti++) mL += topLab[ti].L;
   mL /= topLab.length;

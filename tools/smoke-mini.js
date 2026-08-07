@@ -144,6 +144,19 @@ var rl = core.processImageMini(lightSubj, 64, { removeBg: true });
 ok('白底+浅灰主体去背景后保留主体(>500珠)', rl.totalBeads > 500, 'beads=' + rl.totalBeads);
 ok('白底+浅灰主体 bgStatus=ok', core.state.bgStatus === 'ok', String(core.state.bgStatus));
 
+// 7d. 渐变背景：水平渐变(255→228) + 中心深红圆，验证中位数背景估计比 RGB 中点更鲁棒
+var gradBg = makeImage(function (x, y) {
+  var dx = x - CX, dy = y - CY;
+  if (dx * dx + dy * dy <= R * R) return [200, 30, 30];
+  var t = x / (W - 1);
+  var v = Math.round(255 - t * 27); // 255→228 浅灰渐变（非纯色背景）
+  return [v, v, v];
+});
+var rg = core.processImageMini(gradBg, 64, { removeBg: true });
+ok('渐变背景去背景 bgStatus=ok', core.state.bgStatus === 'ok', String(core.state.bgStatus));
+ok('渐变背景去背景生效(珠数<全图90%)', rg.totalBeads < 64 * 64 * 0.9, 'beads=' + rg.totalBeads);
+ok('渐变背景去背景保留主体(>500珠)', rg.totalBeads > 500, 'beads=' + rg.totalBeads);
+
 console.log('--- 6. 不同尺寸 ---');
 [16, 48, 64].forEach(function (n) {
   var r = core.processImageMini(circleImg, n, {});
