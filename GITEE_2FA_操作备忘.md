@@ -69,7 +69,7 @@ ssh -i "C:/Users/余莎莎/.ssh/id_ed25519" \
 
 ```bash
 # gitee 走 SSH
-git remote set-url gitee git@gitee.com:sanmiaowuyu/fox-bead.git
+git remote set-url gitee git@gitee.com:three-little-kitty/fox-bead.git
 
 # 让本仓库所有 git 操作自动用正确私钥路径（绕开中文家目录编码坑）
 git config core.sshCommand "ssh -i C:/Users/余莎莎/.ssh/id_ed25519 -o UserKnownHostsFile=C:/Users/余莎莎/.ssh/known_hosts"
@@ -78,7 +78,7 @@ git config core.sshCommand "ssh -i C:/Users/余莎莎/.ssh/id_ed25519 -o UserKno
 查看状态：
 ```bash
 git remote -v
-# gitee   git@gitee.com:sanmiaowuyu/fox-bead.git (fetch/push)
+# gitee   git@gitee.com:three-little-kitty/fox-bead.git (fetch/push)
 # origin  https://github.com/sanmiaowuyu/fox-bead.git (fetch/push)
 ```
 
@@ -90,7 +90,7 @@ git remote -v
 
 1. 登录 gitee.com → 右上角 **＋** → **新建仓库**
 2. **仓库名称**填 `fox-bead`
-3. **路径**自动变 `sanmiaowuyu/fox-bead`（**必须一致**，否则还是 404）
+3. **路径**自动变 `three-little-kitty/fox-bead`（**必须一致**，否则还是 404；注意 Gitee 真实路径是 `three-little-kitty`，不是显示名 `sanmiaowuyu`）
 4. **不要**勾选「初始化 README」「添加 .gitignore」「选择分支模型」—— 保持**完全空仓库**，否则首次 push 冲突
 5. 可见性：建议 **公开**（与 GitHub 镜像一致）；想私密选私有
 6. 点 **创建**
@@ -118,7 +118,7 @@ git push origin main --tags    # GitHub（外网不稳时失败就重试）
 嫌麻烦可合并一次推双份（把 Gitee 加为 origin 的额外 URL）：
 
 ```bash
-git remote set-url --add origin git@gitee.com:sanmiaowuyu/fox-bead.git
+git remote set-url --add origin git@gitee.com:three-little-kitty/fox-bead.git
 # 之后 git push origin main --tags 同时推 GitHub + Gitee
 ```
 
@@ -133,7 +133,7 @@ git remote set-url --add origin git@gitee.com:sanmiaowuyu/fox-bead.git
 - **仅中文用户名机器有此问题**，纯英文用户名无
 
 ### 坑 2：push 报 404 not found
-- **原因**：Gitee 上 `sanmiaowuyu/fox-bead` 仓库不存在（见 §4）
+- **原因**：Gitee 上 `three-little-kitty/fox-bead` 仓库不存在（见 §4）；注意真实路径是 `three-little-kitty` 不是显示名 `sanmiaowuyu`
 - **解决**：去 Gitee 网页新建空仓库，再 push
 
 ### 坑 3：GitHub push 卡 443 超时
