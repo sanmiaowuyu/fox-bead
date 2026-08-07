@@ -356,6 +356,10 @@ body {
   background: var(--accent-soft); border: 1px solid var(--accent-line);
   padding: 4px 10px; border-radius: 20px;
 }
+.edit-tool { display: flex; align-items: center; gap: 8px; }
+.edit-tool-label { font-size: 13px; color: var(--ink3); }
+.edit-paint-color { font-size: 13px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid var(--accent-line); padding: 4px 10px; border-radius: 20px; }
+.edit-tool .seg { background: var(--bg); }
 .edit-btn {
   padding: 8px 18px; border-radius: 10px; border: 1px solid var(--accent-line);
   background: var(--white); color: var(--accent-ink); font-size: 14px; font-weight: 600; cursor: pointer;
@@ -812,6 +816,14 @@ body {
     <div class="edit-head">
       <span class="edit-title">✎ 编辑模式</span>
       <span class="edit-tip">点选格子换色 · 整片换色用上方"色号一键替换"</span>
+      <span class="edit-tool">
+        <span class="edit-tool-label">工具</span>
+        <span class="seg" id="edit-tool-seg">
+          <button class="seg-item active" data-tool="select">选择</button>
+          <button class="seg-item" data-tool="paint">手绘</button>
+        </span>
+        <span class="edit-paint-color" id="edit-paint-color">画笔：H7</span>
+      </span>
       <span class="edit-sel" id="edit-selinfo">未选中</span>
     </div>
     <div class="edit-body">
@@ -1182,6 +1194,8 @@ const state = {
 
   editMode: false,       // 编辑模式开关
   editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）
+  editTool: 'select',    // 编辑工具：'select' 选格换色 / 'paint' 手绘刷色
+  selectedColor: 'H7',   // 手绘画笔色 / 当前选中色（默认白色系）
 };
 
 const MODE_DESC = {
@@ -2397,6 +2411,7 @@ var editCanvas = null, editOctx = null, editOvCanvas = null, editOvCtx = null, e
 var editZoom = 1, editPanX = 0, editPanY = 0, editViewEl = null, editStageEl = null, editSpaceDown = false, editPanning = false, editPanStart = null, editPinch = null;
 var editOrigGrid = null, editOrigBg = null; // v120: 打开编辑时的原始网格/背景掩码快照，供"清除"还原选格原色
 var touchStartPt = null, touchMoved = false;  // v113: 触摸点记录，用于区分 轻点(选单格) vs 拖动(平移)
+var editPainting = false, editPaintSet = null, paintCells = null; // v(本版): 手绘工具拖动状态
 
 function screenToEditGrid(clientX, clientY) {
   if (!editGeom) return null;
@@ -2445,7 +2460,7 @@ function buildEditColors() {
       el.className = 'edit-color-item';
       el.title = c.id;
       el.innerHTML = '<div class="ec-sw" style="background:' + c.hex + '"><span class="ec-id" style="color:' + txt + '">' + c.id + '</span></div>';
-      el.addEventListener('click', function () { applyEditColor(c.id); });
+      el.addEventListener('click', function () { state.selectedColor = c.id; updatePaintColorLabel(); applyEditColor(c.id); });
       gridEl.appendChild(el);
     })(sorted[i]);
   }
@@ -2717,6 +2732,40 @@ function applyEditColor(colorId) {
   renderStats();
 }
 
+function updatePaintColorLabel() {
+  var lbl = $('edit-paint-color');
+  if (lbl) lbl.textContent = '画笔：' + (state.selectedColor || '—');
+}
+function paintCell(gx, gy) {
+  if (!state.selectedColor) return false;
+  var src = dispToSrc(gx, gy);
+  if (!src || !state.grid[src.y] || state.grid[src.y][src.x] === undefined) return false;
+  state.grid[src.y][src.x] = state.selectedColor;
+  if (state.bgMask && state.bgMask[src.y]) state.bgMask[src.y][src.x] = false;
+  _patchEditCell(gx, gy, state.selectedColor);
+  patchMainCell(gy, gx, state.selectedColor);
+  return true;
+}
+function startPaint(gx, gy) {
+  _pushUndo();
+  paintCells = []; editPaintSet = {};
+  doPaint(gx, gy);
+}
+function doPaint(gx, gy) {
+  if (!paintCells) return;
+  var key = gx + ',' + gy;
+  if (editPaintSet[key]) return;
+  if (paintCell(gx, gy)) {
+    paintCells.push({ gx: gx, gy: gy });
+    editPaintSet[key] = true;
+    setEditSel(paintCells.slice()); // 实时高亮已刷格子
+  }
+}
+function endPaint() {
+  if (paintCells) { setEditSel(paintCells); renderStats(); }
+  paintCells = null; editPaintSet = null;
+}
+
 function openEditor() {
   if (!state.grid) { alert('请先上传或载入一张图片再编辑'); return; }
   editCanvas = $('edit-canvas');
@@ -2735,6 +2784,12 @@ function openEditor() {
 
   editOrigGrid = state.grid.map(function (r) { return r.slice(); });
   editOrigBg = state.bgMask ? state.bgMask.map(function (r) { return r.slice(); }) : null;
+
+  var tseg = $('edit-tool-seg');
+  if (tseg) tseg.querySelectorAll('.seg-item').forEach(function (s) {
+    s.classList.toggle('active', s.dataset.tool === state.editTool);
+  });
+  updatePaintColorLabel();
   fitEditView();
 }
 function closeEditor() {
@@ -2785,9 +2840,10 @@ function updateEditHint() {
   if (!hint) return;
   var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
   var base = Math.round(editZoom * 100) + '%';
-  hint.textContent = base + ' · ' + (touch
-    ? '单指拖拽平移 · 轻点选单格 · 双指缩放'
-    : '左键拖拽平移 · 双击选单格 · 滚轮缩放');
+  var tool = state.editTool === 'paint' ? '手绘：拖动刷色' : '选择：轻点/双击选格';
+  hint.textContent = base + ' · ' + tool + ' · ' + (touch
+    ? (state.editTool === 'paint' ? '单指拖动刷色 · 双指缩放' : '单指拖拽平移 · 轻点选单格 · 双指缩放')
+    : (state.editTool === 'paint' ? '左键拖动刷色 · 滚轮缩放' : '左键拖拽平移 · 双击选单格 · 滚轮缩放'));
 }
 function fitEditView() {
   if (!editViewEl || !editCanvas || !editGeom) return;
@@ -2818,22 +2874,36 @@ function bindEditCanvas() {
   function isPanEvent(e) { return e.button === 2 || e.button === 1 || (e.button === 0 && !e.shiftKey); }
   editViewEl.addEventListener('mousedown', function (e) {
     if (!state.editMode) return;
-    if (isPanEvent(e)) {
+    if (e.button === 0 && state.editTool === 'paint') {
+
+      editPainting = true;
+      var mg = screenToEditGrid(e.clientX, e.clientY);
+      if (mg) startPaint(mg.gx, mg.gy);
+      e.preventDefault(); e.stopPropagation();
+    } else if (isPanEvent(e)) {
       editPanning = true; editPanStart = { x: e.clientX, y: e.clientY, px: editPanX, py: editPanY };
       editViewEl.classList.add('panning');
       e.preventDefault(); e.stopPropagation();
     }
   });
   window.addEventListener('mousemove', function (e) {
+    if (editPainting) {
+      var pg = screenToEditGrid(e.clientX, e.clientY);
+      if (pg) doPaint(pg.gx, pg.gy);
+      return;
+    }
     if (!editPanning) return;
     editPanX = editPanStart.px + (e.clientX - editPanStart.x);
     editPanY = editPanStart.py + (e.clientY - editPanStart.y);
     applyEditView();
   });
-  window.addEventListener('mouseup', function () { if (editPanning) { editPanning = false; editViewEl.classList.remove('panning'); } });
+  window.addEventListener('mouseup', function () {
+    if (editPainting) { editPainting = false; endPaint(); }
+    else if (editPanning) { editPanning = false; editViewEl.classList.remove('panning'); }
+  });
 
   editStageEl.addEventListener('mousemove', function (e) {
-    if (!state.editMode || editPanning) return;
+    if (!state.editMode || editPanning || editPainting) return;
     var hg = screenToEditGrid(e.clientX, e.clientY); editHover = hg; drawEditOverlayCanvas();
   });
   editStageEl.addEventListener('mouseleave', function () { if (!editPanning) { editHover = null; drawEditOverlayCanvas(); } });
@@ -2870,9 +2940,16 @@ function bindEditCanvas() {
     if (e.touches.length === 1) {
       var p = getPos(e);
       touchStartPt = p; touchMoved = false;
+      if (state.editTool === 'paint') {
 
-      editPanning = true;
-      editPanStart = { x: p.x, y: p.y, px: editPanX, py: editPanY };
+        var pg0 = screenToEditGrid(p.x, p.y);
+        if (pg0) startPaint(pg0.gx, pg0.gy);
+        editPanning = false;
+      } else {
+
+        editPanning = true;
+        editPanStart = { x: p.x, y: p.y, px: editPanX, py: editPanY };
+      }
     } else if (e.touches.length === 2) {
       editPanning = false;
       var dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -2886,7 +2963,10 @@ function bindEditCanvas() {
     e.preventDefault();
     if (e.touches.length === 1) {
       var p = getPos(e);
-      if (editPanning) {
+      if (state.editTool === 'paint' && paintCells) {
+        var pg = screenToEditGrid(p.x, p.y);
+        if (pg) doPaint(pg.gx, pg.gy);
+      } else if (editPanning) {
         var ddx = p.x - editPanStart.x, ddy = p.y - editPanStart.y;
         if (Math.abs(ddx) > 5 || Math.abs(ddy) > 5) touchMoved = true;
         editPanX = editPanStart.px + ddx;
@@ -2909,8 +2989,10 @@ function bindEditCanvas() {
   editViewEl.addEventListener('touchend', function (e) {
     if (e.target.closest('button')) return; // v117: 按钮触摸序列不接管
     if (e.touches.length === 0) {
+      if (paintCells) {
+        endPaint();
+      } else if (!touchMoved && touchStartPt) {
 
-      if (!touchMoved && touchStartPt) {
         var g = screenToEditGrid(touchStartPt.x, touchStartPt.y);
         if (g) setEditSel([g]);
       }
@@ -3909,7 +3991,7 @@ function bindEvents() {
     reader.onload = ev => {
       const img = new Image();
       img.onerror = () => setUploadError('图片解析失败，请换张图重试');
-      img.onload = () => { state.sourceImage = img; processImage(); clearUploadError(); };
+      img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); clearUploadError(); };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(f);
@@ -3920,7 +4002,7 @@ function bindEvents() {
   uz.addEventListener('drop', e => {
     const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = ev => { const img = new Image(); img.onload = () => { state.sourceImage = img; processImage(); }; img.src = ev.target.result; };
+    reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); }; img.src = ev.target.result; };
     reader.readAsDataURL(f);
   });
 
@@ -3930,7 +4012,7 @@ function bindEvents() {
       if (it.type && it.type.startsWith('image/')) {
         const f = it.getAsFile(); if (!f) continue;
         const reader = new FileReader();
-        reader.onload = ev => { const img = new Image(); img.onload = () => { state.sourceImage = img; processImage(); clearUploadError(); }; img.src = ev.target.result; };
+        reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); clearUploadError(); }; img.src = ev.target.result; };
         reader.readAsDataURL(f);
         e.preventDefault();
         return;
@@ -3979,6 +4061,16 @@ function bindEvents() {
 
   $('edit-replace-from').addEventListener('change', updateReplaceInfo);
   $('edit-replace-btn').addEventListener('click', replaceColorById);
+
+  var toolSeg = $('edit-tool-seg');
+  if (toolSeg) toolSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('.seg-item'); if (!b) return;
+    document.querySelectorAll('#edit-tool-seg .seg-item').forEach(function (s) { s.classList.remove('active'); });
+    b.classList.add('active');
+    state.editTool = b.dataset.tool;
+    updateEditHint();
+    updatePaintColorLabel();
+  });
 
   $('btn-sample').addEventListener('click', loadSamplePhoto);
 
@@ -4060,6 +4152,23 @@ function bindEvents() {
     canvas.style.cursor = 'default';
   });
 
+  var _pan = { x: 0, y: 0, sx: 0, sy: 0, bx: 0, by: 0, can: false };
+  function clampMainPan() {
+    var wrap = canvas.parentElement;
+    if (!wrap) return;
+    var cw = canvas.clientWidth || canvas.offsetWidth;
+    var ch = canvas.clientHeight || canvas.offsetHeight;
+    var availW = wrap.clientWidth, availH = wrap.clientHeight;
+    var maxX = cw > availW ? (cw - availW) / 2 : 0;
+    var maxY = ch > availH ? (ch - availH) / 2 : 0;
+    if (_pan.x > maxX) _pan.x = maxX; else if (_pan.x < -maxX) _pan.x = -maxX;
+    if (_pan.y > maxY) _pan.y = maxY; else if (_pan.y < -maxY) _pan.y = -maxY;
+  }
+  function applyMainPan() {
+    clampMainPan();
+    canvas.style.transform = 'translate(' + _pan.x + 'px,' + _pan.y + 'px)';
+  }
+  function resetMainPan() { _pan.x = 0; _pan.y = 0; if (canvas) canvas.style.transform = ''; }
   var _pinch = { mode: 0, dist: 0, curDist: 0, zoom: 1, moved: false, sx: 0, sy: 0, raf: 0 };
   function _doPinchZoom() {
     _pinch.raf = 0;
@@ -4083,6 +4192,10 @@ function bindEvents() {
     } else if (e.touches.length === 1) {
       _pinch.mode = 1; _pinch.moved = false;
       _pinch.sx = e.touches[0].clientX; _pinch.sy = e.touches[0].clientY;
+      _pan.sx = _pinch.sx; _pan.sy = _pinch.sy;
+      _pan.bx = _pan.x; _pan.by = _pan.y;
+      var _pw = canvas.parentElement;
+      _pan.can = !!(_pw && (canvas.clientWidth > _pw.clientWidth || canvas.clientHeight > _pw.clientHeight));
     }
   }, { passive: false });
   canvas.addEventListener('touchmove', function (e) {
@@ -4094,7 +4207,16 @@ function bindEvents() {
       e.preventDefault();
     } else if (_pinch.mode === 1 && e.touches.length === 1) {
       var t = e.touches[0];
-      if (Math.abs(t.clientX - _pinch.sx) > 8 || Math.abs(t.clientY - _pinch.sy) > 8) _pinch.moved = true;
+      var _tdx = t.clientX - _pinch.sx, _tdy = t.clientY - _pinch.sy;
+      if (Math.abs(_tdx) > 8 || Math.abs(_tdy) > 8) {
+        _pinch.moved = true;
+        if (_pan.can) {
+          _pan.x = _pan.bx + (t.clientX - _pan.sx);
+          _pan.y = _pan.by + (t.clientY - _pan.sy);
+          applyMainPan();
+          e.preventDefault();
+        }
+      }
     }
   }, { passive: false });
   canvas.addEventListener('touchend', function (e) {
@@ -4125,6 +4247,7 @@ function bindEvents() {
       }
     }
     if (_pinch.raf) { cancelAnimationFrame(_pinch.raf); _pinch.raf = 0; _doPinchZoom(); }
+    clampMainPan(); // 缩放后重新夹取平移边界，避免拖飞
     _pinch.mode = 0;
   }, { passive: false });
 
@@ -4153,8 +4276,8 @@ function bindEvents() {
     renderPalette();
   });
 
-  $('zoom-in').addEventListener('click', () => { state.zoom = Math.min(3, state.zoom + 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); });
-  $('zoom-out').addEventListener('click', () => { state.zoom = Math.max(0.3, state.zoom - 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); });
+  $('zoom-in').addEventListener('click', () => { state.zoom = Math.min(3, state.zoom + 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); clampMainPan(); });
+  $('zoom-out').addEventListener('click', () => { state.zoom = Math.max(0.3, state.zoom - 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); clampMainPan(); });
 
   const onDownloadClick = () => {
     if (isMobileDevice()) mobileQuickExport();
@@ -4286,12 +4409,12 @@ function loadSamplePhoto() {
     const url = URL.createObjectURL(blob);
 
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); state.sourceImage = img; processImage(); };
+    img.onload = () => { URL.revokeObjectURL(url); resetMainPan(); state.sourceImage = img; processImage(); };
     img.onerror = () => {
       URL.revokeObjectURL(url);
 
       const fallback = new Image();
-      fallback.onload = () => { state.sourceImage = fallback; processImage(); };
+      fallback.onload = () => { resetMainPan(); state.sourceImage = fallback; processImage(); };
       fallback.onerror = () => {
         const hint = document.getElementById('canvas-hint');
         if (hint) { hint.textContent = '示例图加载失败，请点击上传图片或 Ctrl+V 粘贴'; hint.style.display = 'block'; }
@@ -4302,7 +4425,7 @@ function loadSamplePhoto() {
   } catch(e) {
 
     const fb = new Image();
-    fb.onload = () => { state.sourceImage = fb; processImage(); };
+    fb.onload = () => { resetMainPan(); state.sourceImage = fb; processImage(); };
     fb.src = SAMPLE_DATA_URI;
   }
 }

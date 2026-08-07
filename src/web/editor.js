@@ -7,6 +7,7 @@ var editCanvas = null, editOctx = null, editOvCanvas = null, editOvCtx = null, e
 var editZoom = 1, editPanX = 0, editPanY = 0, editViewEl = null, editStageEl = null, editSpaceDown = false, editPanning = false, editPanStart = null, editPinch = null;
 var editOrigGrid = null, editOrigBg = null; // v120: 打开编辑时的原始网格/背景掩码快照，供"清除"还原选格原色
 var touchStartPt = null, touchMoved = false;  // v113: 触摸点记录，用于区分 轻点(选单格) vs 拖动(平移)
+var editPainting = false, editPaintSet = null, paintCells = null; // v(本版): 手绘工具拖动状态
 
 // 屏幕坐标→编辑大图格子坐标（已镜像反转，等价于 renderCanvas 显示列→源列映射）
 function screenToEditGrid(clientX, clientY) {
@@ -58,7 +59,7 @@ function buildEditColors() {
       el.className = 'edit-color-item';
       el.title = c.id;
       el.innerHTML = '<div class="ec-sw" style="background:' + c.hex + '"><span class="ec-id" style="color:' + txt + '">' + c.id + '</span></div>';
-      el.addEventListener('click', function () { applyEditColor(c.id); });
+      el.addEventListener('click', function () { state.selectedColor = c.id; updatePaintColorLabel(); applyEditColor(c.id); });
       gridEl.appendChild(el);
     })(sorted[i]);
   }
@@ -336,6 +337,41 @@ function applyEditColor(colorId) {
   renderStats();
 }
 
+// v(本版): 手绘工具——把拖动经过的格子刷成当前画笔色(state.selectedColor)
+function updatePaintColorLabel() {
+  var lbl = $('edit-paint-color');
+  if (lbl) lbl.textContent = '画笔：' + (state.selectedColor || '—');
+}
+function paintCell(gx, gy) {
+  if (!state.selectedColor) return false;
+  var src = dispToSrc(gx, gy);
+  if (!src || !state.grid[src.y] || state.grid[src.y][src.x] === undefined) return false;
+  state.grid[src.y][src.x] = state.selectedColor;
+  if (state.bgMask && state.bgMask[src.y]) state.bgMask[src.y][src.x] = false;
+  _patchEditCell(gx, gy, state.selectedColor);
+  patchMainCell(gy, gx, state.selectedColor);
+  return true;
+}
+function startPaint(gx, gy) {
+  _pushUndo();
+  paintCells = []; editPaintSet = {};
+  doPaint(gx, gy);
+}
+function doPaint(gx, gy) {
+  if (!paintCells) return;
+  var key = gx + ',' + gy;
+  if (editPaintSet[key]) return;
+  if (paintCell(gx, gy)) {
+    paintCells.push({ gx: gx, gy: gy });
+    editPaintSet[key] = true;
+    setEditSel(paintCells.slice()); // 实时高亮已刷格子
+  }
+}
+function endPaint() {
+  if (paintCells) { setEditSel(paintCells); renderStats(); }
+  paintCells = null; editPaintSet = null;
+}
+
 // 打开 / 关闭 编辑大图面板
 function openEditor() {
   if (!state.grid) { alert('请先上传或载入一张图片再编辑'); return; }
@@ -355,6 +391,12 @@ function openEditor() {
   // v120: 快照原始网格+背景掩码，供"清除"把选格还原为原色
   editOrigGrid = state.grid.map(function (r) { return r.slice(); });
   editOrigBg = state.bgMask ? state.bgMask.map(function (r) { return r.slice(); }) : null;
+  // 同步工具切换 UI 与画笔色显示
+  var tseg = $('edit-tool-seg');
+  if (tseg) tseg.querySelectorAll('.seg-item').forEach(function (s) {
+    s.classList.toggle('active', s.dataset.tool === state.editTool);
+  });
+  updatePaintColorLabel();
   fitEditView();
 }
 function closeEditor() {
@@ -409,9 +451,10 @@ function updateEditHint() {
   if (!hint) return;
   var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
   var base = Math.round(editZoom * 100) + '%';
-  hint.textContent = base + ' · ' + (touch
-    ? '单指拖拽平移 · 轻点选单格 · 双指缩放'
-    : '左键拖拽平移 · 双击选单格 · 滚轮缩放');
+  var tool = state.editTool === 'paint' ? '手绘：拖动刷色' : '选择：轻点/双击选格';
+  hint.textContent = base + ' · ' + tool + ' · ' + (touch
+    ? (state.editTool === 'paint' ? '单指拖动刷色 · 双指缩放' : '单指拖拽平移 · 轻点选单格 · 双指缩放')
+    : (state.editTool === 'paint' ? '左键拖动刷色 · 滚轮缩放' : '左键拖拽平移 · 双击选单格 · 滚轮缩放'));
 }
 function fitEditView() {
   if (!editViewEl || !editCanvas || !editGeom) return;
@@ -444,23 +487,37 @@ function bindEditCanvas() {
   function isPanEvent(e) { return e.button === 2 || e.button === 1 || (e.button === 0 && !e.shiftKey); }
   editViewEl.addEventListener('mousedown', function (e) {
     if (!state.editMode) return;
-    if (isPanEvent(e)) {
+    if (e.button === 0 && state.editTool === 'paint') {
+      // 手绘工具：左键拖动=刷色
+      editPainting = true;
+      var mg = screenToEditGrid(e.clientX, e.clientY);
+      if (mg) startPaint(mg.gx, mg.gy);
+      e.preventDefault(); e.stopPropagation();
+    } else if (isPanEvent(e)) {
       editPanning = true; editPanStart = { x: e.clientX, y: e.clientY, px: editPanX, py: editPanY };
       editViewEl.classList.add('panning');
       e.preventDefault(); e.stopPropagation();
     }
   });
   window.addEventListener('mousemove', function (e) {
+    if (editPainting) {
+      var pg = screenToEditGrid(e.clientX, e.clientY);
+      if (pg) doPaint(pg.gx, pg.gy);
+      return;
+    }
     if (!editPanning) return;
     editPanX = editPanStart.px + (e.clientX - editPanStart.x);
     editPanY = editPanStart.py + (e.clientY - editPanStart.y);
     applyEditView();
   });
-  window.addEventListener('mouseup', function () { if (editPanning) { editPanning = false; editViewEl.classList.remove('panning'); } });
+  window.addEventListener('mouseup', function () {
+    if (editPainting) { editPainting = false; endPaint(); }
+    else if (editPanning) { editPanning = false; editViewEl.classList.remove('panning'); }
+  });
 
   // ---- 鼠标悬停高亮当前格 + 双击精确选中单格（区域框选已移除：整片换色用"色号一键替换"，单格换色用双击/轻点）----
   editStageEl.addEventListener('mousemove', function (e) {
-    if (!state.editMode || editPanning) return;
+    if (!state.editMode || editPanning || editPainting) return;
     var hg = screenToEditGrid(e.clientX, e.clientY); editHover = hg; drawEditOverlayCanvas();
   });
   editStageEl.addEventListener('mouseleave', function () { if (!editPanning) { editHover = null; drawEditOverlayCanvas(); } });
@@ -501,9 +558,16 @@ function bindEditCanvas() {
     if (e.touches.length === 1) {
       var p = getPos(e);
       touchStartPt = p; touchMoved = false;
-      // 单指拖动=平移画面；轻点(无移动)在 touchend 时选单格
-      editPanning = true;
-      editPanStart = { x: p.x, y: p.y, px: editPanX, py: editPanY };
+      if (state.editTool === 'paint') {
+        // 手绘工具：单指拖动=刷色（不进入平移）
+        var pg0 = screenToEditGrid(p.x, p.y);
+        if (pg0) startPaint(pg0.gx, pg0.gy);
+        editPanning = false;
+      } else {
+        // 单指拖动=平移画面；轻点(无移动)在 touchend 时选单格
+        editPanning = true;
+        editPanStart = { x: p.x, y: p.y, px: editPanX, py: editPanY };
+      }
     } else if (e.touches.length === 2) {
       editPanning = false;
       var dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -517,7 +581,10 @@ function bindEditCanvas() {
     e.preventDefault();
     if (e.touches.length === 1) {
       var p = getPos(e);
-      if (editPanning) {
+      if (state.editTool === 'paint' && paintCells) {
+        var pg = screenToEditGrid(p.x, p.y);
+        if (pg) doPaint(pg.gx, pg.gy);
+      } else if (editPanning) {
         var ddx = p.x - editPanStart.x, ddy = p.y - editPanStart.y;
         if (Math.abs(ddx) > 5 || Math.abs(ddy) > 5) touchMoved = true;
         editPanX = editPanStart.px + ddx;
@@ -540,8 +607,10 @@ function bindEditCanvas() {
   editViewEl.addEventListener('touchend', function (e) {
     if (e.target.closest('button')) return; // v117: 按钮触摸序列不接管
     if (e.touches.length === 0) {
-      // 若本次触摸未移动(轻点)则选中单格
-      if (!touchMoved && touchStartPt) {
+      if (paintCells) {
+        endPaint();
+      } else if (!touchMoved && touchStartPt) {
+        // 若本次触摸未移动(轻点)则选中单格
         var g = screenToEditGrid(touchStartPt.x, touchStartPt.y);
         if (g) setEditSel([g]);
       }

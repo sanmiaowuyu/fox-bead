@@ -323,6 +323,8 @@ const state = {
   // v100: 编辑模式
   editMode: false,       // 编辑模式开关
   editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）
+  editTool: 'select',    // 编辑工具：'select' 选格换色 / 'paint' 手绘刷色
+  selectedColor: 'H7',   // 手绘画笔色 / 当前选中色（默认白色系）
 };
 /* ---------- 5. 图片处理管线（纯算法内核，零 DOM 依赖，web / 小程序共用） ---------- */
 /* 本文件不含任何 document / window / canvas 引用，可由 build.js 同时打入网页版与小程序版。

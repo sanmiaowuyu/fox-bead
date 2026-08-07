@@ -26,5 +26,7 @@ const state = {
   // v100: 编辑模式
   editMode: false,       // 编辑模式开关
   editSel: null,         // 选中的显示格子 [{gx,gy},...]（displayRect 坐标）
+  editTool: 'select',    // 编辑工具：'select' 选格换色 / 'paint' 手绘刷色
+  selectedColor: 'H7',   // 手绘画笔色 / 当前选中色（默认白色系）
 };
 

@@ -28,7 +28,7 @@ function bindEvents() {
     reader.onload = ev => {
       const img = new Image();
       img.onerror = () => setUploadError('图片解析失败，请换张图重试');
-      img.onload = () => { state.sourceImage = img; processImage(); clearUploadError(); };
+      img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); clearUploadError(); };
       img.src = ev.target.result;
     };
     reader.readAsDataURL(f);
@@ -39,7 +39,7 @@ function bindEvents() {
   uz.addEventListener('drop', e => {
     const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
     const reader = new FileReader();
-    reader.onload = ev => { const img = new Image(); img.onload = () => { state.sourceImage = img; processImage(); }; img.src = ev.target.result; };
+    reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); }; img.src = ev.target.result; };
     reader.readAsDataURL(f);
   });
   // 兜底：粘贴图片也能上传（v133 新增）。某些托管平台把页面包进 iframe 且沙箱禁止文件选择框时，
@@ -50,7 +50,7 @@ function bindEvents() {
       if (it.type && it.type.startsWith('image/')) {
         const f = it.getAsFile(); if (!f) continue;
         const reader = new FileReader();
-        reader.onload = ev => { const img = new Image(); img.onload = () => { state.sourceImage = img; processImage(); clearUploadError(); }; img.src = ev.target.result; };
+        reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.sourceImage = img; processImage(); clearUploadError(); }; img.src = ev.target.result; };
         reader.readAsDataURL(f);
         e.preventDefault();
         return;
@@ -101,6 +101,16 @@ function bindEvents() {
   // v126: 色号一键替换
   $('edit-replace-from').addEventListener('change', updateReplaceInfo);
   $('edit-replace-btn').addEventListener('click', replaceColorById);
+  // v(本版): 编辑工具切换（选择 / 手绘）
+  var toolSeg = $('edit-tool-seg');
+  if (toolSeg) toolSeg.addEventListener('click', function (e) {
+    var b = e.target.closest('.seg-item'); if (!b) return;
+    document.querySelectorAll('#edit-tool-seg .seg-item').forEach(function (s) { s.classList.remove('active'); });
+    b.classList.add('active');
+    state.editTool = b.dataset.tool;
+    updateEditHint();
+    updatePaintColorLabel();
+  });
   // 放大预览暂缓：按钮和弹窗已移除，避免误触发，但函数保留在下方以便下周恢复
   // $('btn-preview').addEventListener('click', openPreview);
   // 示例（载入用户真实小猫照片）
@@ -186,6 +196,24 @@ function bindEvents() {
     canvas.style.cursor = 'default';
   });
   // 移动端：主预览画布触屏（双指缩放到 state.zoom；单指轻点取样，消除 iOS 300ms 延迟）
+  // v140+: 单指拖拽平移（CSS transform，仅在画布溢出容器时可平移；不侵入 render.js 重绘模型）
+  var _pan = { x: 0, y: 0, sx: 0, sy: 0, bx: 0, by: 0, can: false };
+  function clampMainPan() {
+    var wrap = canvas.parentElement;
+    if (!wrap) return;
+    var cw = canvas.clientWidth || canvas.offsetWidth;
+    var ch = canvas.clientHeight || canvas.offsetHeight;
+    var availW = wrap.clientWidth, availH = wrap.clientHeight;
+    var maxX = cw > availW ? (cw - availW) / 2 : 0;
+    var maxY = ch > availH ? (ch - availH) / 2 : 0;
+    if (_pan.x > maxX) _pan.x = maxX; else if (_pan.x < -maxX) _pan.x = -maxX;
+    if (_pan.y > maxY) _pan.y = maxY; else if (_pan.y < -maxY) _pan.y = -maxY;
+  }
+  function applyMainPan() {
+    clampMainPan();
+    canvas.style.transform = 'translate(' + _pan.x + 'px,' + _pan.y + 'px)';
+  }
+  function resetMainPan() { _pan.x = 0; _pan.y = 0; if (canvas) canvas.style.transform = ''; }
   var _pinch = { mode: 0, dist: 0, curDist: 0, zoom: 1, moved: false, sx: 0, sy: 0, raf: 0 };
   function _doPinchZoom() {
     _pinch.raf = 0;
@@ -209,6 +237,10 @@ function bindEvents() {
     } else if (e.touches.length === 1) {
       _pinch.mode = 1; _pinch.moved = false;
       _pinch.sx = e.touches[0].clientX; _pinch.sy = e.touches[0].clientY;
+      _pan.sx = _pinch.sx; _pan.sy = _pinch.sy;
+      _pan.bx = _pan.x; _pan.by = _pan.y;
+      var _pw = canvas.parentElement;
+      _pan.can = !!(_pw && (canvas.clientWidth > _pw.clientWidth || canvas.clientHeight > _pw.clientHeight));
     }
   }, { passive: false });
   canvas.addEventListener('touchmove', function (e) {
@@ -220,7 +252,16 @@ function bindEvents() {
       e.preventDefault();
     } else if (_pinch.mode === 1 && e.touches.length === 1) {
       var t = e.touches[0];
-      if (Math.abs(t.clientX - _pinch.sx) > 8 || Math.abs(t.clientY - _pinch.sy) > 8) _pinch.moved = true;
+      var _tdx = t.clientX - _pinch.sx, _tdy = t.clientY - _pinch.sy;
+      if (Math.abs(_tdx) > 8 || Math.abs(_tdy) > 8) {
+        _pinch.moved = true;
+        if (_pan.can) {
+          _pan.x = _pan.bx + (t.clientX - _pan.sx);
+          _pan.y = _pan.by + (t.clientY - _pan.sy);
+          applyMainPan();
+          e.preventDefault();
+        }
+      }
     }
   }, { passive: false });
   canvas.addEventListener('touchend', function (e) {
@@ -251,6 +292,7 @@ function bindEvents() {
       }
     }
     if (_pinch.raf) { cancelAnimationFrame(_pinch.raf); _pinch.raf = 0; _doPinchZoom(); }
+    clampMainPan(); // 缩放后重新夹取平移边界，避免拖飞
     _pinch.mode = 0;
   }, { passive: false });
   // v123: 像素描边（后处理）——开关/强度/颜色均触发重算管线
@@ -283,8 +325,8 @@ function bindEvents() {
 
   // [品牌色卡弹窗已下线：白块 bug 待修，下周再开放]
   // 缩放
-  $('zoom-in').addEventListener('click', () => { state.zoom = Math.min(3, state.zoom + 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); });
-  $('zoom-out').addEventListener('click', () => { state.zoom = Math.max(0.3, state.zoom - 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); });
+  $('zoom-in').addEventListener('click', () => { state.zoom = Math.min(3, state.zoom + 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); clampMainPan(); });
+  $('zoom-out').addEventListener('click', () => { state.zoom = Math.max(0.3, state.zoom - 0.1); $('zoom-val').textContent = Math.round(state.zoom * 100) + '%'; applyZoom(); clampMainPan(); });
 
   // 下载：手机端一键直达（跳过设置弹窗），桌面端走设置弹窗
   const onDownloadClick = () => {
@@ -428,12 +470,12 @@ function loadSamplePhoto() {
     const url = URL.createObjectURL(blob);
 
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); state.sourceImage = img; processImage(); };
+    img.onload = () => { URL.revokeObjectURL(url); resetMainPan(); state.sourceImage = img; processImage(); };
     img.onerror = () => {
       URL.revokeObjectURL(url);
       // Blob 方式也失败 → 回退到直接 data URI（部分环境支持）
       const fallback = new Image();
-      fallback.onload = () => { state.sourceImage = fallback; processImage(); };
+      fallback.onload = () => { resetMainPan(); state.sourceImage = fallback; processImage(); };
       fallback.onerror = () => {
         const hint = document.getElementById('canvas-hint');
         if (hint) { hint.textContent = '示例图加载失败，请点击上传图片或 Ctrl+V 粘贴'; hint.style.display = 'block'; }
@@ -444,7 +486,7 @@ function loadSamplePhoto() {
   } catch(e) {
     // atob/Blob 不支持的极端环境 → 直接 data URI
     const fb = new Image();
-    fb.onload = () => { state.sourceImage = fb; processImage(); };
+    fb.onload = () => { resetMainPan(); state.sourceImage = fb; processImage(); };
     fb.src = SAMPLE_DATA_URI;
   }
 }

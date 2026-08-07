@@ -361,6 +361,10 @@ body {
   background: var(--accent-soft); border: 1px solid var(--accent-line);
   padding: 4px 10px; border-radius: 20px;
 }
+.edit-tool { display: flex; align-items: center; gap: 8px; }
+.edit-tool-label { font-size: 13px; color: var(--ink3); }
+.edit-paint-color { font-size: 13px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); border: 1px solid var(--accent-line); padding: 4px 10px; border-radius: 20px; }
+.edit-tool .seg { background: var(--bg); }
 .edit-btn {
   padding: 8px 18px; border-radius: 10px; border: 1px solid var(--accent-line);
   background: var(--white); color: var(--accent-ink); font-size: 14px; font-weight: 600; cursor: pointer;
