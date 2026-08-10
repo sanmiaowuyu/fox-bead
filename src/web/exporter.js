@@ -51,27 +51,34 @@ function genPNGSource(cv, cb) {
   try { cb(cv.toDataURL('image/png')); } catch (e) { cb(null); }
 }
 
-/* 手机端：a.download 常被浏览器拦截，改为弹出图片让用户「长按保存到相册」。
-   src 可以是 Blob 或 URL/dataURL 字符串；Blob 会转成 blob URL。
-   额外提供「在新窗口打开」按钮作为备份（部分浏览器长按无菜单时可用）。 */
-function showMobileSaveOverlay(src, failMsg) {
-  let url = src;
-  let blob = null;
-  if (src instanceof Blob) {
-    blob = src;
-    url = URL.createObjectURL(blob);
-  }
-  const mask = document.createElement('div');
+/* 保存对话框：覆盖层展示生成的图纸，并提供多种保存方式（专治 iframe/沙箱里「右键另存」拿不到文件）。
+   - 「下载图片」按钮：页内 <a download> 点击，沙箱允许下载时直接成功，且不会被宿主 UI 拦截右键
+   - 「新窗口打开」按钮：window.open(blobURL)，沙箱允许弹窗时在新标签保存
+   - 图片本体：右键/长按「另存为」兜底
+   src 可以是 Blob 或 URL/dataURL 字符串；Blob 会转成 blob URL。name 为文件名（可选）。 */
+function tryRealDownload(src, name) {
+  try {
+    var a = document.createElement('a');
+    if (src instanceof Blob) a.href = URL.createObjectURL(src); else a.href = src;
+    a.download = name || 'fox-bead';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { document.body.removeChild(a); if (src instanceof Blob) URL.revokeObjectURL(a.href); }, 1500);
+    return true;
+  } catch (e) { return false; }
+}
+function showMobileSaveOverlay(src, name, failMsg) {
+  var blob = null, url = null;
+  if (src instanceof Blob) { blob = src; url = URL.createObjectURL(blob); }
+  else if (typeof src === 'string') { url = src; }
+  var mask = document.createElement('div');
   mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;overflow:auto;';
-  const cleanup = () => {
-    if (blob && url) URL.revokeObjectURL(url);
-    mask.remove();
-  };
+  var cleanup = function () { if (blob && url) URL.revokeObjectURL(url); mask.remove(); };
   if (!src) {
-    const t = document.createElement('div');
+    var t = document.createElement('div');
     t.textContent = failMsg || '生成失败，请重试';
     t.style.cssText = 'color:#fff;font-size:15px;text-align:center;';
-    const b = document.createElement('button');
+    var b = document.createElement('button');
     b.textContent = '关闭';
     b.style.cssText = 'margin-top:16px;padding:10px 34px;border:none;border-radius:22px;background:#fff;color:#333;font-size:15px;';
     b.onclick = cleanup;
@@ -79,31 +86,37 @@ function showMobileSaveOverlay(src, failMsg) {
     document.body.appendChild(mask);
     return;
   }
-  const title = document.createElement('div');
-  const sub = document.createElement('div');
+  var title = document.createElement('div');
+  var sub = document.createElement('div');
   if (isMobileDevice()) {
     title.textContent = '长按图片 → 保存到相册';
-    sub.textContent = '（若长按没出现菜单，点下方「在新窗口打开」再保存）';
+    sub.textContent = '（若长按没出现菜单，点下方「下载图片」）';
   } else {
-    title.textContent = '右键图片 → 选择「图片另存为」';
-    sub.textContent = '（或点下方「在新窗口打开」后保存）';
+    title.textContent = '选择一种方式保存图纸';
+    sub.textContent = '（如未自动下载，点「下载图片」按钮，或右键图片「另存为」）';
   }
   title.style.cssText = 'color:#fff;font-size:17px;line-height:1.4;margin-bottom:6px;text-align:center;font-weight:600;';
   sub.style.cssText = 'color:#bbb;font-size:13px;margin-bottom:12px;text-align:center;';
-  const img = document.createElement('img');
+  var img = document.createElement('img');
   img.src = url;
   img.alt = '拼豆图纸';
-  img.style.cssText = 'max-width:100%;max-height:56vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);object-fit:contain;background:#fff;';
-  const openBtn = document.createElement('button');
-  openBtn.textContent = '在新窗口打开';
-  openBtn.style.cssText = 'display:none;margin-top:14px;padding:9px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.15);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.35);';
-  openBtn.onclick = () => { try { const w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; } };
-  img.onerror = () => { img.style.display = 'none'; openBtn.style.display = 'block'; };
-  const closeBtn = document.createElement('button');
+  img.style.cssText = 'max-width:100%;max-height:46vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);object-fit:contain;background:#fff;';
+  // 主按钮：页内 <a download> 点击（iframe/沙箱里最可靠的下载方式）
+  var dlBtn = document.createElement('button');
+  dlBtn.textContent = '下载图片';
+  dlBtn.style.cssText = 'margin-top:14px;padding:11px 34px;border:none;border-radius:24px;background:#fff;color:#222;font-size:15px;font-weight:600;';
+  dlBtn.onclick = function () { tryRealDownload(src, name || 'fox-bead.png'); };
+  // 次按钮：新窗口打开（沙箱允许弹窗时）
+  var openBtn = document.createElement('button');
+  openBtn.textContent = '新窗口打开';
+  openBtn.style.cssText = 'margin-top:10px;padding:9px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.15);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.35);';
+  openBtn.onclick = function () { try { var w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; } };
+  img.onerror = function () { img.style.display = 'none'; openBtn.style.display = 'block'; dlBtn.style.display = 'block'; };
+  var closeBtn = document.createElement('button');
   closeBtn.textContent = '关闭';
   closeBtn.style.cssText = 'margin-top:10px;padding:8px 30px;border:none;border-radius:22px;background:transparent;color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.35);';
   closeBtn.onclick = cleanup;
-  mask.appendChild(title); mask.appendChild(sub); mask.appendChild(img); mask.appendChild(openBtn); mask.appendChild(closeBtn);
+  mask.appendChild(title); mask.appendChild(sub); mask.appendChild(img); mask.appendChild(dlBtn); mask.appendChild(openBtn); mask.appendChild(closeBtn);
   document.body.appendChild(mask);
 }
 
@@ -123,8 +136,9 @@ function downloadCanvasPNG(cv, name) {
         return;
       } catch (e) { /* 落到下方弹窗兜底 */ }
     }
-    // iframe 内（预览面板 / 部分托管沙箱）或下载被拦截：弹窗让用户右键/长按保存
-    showMobileSaveOverlay(src);
+    // iframe 内（预览面板 / 部分托管沙箱）：先尝试真实下载，再给统一保存对话框兜底
+    tryRealDownload(src, name);
+    showMobileSaveOverlay(src, name);
   });
 }
 
@@ -894,7 +908,7 @@ function downloadSVG(svgStr, name) {
       c.height = (im.naturalHeight || 1000) * SCALE;
       c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      genPNGSource(c, src => showMobileSaveOverlay(src));
+      genPNGSource(c, src => showMobileSaveOverlay(src, name));
     };
     im.onerror = () => {
       URL.revokeObjectURL(url);
@@ -904,11 +918,29 @@ function downloadSVG(svgStr, name) {
     return;
   }
   const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  const inIframe = (window.self !== window.top);
+  if (!inIframe) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  } else {
+    // iframe 沙箱：SVG 直接下载常被拦，转 PNG 位图走统一保存对话框
+    const url = URL.createObjectURL(blob);
+    const im = new Image();
+    im.onload = () => {
+      const c = document.createElement('canvas');
+      const SCALE = 4;
+      c.width = (im.naturalWidth || 1000) * SCALE;
+      c.height = (im.naturalHeight || 1000) * SCALE;
+      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url);
+      genPNGSource(c, src => { tryRealDownload(src, name); showMobileSaveOverlay(src, name); });
+    };
+    im.onerror = () => { URL.revokeObjectURL(url); showMobileSaveOverlay(null, name, '生成失败，请重试'); };
+    im.src = url;
+  }
 }
 
 /** 圆角矩形辅助 */
@@ -1170,6 +1202,8 @@ function downloadBlob(blob, name) {
       return;
     } catch (e) { /* 落到下方 */ }
   }
-  try { const url = URL.createObjectURL(blob); window.open(url, '_blank'); } catch (e) {}
+  // iframe 内：先尝试真实下载，再给统一保存对话框（PDF 在沙箱里 window.open 常被静默拦截）
+  tryRealDownload(blob, name);
+  showMobileSaveOverlay(blob, name);
 }
 

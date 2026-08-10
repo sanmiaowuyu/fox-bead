@@ -380,7 +380,7 @@ function bindEvents() {
       setTimeout(() => {
         try {
           const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
-          genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
+          genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src, base); });
         } catch (e) {
           loading.close();
           showMobileSaveOverlay(null, '生成失败，请重试');
@@ -1343,7 +1343,7 @@ function mobileQuickExport() {
         else showMobileSaveOverlay(null, '生成失败，请重试');
       } else {
         const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
-        genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
+        genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src, base); });
       }
     } catch (e) {
       loading.close();
