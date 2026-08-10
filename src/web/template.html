@@ -362,6 +362,17 @@
         <span class="modal-row-name">包含采购清单<small class="help-inline">按色系分组的购物清单</small></span>
         <label class="switch"><input id="m-bom" type="checkbox" checked /><span class="knob"></span></label>
       </div>
+      <div class="modal-row">
+        <span class="modal-row-name">分块多板导出<small class="help-inline">大图按 N×N 板切分，每块独立对照图+色号（拼大图不翻车）</small></span>
+        <label class="switch"><input id="m-blocks" type="checkbox" /><span class="knob"></span></label>
+      </div>
+      <div class="modal-sub" id="m-blocks-sub" style="display:none">
+        <div class="modal-row sub">
+          <span class="modal-row-name sm">每块尺寸 (格)</span>
+          <span class="slider-val" id="m-blocksize-val">29</span>
+        </div>
+        <input id="m-blocksize" class="range" type="range" min="15" max="40" value="29" step="1" />
+      </div>
 
       <div class="modal-btns">
         <button id="m-cancel" class="btn-ghost full">取消</button>
@@ -440,6 +451,11 @@
         <input id="prep-seg-strength" class="range" type="range" min="4" max="22" value="10" step="1" />
         <div class="slider-hint">默认「自动」最稳；照片抠不净（留背景边）往右调，抠过头（主体缺角）往左调。</div>
       </div>
+      <div class="slider-row prep-feather-row">
+        <div class="slider-top"><span class="slider-name">羽化强度</span><span id="prep-feather-val" class="slider-val">标准</span></div>
+        <input id="prep-feather-strength" class="range" type="range" min="0" max="100" value="50" step="1" />
+        <div class="slider-hint">抠出主体边缘软硬：0=硬边、50=标准、100=羽化最明显（消除白边/锯齿）。</div>
+      </div>
       <div class="prep-seg-status" id="prep-seg-status" hidden></div>
 
       <div class="prep-results" id="prep-results" hidden>
@@ -447,7 +463,7 @@
           <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
           <div class="prep-results-actions">
             <button class="prep-btn prep-seg-all" id="prep-seg-all" hidden>全部拼成一张</button>
-            <button class="prep-btn prep-seg-exportall" id="prep-seg-exportall" hidden>逐个导出 N 张</button>
+            <button class="prep-btn prep-seg-exportall" id="prep-seg-exportall" hidden>导出对照长图 (N张)</button>
           </div>
         </div>
         <div class="prep-subjects" id="prep-subjects"></div>
@@ -504,6 +520,7 @@
     <div class="seg-lightbox-card">
       <img id="seg-lightbox-img" alt="主体预览" />
       <button class="seg-lightbox-close" id="seg-lightbox-close" aria-label="关闭">✕</button>
+      <button class="seg-lightbox-btn" id="seg-lightbox-topixel">就此转像素图</button>
     </div>
   </div>
 

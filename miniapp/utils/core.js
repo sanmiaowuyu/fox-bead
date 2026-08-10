@@ -387,7 +387,10 @@ function _segMedianLab(labs) {
 
 // 边缘羽化（抗锯齿软边）：对主体前景边缘像素按相邻背景数降低 alpha，消除硬锯齿/白边。
 // 纯函数、零 DOM、兼容旧移动端（无 ?./spread）。返回同一 data（原地修改）。
-function featherAlpha(data, w, h) {
+function featherAlpha(data, w, h, strength) {
+  if (strength == null) strength = 0.5;   // 默认=原固定强度（向后兼容）
+  if (strength <= 0) return data;         // 0 = 不羽化（硬边）
+  var k = strength * 2;                   // 0..2（1=标准 0.7/0.45/0.25，2=强，<1 更硬）
   var has = new Uint8Array(w * h);
   for (var i = 0; i < w * h; i++) has[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
   for (var y = 0; y < h; y++) {
@@ -400,12 +403,29 @@ function featherAlpha(data, w, h) {
       if (y > 0 && !has[p - w]) nBg++;
       if (y < h - 1 && !has[p + w]) nBg++;
       if (nBg > 0) {
-        var r = nBg === 1 ? 0.7 : (nBg === 2 ? 0.45 : 0.25);
+        var base = nBg === 1 ? 0.7 : (nBg === 2 ? 0.45 : 0.25);
+        var r = Math.pow(base, k);        // k=1→标准；k>1 更软；k<1 更硬
         data[p * 4 + 3] = Math.round(data[p * 4 + 3] * r);
       }
     }
   }
   return data;
+}
+
+// 给透明底主体图四周加透明 padding 并居中（拼豆时不贴边）。纯函数、零 DOM、兼容旧移动端。
+// 返回 { data: Uint8ClampedArray, w, h }。pad<=0 原样返回。
+function padAlphaImage(data, w, h, pad) {
+  if (!pad || pad < 0) return { data: data, w: w, h: h };
+  var nw = w + pad * 2, nh = h + pad * 2;
+  var nd = new Uint8ClampedArray(nw * nh * 4);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      var si = (y * w + x) * 4;
+      var di = ((y + pad) * nw + (x + pad)) * 4;
+      nd[di] = data[si]; nd[di + 1] = data[si + 1]; nd[di + 2] = data[si + 2]; nd[di + 3] = data[si + 3];
+    }
+  }
+  return { data: nd, w: nw, h: nh };
 }
 
 // 原图级多主体抠图（零 DOM，web / 小程序共用）：去背景 + 连通分量分离多个主体。
@@ -505,7 +525,7 @@ function segmentSubjects(imgData, opts) {
       var di = ((py - c.minY) * cw + (px - c.minX)) * 4;
       cdata[di] = data[si]; cdata[di + 1] = data[si + 1]; cdata[di + 2] = data[si + 2]; cdata[di + 3] = data[si + 3];
     }
-    featherAlpha(cdata, cw, ch); // 边缘羽化，消除硬锯齿/白边
+    featherAlpha(cdata, cw, ch, opts.feather); // 边缘羽化（强度可调），消除硬锯齿/白边
     out.push({ data: cdata, x: c.minX, y: c.minY, w: cw, h: ch, area: c.area });
   }
   return out;

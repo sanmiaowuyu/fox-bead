@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -243,6 +243,14 @@ fox-bead/
 - **修复**：① 导出加总高度钳制（按 H 比例缩 `cell` 并完整重算布局，桌面/移动/微信单边上限统一覆盖）；② `PALETTE_BY_ID[tid]` 越界保护（两处 `_pngGetCell`）；③ `buildExportCanvas` 入口空 grid/displayRect 保护。
 - **验证**：node 模拟 N=40~221 × 色卡30/60 全部 H≤16384（旧逻辑 N≥80 及大色卡全超限）；`node --check`/smoke-mini 全过；铁律 `?.=0`、mini DOM=0。未 bump 版本（修 bug），保持 v141。
 
+## v141 图片模块再优化（抠图质量/体验/批量导出，未 bump）
+- 余总「继续优化」→ 三项，仍不 bump（APP_VERSION=141）：
+  1. **抠图边缘羽化** `featherAlpha`（image-prep.js 纯函数，零 DOM）：主体前景边缘像素按相邻背景数降 alpha（1邻→0.7 / 2邻→0.45 / 3+→0.25），消除硬锯齿/白边；已进小程序 core.js
+  2. **自动抠图 loading 态**：`runAutoSeg` 先显「正在分离主体…」再 setTimeout 跑重计算，大图不再卡死无反馈
+  3. **批量分张导出** `exportAllSubjects`：弹窗「逐个导出 N 张」→ 串行给每个主体 processImage(onDone)+下载 PNG（文件名带主体序号+时间戳），结束恢复主图；`processImage` 加可选 onDone 回调（向后兼容）；浏览器可能拦截多次下载，已提示用户允许
+- 验证：featherAlpha node 单测通过（中心255/边角115/边缘179/背景0）；语法+构建+smoke 全过；铁律精确 `?.`=0 / 字面 `document.`=0；featherAlpha 进 mini core 无 DOM
+- 部署：CloudStudio 同沙箱；Gitee main `7e92877..0db4077`
+
 ## ⚠️ 后续部署注意
 - v141 已推 Gitee main；Gitee Pages 部署目录 `/docs`，改代码后需在 Pages 页点「更新」重新部署（免费版仅公开仓库）
 - 分支陷阱仍在：本地 `master` → 远端 `main`，推送 `git push origin master:main`
@@ -262,3 +270,14 @@ fox-bead/
 - ③ **主体缩略图点击放大**：抠完点缩略图弹 lightbox 大图（透明棋盘格背景），确认抠图效果再「转为像素图」。新增全局 `seg-lightbox` 遮罩 + `openSegLightbox`/`closeSegLightbox` + `template.html` 节点 + `style.css` 棋盘格样式。
 - 改动文件：`src/web/events.js`、`src/web/template.html`、`src/web/css/style.css`。
 - 验证：node --check 过；build 成功（v141 未 bump）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / mini DOM=0；新控件（seg-lightbox/openSegLightbox/timeStamp/prepSegTimer/实时重抠文案）已进 docs/index.html 产物。已部署 CloudStudio 预览 + 推送 Gitee main（de58edf..7e92877）。
+
+## v142 图片模块精修 + 分块多板导出（2026-08-07，SeniorDeveloper）
+- 用户指令「好的，都做了」→ 在 v141 图片模块基础上落地 A 档四件套 + B6 分块多板导出，按版本纪律 **bump 到 v142**（B6 是新增对外功能；B7/BOM 经核查前版已交付，本次 no-op）。
+- **A1 羽化强度可调**：`featherAlpha(data,w,h,strength)` 新增 `strength`（默认 0.5=标准；0=硬边；1=羽化最强）。`Math.pow(base, strength*2)`，`strength=0.5` 与原行为完全一致（向后兼容）。抠图弹窗加「羽化强度」滑块（0=硬边/50=标准/100=最强），250ms 防抖实时重抠。
+- **A2 灯箱内直接转像素图**：抠图 lightbox 加「就此转像素图」按钮 → `applySubjectAsPixel(prepSegSubs[idx])` 直接把当前主体转像素图，省去关弹窗再点缩略图的步骤。
+- **A3 主体 trim 透明边 + 居中留边距**：新增纯函数 `padAlphaImage(data,w,h,pad)`，给主体四周加透明留边（最小 2 格，约 8% 边长）再合成，避免拼大图时主体贴边/缺角；`setSubjectSource` 与 `applyAllAsOne` 均接入，后者加全局留白保留原构图比例。
+- **A4 批量导出改合成对照长图**：`exportAllSubjects` 重写——收集各主体 canvas → `composeSubjectSheet()` 统一缩放到宽 1100 竖向堆叠（间距留白 + 序号标题标注），单张 PNG 一次下载，规避浏览器「允许多文件下载」拦截；高度封顶 HARD（16384 桌面 / 4096 移动+微信）。导出按钮文案改为「导出对照长图 (N张)」。
+- **B6 分块多板导出**：导出弹窗加「分块多板导出」开关 + 每块尺寸滑块（15~40 格，默认 29）。勾选后 `buildExportCanvas(opts)` 改走新独立函数 `buildBlockExportCanvas(opts)`：把 M×M 整图按 bs×bs 切块，每块独立对照图 + 该块色号清单，网格（cols×rows）排列，超 HARD 上限时 `cellB` 16→4 降采样；与稳定版 `buildExportCanvas` 零耦合、零回归。三个调用点（m-confirm / mobileQuickExport / 预览导出）均透传 `blocks` + `blockSize`。
+- **B7（坐标标注）/ BOM（采购清单）核查结论**：`exporter.js` 已存在 `opts.coords` / `opts.bom` 及 export 弹窗 `m-coords`/`m-bom` 开关（前版已实现），本次确认为 no-op，未重复实现。
+- 改动文件：`src/core/image-prep.js`（featherAlpha strength + padAlphaImage）、`src/core/init.js`（APP_VERSION 141→142）、`src/web/template.html`（羽化滑块/灯箱按钮/分块导出开关/批量按钮文案）、`src/web/events.js`（变量/重置/实时羽化重抠/灯箱转像素/主体留边/A4 长图/分块监听/opts 透传）、`src/web/exporter.js`（buildBlockExportCanvas）。
+- 验证：node --check 过；build 成功（v142）；smoke-mini 全 PASS；铁律 `?.=0`（仅注释文本提及，无真实调用）/ `fromEntries=0`（同上）/ mini DOM=0；新控件已进 docs/index.html 产物。待部署 CloudStudio 预览 + 推送 Gitee main。

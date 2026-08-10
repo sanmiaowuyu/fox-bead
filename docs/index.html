@@ -1020,6 +1020,17 @@ body {
         <span class="modal-row-name">包含采购清单<small class="help-inline">按色系分组的购物清单</small></span>
         <label class="switch"><input id="m-bom" type="checkbox" checked /><span class="knob"></span></label>
       </div>
+      <div class="modal-row">
+        <span class="modal-row-name">分块多板导出<small class="help-inline">大图按 N×N 板切分，每块独立对照图+色号（拼大图不翻车）</small></span>
+        <label class="switch"><input id="m-blocks" type="checkbox" /><span class="knob"></span></label>
+      </div>
+      <div class="modal-sub" id="m-blocks-sub" style="display:none">
+        <div class="modal-row sub">
+          <span class="modal-row-name sm">每块尺寸 (格)</span>
+          <span class="slider-val" id="m-blocksize-val">29</span>
+        </div>
+        <input id="m-blocksize" class="range" type="range" min="15" max="40" value="29" step="1" />
+      </div>
 
       <div class="modal-btns">
         <button id="m-cancel" class="btn-ghost full">取消</button>
@@ -1098,6 +1109,11 @@ body {
         <input id="prep-seg-strength" class="range" type="range" min="4" max="22" value="10" step="1" />
         <div class="slider-hint">默认「自动」最稳；照片抠不净（留背景边）往右调，抠过头（主体缺角）往左调。</div>
       </div>
+      <div class="slider-row prep-feather-row">
+        <div class="slider-top"><span class="slider-name">羽化强度</span><span id="prep-feather-val" class="slider-val">标准</span></div>
+        <input id="prep-feather-strength" class="range" type="range" min="0" max="100" value="50" step="1" />
+        <div class="slider-hint">抠出主体边缘软硬：0=硬边、50=标准、100=羽化最明显（消除白边/锯齿）。</div>
+      </div>
       <div class="prep-seg-status" id="prep-seg-status" hidden></div>
 
       <div class="prep-results" id="prep-results" hidden>
@@ -1105,7 +1121,7 @@ body {
           <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
           <div class="prep-results-actions">
             <button class="prep-btn prep-seg-all" id="prep-seg-all" hidden>全部拼成一张</button>
-            <button class="prep-btn prep-seg-exportall" id="prep-seg-exportall" hidden>逐个导出 N 张</button>
+            <button class="prep-btn prep-seg-exportall" id="prep-seg-exportall" hidden>导出对照长图 (N张)</button>
           </div>
         </div>
         <div class="prep-subjects" id="prep-subjects"></div>
@@ -1162,6 +1178,7 @@ body {
     <div class="seg-lightbox-card">
       <img id="seg-lightbox-img" alt="主体预览" />
       <button class="seg-lightbox-close" id="seg-lightbox-close" aria-label="关闭">✕</button>
+      <button class="seg-lightbox-btn" id="seg-lightbox-topixel">就此转像素图</button>
     </div>
   </div>
 
@@ -1200,7 +1217,7 @@ const SAMPLE_DATA_URI = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHY
 const LOGO_DATA_URI = 'data:image/jpeg;base64,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';
 
 
-const APP_VERSION = '141';
+const APP_VERSION = '142';
 
 
 (function syncStyleVersion() {
@@ -1584,7 +1601,10 @@ function _segMedianLab(labs) {
   var pick = function (arr) { return n % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2; };
   return { L: pick(Ls), a: pick(as), b: pick(bs) };
 }
-function featherAlpha(data, w, h) {
+function featherAlpha(data, w, h, strength) {
+  if (strength == null) strength = 0.5;   // 默认=原固定强度（向后兼容）
+  if (strength <= 0) return data;         // 0 = 不羽化（硬边）
+  var k = strength * 2;                   // 0..2（1=标准 0.7/0.45/0.25，2=强，<1 更硬）
   var has = new Uint8Array(w * h);
   for (var i = 0; i < w * h; i++) has[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
   for (var y = 0; y < h; y++) {
@@ -1597,12 +1617,26 @@ function featherAlpha(data, w, h) {
       if (y > 0 && !has[p - w]) nBg++;
       if (y < h - 1 && !has[p + w]) nBg++;
       if (nBg > 0) {
-        var r = nBg === 1 ? 0.7 : (nBg === 2 ? 0.45 : 0.25);
+        var base = nBg === 1 ? 0.7 : (nBg === 2 ? 0.45 : 0.25);
+        var r = Math.pow(base, k);        // k=1→标准；k>1 更软；k<1 更硬
         data[p * 4 + 3] = Math.round(data[p * 4 + 3] * r);
       }
     }
   }
   return data;
+}
+function padAlphaImage(data, w, h, pad) {
+  if (!pad || pad < 0) return { data: data, w: w, h: h };
+  var nw = w + pad * 2, nh = h + pad * 2;
+  var nd = new Uint8ClampedArray(nw * nh * 4);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      var si = (y * w + x) * 4;
+      var di = ((y + pad) * nw + (x + pad)) * 4;
+      nd[di] = data[si]; nd[di + 1] = data[si + 1]; nd[di + 2] = data[si + 2]; nd[di + 3] = data[si + 3];
+    }
+  }
+  return { data: nd, w: nw, h: nh };
 }
 function segmentSubjects(imgData, opts) {
   opts = opts || {};
@@ -1690,7 +1724,7 @@ function segmentSubjects(imgData, opts) {
       var di = ((py - c.minY) * cw + (px - c.minX)) * 4;
       cdata[di] = data[si]; cdata[di + 1] = data[si + 1]; cdata[di + 2] = data[si + 2]; cdata[di + 3] = data[si + 3];
     }
-    featherAlpha(cdata, cw, ch); // 边缘羽化，消除硬锯齿/白边
+    featherAlpha(cdata, cw, ch, opts.feather); // 边缘羽化（强度可调），消除硬锯齿/白边
     out.push({ data: cdata, x: c.minX, y: c.minY, w: cw, h: ch, area: c.area });
   }
   return out;
@@ -4372,6 +4406,113 @@ function isLight(hex) {
 }
 
 
+function buildBlockExportCanvas(opts) {
+  const N = state.N;
+  if (!state.displayRect || !state.grid) return null;
+  const dr = state.displayRect;
+  const M = dr.M;
+  const MAX_CANVAS = 16384, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
+  const HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
+  const bs = (opts && opts.blockSize) ? opts.blockSize : 29;
+  const cols = Math.ceil(M / bs), rows = Math.ceil(M / bs);
+  const totalBlocks = cols * rows;
+  const pad = 16, titleH = 46, labelH = 30, palEntryW = 150, palCellH = 34, palPad = 10, gap = 14;
+
+  function blockColors(bx, by) {
+    const counts = {}; let total = 0;
+    const r0 = by * bs, r1 = Math.min((by + 1) * bs, M);
+    const c0 = bx * bs, c1 = Math.min((by + 1) * bs, M);
+    for (let y = r0; y < r1; y++) for (let x = c0; x < c1; x++) {
+      const id = state.grid[y][x];
+      if (id && !(state.bgMask && state.bgMask[y][x])) { counts[id] = (counts[id] || 0) + 1; total++; }
+    }
+    return { counts: counts, total: total };
+  }
+  function bpc(gx, gy) {
+    if (gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
+      var sx = dr.srcMinX + (gx - dr.offX);
+      var sy = dr.srcMinY + (gy - dr.offY);
+      var tid = state.grid[sy][sx];
+      var tbg = state.bgMask && state.bgMask[sy][sx];
+      var _pp = (tid && !tbg && PALETTE_BY_ID[tid]) ? PALETTE_BY_ID[tid] : null; return { id: tid, bg: tbg, hex: _pp ? _pp.hex : '#FFFFFF' };
+    }
+    return { id: null, bg: false, hex: '#FFFFFF' };
+  }
+
+  let cellB = isWeixin() ? 10 : (isMobileDevice() ? 8 : 16);
+  let blockW, blockH, palH, maxPalRows;
+  function layout(cb) {
+    const fullPatW = bs * cb, fullPatH = bs * cb;
+    let mpr = 1;
+    for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+      const cc = blockColors(bx, by);
+      const ids = Object.keys(cc.counts);
+      const palW = fullPatW - palPad * 2;
+      const pcols = Math.max(1, Math.floor(palW / palEntryW));
+      const pr = ids.length ? Math.ceil(ids.length / pcols) : 0;
+      if (pr > mpr) mpr = pr;
+    }
+    const ph = labelH + palPad + mpr * palCellH + palPad;
+    return { blockW: fullPatW + pad * 2, blockH: titleH + fullPatH + ph + pad, palH: ph, maxPalRows: mpr };
+  }
+  let _guard = 0;
+  while (_guard < 40) {
+    const L = layout(cellB);
+    if (rows * L.blockH + (rows + 1) * gap + titleH <= HARD) { blockW = L.blockW; blockH = L.blockH; palH = L.palH; maxPalRows = L.maxPalRows; break; }
+    cellB = Math.max(4, cellB - 1); _guard++;
+    if (cellB <= 4) { const L2 = layout(4); blockW = L2.blockW; blockH = L2.blockH; palH = L2.palH; maxPalRows = L2.maxPalRows; break; }
+  }
+
+  const totalW = cols * blockW + (cols + 1) * gap;
+  const totalH = rows * blockH + (rows + 1) * gap + titleH;
+  const cv = document.createElement('canvas'); cv.width = totalW; cv.height = totalH;
+  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+  c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, totalW, totalH);
+  c.fillStyle = '#211E2B'; c.font = 'bold 28px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText('狐狸爱拼豆 · 分块多板 (' + M + '×' + M + ')  共 ' + totalBlocks + ' 块  板尺寸 ' + bs + '×' + bs, pad, 8);
+
+  for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+    const ox = gap + bx * (blockW + gap);
+    const oy = titleH + gap + by * (blockH + gap);
+    const r0 = by * bs, r1 = Math.min((by + 1) * bs, M);
+    const c0 = bx * bs, c1 = Math.min((by + 1) * bs, M);
+    c.fillStyle = '#FFFFFF'; c.fillRect(ox, oy, blockW, blockH);
+    c.strokeStyle = '#E2D8F2'; c.lineWidth = 1; c.strokeRect(ox + 0.5, oy + 0.5, blockW - 1, blockH - 1);
+    c.fillStyle = '#6A4C93'; c.font = 'bold 20px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('第 ' + (by * cols + bx + 1) + ' 块 (行' + (r0 + 1) + '-' + r1 + '/列' + (c0 + 1) + '-' + c1 + ')', ox + pad, oy + 8);
+    const fullPatW = bs * cellB, fullPatH = bs * cellB;
+    const patOX = ox + pad + (fullPatW - (c1 - c0) * cellB) / 2;
+    const patOY = oy + titleH + (fullPatH - (r1 - r0) * cellB) / 2;
+    for (let gy2 = r0; gy2 < r1; gy2++) for (let gx2 = c0; gx2 < c1; gx2++) {
+      const info = bpc(gx2, gy2);
+      if (!info.id || info.bg) continue;
+      const px = state.mirror ? patOX + (c1 - 1 - gx2) * cellB : patOX + (gx2 - c0) * cellB;
+      const py = patOY + (gy2 - r0) * cellB;
+      c.fillStyle = info.hex; c.fillRect(px, py, cellB, cellB);
+    }
+    const cc2 = blockColors(bx, by);
+    const ids = Object.keys(cc2.counts).sort();
+    const palW = fullPatW - palPad * 2;
+    const pcols = Math.max(1, Math.floor(palW / palEntryW));
+    const palTop = oy + titleH + fullPatH + palPad;
+    c.fillStyle = '#211E2B'; c.font = 'bold 14px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('用料 ' + ids.length + ' 色 / ' + cc2.total + ' 颗', ox + pad, palTop);
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const col = i % pcols, row = Math.floor(i / pcols);
+      const gx = ox + pad + palPad + col * palEntryW;
+      const gy = palTop + labelH + row * palCellH;
+      c.fillStyle = PALETTE_BY_ID[id].hex; c.fillRect(gx, gy, 18, 18);
+      c.fillStyle = '#211E2B'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(id, gx + 22, gy + 9);
+      c.fillStyle = '#6B6675'; c.font = '12px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(String(cc2.counts[id]), gx + 56, gy + 9);
+    }
+  }
+  return cv;
+}
+
+
 
 var _debounceTimer = null;
 function debounceProcessImage(delay) {
@@ -4685,6 +4826,8 @@ function bindEvents() {
   $('modal-backdrop').addEventListener('click', e => { if (e.target === $('modal-backdrop')) closeModal(); });
 
   $('m-gridlines').addEventListener('change', e => { $('m-grid-sub').style.display = e.target.checked ? 'flex' : 'none'; });
+  $('m-blocks').addEventListener('change', e => { $('m-blocks-sub').style.display = e.target.checked ? 'flex' : 'none'; });
+  $('m-blocksize').addEventListener('input', e => { $('m-blocksize-val').textContent = e.target.value; });
   $('m-interval').addEventListener('input', e => { $('m-interval-val').textContent = e.target.value; });
   $('format-seg').addEventListener('click', e => {
     const b = e.target.closest('.seg-item'); if (!b) return;
@@ -4699,6 +4842,8 @@ function bindEvents() {
       showcode: $('m-showcode').checked,
       stats: $('m-stats').checked,
       bom: $('m-bom') ? $('m-bom').checked : true,
+      blocks: $('m-blocks').checked,
+      blockSize: +$('m-blocksize').value,
     };
     if (!state.grid) { closeModal(); return; }
     const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_MARD_${timeStamp()}`;
@@ -4707,7 +4852,7 @@ function bindEvents() {
       const loading = showGeneratingOverlay('正在生成图纸…');
       setTimeout(() => {
         try {
-          const cv = buildExportCanvas(opts);
+          const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
           genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
         } catch (e) {
           loading.close();
@@ -4721,7 +4866,7 @@ function bindEvents() {
     if (fmt === 'svg') {
       downloadSVG(buildExportSVG(opts), base + '.svg');
     } else {
-      downloadCanvasPNG(buildExportCanvas(opts), base + '.png');
+      downloadCanvasPNG(opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts), base + '.png');
     }
     closeModal();
   });
@@ -4762,6 +4907,8 @@ var prepCropStart = null;        // 裁剪起点（显示坐标）
 var prepCropDraft = null;        // 裁剪临时框（显示坐标）
 
 var prepSegSubs = [], prepSegW = 0, prepSegH = 0, prepSegStrength = null, prepSegTimer = null;
+var prepFeather = 0.5;          // 羽化强度（0=硬边，0.5=标准，1=强）
+var prepSegLightboxIdx = -1;    // 灯箱当前查看的主体序号（供「就此转像素图」）
 
 function timeStamp() {
   var d = new Date();
@@ -4774,7 +4921,7 @@ function openPrepModal() {
   state.prepBase = state.sourceImage;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
-  prepSegSubs = []; prepSegW = 0; prepSegH = 0; prepSegStrength = null;
+  prepSegSubs = []; prepSegW = 0; prepSegH = 0; prepSegStrength = null; prepFeather = 0.5; prepSegLightboxIdx = -1;
   var bd = $('prep-backdrop');
   if (bd) bd.hidden = false;
   var rb = $('prep-removebg'); if (rb) rb.checked = !!state.removeBg;
@@ -4793,6 +4940,8 @@ function syncPrepSliders() {
   var sv = $('prep-sat-val'); if (sv) sv.textContent = state.prep.saturation;
   var ss = $('prep-seg-strength'); if (ss) ss.value = 10;
   var ssv = $('prep-seg-val'); if (ssv) ssv.textContent = prepSegStrength == null ? '自动' : prepSegStrength.toFixed(2);
+  var fe = $('prep-feather-strength'); if (fe) fe.value = Math.round(prepFeather * 100);
+  var fev = $('prep-feather-val'); if (fev) fev.textContent = prepFeather <= 0 ? '硬边' : (prepFeather >= 1 ? '最强' : (Math.abs(prepFeather - 0.5) < 0.01 ? '标准' : (prepFeather < 0.5 ? '偏弱' : '偏强')));
 }
 function renderPrepPreview() {
   var canvas = $('prep-canvas'), overlay = $('prep-overlay'), wrap = $('prep-preview-wrap');
@@ -4842,7 +4991,9 @@ function runAutoSeg() {
     prepSegW = cv.width; prepSegH = cv.height;
     var ctx = cv.getContext('2d');
     var id = ctx.getImageData(0, 0, cv.width, cv.height);
-    var opts = prepSegStrength != null ? { bgT: prepSegStrength } : {};
+    var opts = {};
+    if (prepSegStrength != null) opts.bgT = prepSegStrength;
+    if (prepFeather != null) opts.feather = prepFeather;
     var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
     prepSegSubs = subs;
     renderPrepSubjects(subs);
@@ -4868,7 +5019,7 @@ function renderPrepSubjects(subs) {
     c.width = sub.w; c.height = sub.h; c.className = 'subject-canvas';
     c.style.cursor = 'pointer'; c.title = '点击放大预览';
     try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
-    c.addEventListener('click', function () { try { openSegLightbox(c.toDataURL('image/png')); } catch (e) {} });
+    c.addEventListener('click', function () { try { openSegLightbox(idx, c.toDataURL('image/png')); } catch (e) {} });
     var btn = document.createElement('button');
     btn.className = 'prep-btn subject-to-pixel';
     btn.textContent = '转为像素图';
@@ -4877,10 +5028,12 @@ function renderPrepSubjects(subs) {
     list.appendChild(item);
   });
 }
-function setSubjectSource(sub) {
+function setSubjectSource(sub) {
+  var pad = Math.max(2, Math.round(Math.min(sub.w, sub.h) * 0.08));
+  var pimg = padAlphaImage(sub.data, sub.w, sub.h, pad);
   var c = document.createElement('canvas');
-  c.width = sub.w; c.height = sub.h;
-  try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
+  c.width = pimg.w; c.height = pimg.h;
+  try { var ic = c.getContext('2d'); var im = ic.createImageData(pimg.w, pimg.h); im.data.set(pimg.data); ic.putImageData(im, 0, 0); } catch (e) {}
   state.sourceImage = c;       // canvas 可当 Image 用
   state.crop = false;
   var tc = document.getElementById('toggle-crop'); if (tc) tc.checked = false;
@@ -4895,12 +5048,15 @@ function applySubjectAsPixel(sub) {
 }
 function applyAllAsOne() {
   if (!prepSegSubs.length) return;
-  var big = document.createElement('canvas'); big.width = prepSegW; big.height = prepSegH;
+  var gpad = Math.max(2, Math.round(Math.min(prepSegW, prepSegH) * 0.04));
+  var big = document.createElement('canvas'); big.width = prepSegW + gpad * 2; big.height = prepSegH + gpad * 2;
   var bctx = big.getContext('2d');
   prepSegSubs.forEach(function (sub) {
-    var c = document.createElement('canvas'); c.width = sub.w; c.height = sub.h;
-    try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
-    bctx.drawImage(c, sub.x, sub.y);
+    var lpad = Math.max(2, Math.round(Math.min(sub.w, sub.h) * 0.08));
+    var pimg = padAlphaImage(sub.data, sub.w, sub.h, lpad);
+    var c = document.createElement('canvas'); c.width = pimg.w; c.height = pimg.h;
+    try { var ic = c.getContext('2d'); var im = ic.createImageData(pimg.w, pimg.h); im.data.set(pimg.data); ic.putImageData(im, 0, 0); } catch (e) {}
+    bctx.drawImage(c, sub.x - lpad + gpad, sub.y - lpad + gpad);   // 保持原构图相对位置 + 四周留白
   });
   state.sourceImage = big;
   state.crop = false;
@@ -4916,33 +5072,66 @@ function exportAllSubjects() {
   var total = prepSegSubs.length;
   var saved = { sourceImage: state.sourceImage, removeBg: state.removeBg, crop: state.crop, prep: state.prep, userCrop: state.userCrop };
   var st = $('prep-seg-status');
+  var canvases = [];
   function step(i) {
     if (i >= total) {
+      try { composeSubjectSheet(canvases, total); } catch (e) {}
       state.sourceImage = saved.sourceImage;
       state.removeBg = saved.removeBg; state.crop = saved.crop; state.prep = saved.prep; state.userCrop = saved.userCrop;
-      if (st) { st.hidden = false; st.textContent = '已导出 ' + total + ' 张主体拼豆图 ✅（如被浏览器拦截，请允许本页多次下载）'; }
+      if (st) { st.hidden = false; st.textContent = '已生成 ' + total + ' 张主体对照长图 ✅（一次保存即可）'; }
+      canvases = [];
       processImage();
       return;
     }
     setSubjectSource(prepSegSubs[i]);
-    if (st) { st.hidden = false; st.textContent = '正在导出 ' + (i + 1) + ' / ' + total + ' …'; }
+    if (st) { st.hidden = false; st.textContent = '正在生成 ' + (i + 1) + ' / ' + total + ' …'; }
     processImage(function () {
       try {
-        var base = '狐狸爱拼豆_主体' + (i + 1) + '_' + state.N + 'x' + state.N + '_MARD_' + timeStamp();
-        downloadCanvasPNG(buildExportCanvas({ gridlines: false, interval: 5, coords: false, showcode: false, stats: true, bom: true }), base + '.png');
+        var cv = buildExportCanvas({ gridlines: false, interval: 5, coords: false, showcode: false, stats: true, bom: true });
+        if (cv) canvases.push(cv);
       } catch (e) {}
-      setTimeout(function () { step(i + 1); }, 450);
+      setTimeout(function () { step(i + 1); }, 350);
     });
   }
   step(0);
+}
+function composeSubjectSheet(cvs, total) {
+  if (!cvs || !cvs.length) return;
+  var TARGETW = 1100, gap = 24;
+  var scaled = [], totalH = 0;
+  for (var i = 0; i < cvs.length; i++) {
+    var sc = TARGETW / cvs[i].width;
+    var w = TARGETW, h = Math.round(cvs[i].height * sc);
+    scaled.push({ w: w, h: h }); totalH += h + gap;
+  }
+  var MAX_CANVAS = 16384, HARD = isWeixin() ? 4096 : (isMobileDevice() ? 4096 : MAX_CANVAS);
+  var rs = 1;
+  if (totalH > HARD) rs = (HARD - gap * (cvs.length + 1)) / totalH;
+  var outW = Math.round(TARGETW * rs), outH = Math.round(totalH * rs);
+  var big = document.createElement('canvas'); big.width = outW; big.height = outH;
+  var c = big.getContext('2d'); c.imageSmoothingEnabled = false;
+  c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, outW, outH);
+  var y = Math.round(gap * rs);
+  for (var j = 0; j < cvs.length; j++) {
+    var ww = Math.round(scaled[j].w * rs), hh = Math.round(scaled[j].h * rs);
+    try { c.drawImage(cvs[j], 0, 0, cvs[j].width, cvs[j].height, Math.round((outW - ww) / 2), y, ww, hh); } catch (e) {}
+    y += hh + Math.round(gap * rs);
+  }
+  downloadCanvasPNG(big, '狐狸爱拼豆_主体对照图_' + state.N + 'x' + state.N + '_MARD_' + timeStamp() + '.png');
 }
 
-function openSegLightbox(dataURL) {
+function openSegLightbox(idx, dataURL) {
   var lb = $('seg-lightbox'); if (!lb) return;
+  prepSegLightboxIdx = (typeof idx === 'number') ? idx : -1;
   var img = $('seg-lightbox-img'); if (img) img.src = dataURL;
+  var tb = $('seg-lightbox-topixel'); if (tb) tb.style.display = prepSegLightboxIdx >= 0 ? 'block' : 'none';
   lb.hidden = false;
 }
-function closeSegLightbox() { var lb = $('seg-lightbox'); if (lb) lb.hidden = true; }
+function closeSegLightbox() { var lb = $('seg-lightbox'); if (lb) lb.hidden = true; prepSegLightboxIdx = -1; }
+function toPixelFromLightbox() {
+  if (prepSegLightboxIdx >= 0 && prepSegSubs[prepSegLightboxIdx]) applySubjectAsPixel(prepSegSubs[prepSegLightboxIdx]);
+  closeSegLightbox();
+}
 
 function prepOverlayPoint(e) {
   var overlay = $('prep-overlay'); if (!overlay) return null;
@@ -5000,6 +5189,16 @@ function bindPrepModal() {
       var st2 = $('prep-seg-status'); if (st2) { st2.hidden = false; st2.textContent = '已设强度，点「自动抠图」分离主体'; }
     }
   });
+  var feStrength = $('prep-feather-strength');
+  if (feStrength) feStrength.addEventListener('input', function () {
+    prepFeather = +feStrength.value / 100;
+    var v = $('prep-feather-val'); if (v) v.textContent = prepFeather <= 0 ? '硬边' : (prepFeather >= 1 ? '最强' : (Math.abs(prepFeather - 0.5) < 0.01 ? '标准' : (prepFeather < 0.5 ? '偏弱' : '偏强')));
+    if (prepSegSubs.length) {
+      var st = $('prep-seg-status'); if (st) { st.hidden = false; st.textContent = '正在按新羽化重新抠图…'; }
+      if (prepSegTimer) clearTimeout(prepSegTimer);
+      prepSegTimer = setTimeout(runAutoSeg, 250);
+    }
+  });
   var segAll = $('prep-seg-all'); if (segAll) segAll.addEventListener('click', applyAllAsOne);
   var segExport = $('prep-seg-exportall'); if (segExport) segExport.addEventListener('click', exportAllSubjects);
   var overlay = $('prep-overlay');
@@ -5044,6 +5243,7 @@ function bindPrepModal() {
   if (lb) {
     lb.addEventListener('click', function (e) { if (e.target === lb) closeSegLightbox(); });
     var lbc = $('seg-lightbox-close'); if (lbc) lbc.addEventListener('click', closeSegLightbox);
+    var lbt = $('seg-lightbox-topixel'); if (lbt) lbt.addEventListener('click', toPixelFromLightbox);
   }
 }
 
@@ -5238,11 +5438,13 @@ function mobileQuickExport() {
     showcode: $('m-showcode').checked,
     stats: $('m-stats').checked,
     bom: $('m-bom') ? $('m-bom').checked : true,
+    blocks: $('m-blocks').checked,
+    blockSize: +$('m-blocksize').value,
   };
   const loading = showGeneratingOverlay('正在生成图纸…');
   setTimeout(() => {
     try {
-      const cv = buildExportCanvas(opts);
+      const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
       genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
     } catch (e) {
       loading.close();

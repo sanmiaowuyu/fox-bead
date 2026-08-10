@@ -347,6 +347,8 @@ function bindEvents() {
   $('modal-backdrop').addEventListener('click', e => { if (e.target === $('modal-backdrop')) closeModal(); });
 
   $('m-gridlines').addEventListener('change', e => { $('m-grid-sub').style.display = e.target.checked ? 'flex' : 'none'; });
+  $('m-blocks').addEventListener('change', e => { $('m-blocks-sub').style.display = e.target.checked ? 'flex' : 'none'; });
+  $('m-blocksize').addEventListener('input', e => { $('m-blocksize-val').textContent = e.target.value; });
   $('m-interval').addEventListener('input', e => { $('m-interval-val').textContent = e.target.value; });
   $('format-seg').addEventListener('click', e => {
     const b = e.target.closest('.seg-item'); if (!b) return;
@@ -361,6 +363,8 @@ function bindEvents() {
       showcode: $('m-showcode').checked,
       stats: $('m-stats').checked,
       bom: $('m-bom') ? $('m-bom').checked : true,
+      blocks: $('m-blocks').checked,
+      blockSize: +$('m-blocksize').value,
     };
     if (!state.grid) { closeModal(); return; }
     const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_MARD_${timeStamp()}`;
@@ -370,7 +374,7 @@ function bindEvents() {
       const loading = showGeneratingOverlay('正在生成图纸…');
       setTimeout(() => {
         try {
-          const cv = buildExportCanvas(opts);
+          const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
           genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
         } catch (e) {
           loading.close();
@@ -384,7 +388,7 @@ function bindEvents() {
     if (fmt === 'svg') {
       downloadSVG(buildExportSVG(opts), base + '.svg');
     } else {
-      downloadCanvasPNG(buildExportCanvas(opts), base + '.png');
+      downloadCanvasPNG(opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts), base + '.png');
     }
     closeModal();
   });
@@ -441,6 +445,8 @@ var prepCropStart = null;        // 裁剪起点（显示坐标）
 var prepCropDraft = null;        // 裁剪临时框（显示坐标）
 
 var prepSegSubs = [], prepSegW = 0, prepSegH = 0, prepSegStrength = null, prepSegTimer = null;
+var prepFeather = 0.5;          // 羽化强度（0=硬边，0.5=标准，1=强）
+var prepSegLightboxIdx = -1;    // 灯箱当前查看的主体序号（供「就此转像素图」）
 
 function timeStamp() {
   var d = new Date();
@@ -453,7 +459,7 @@ function openPrepModal() {
   state.prepBase = state.sourceImage;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
-  prepSegSubs = []; prepSegW = 0; prepSegH = 0; prepSegStrength = null;
+  prepSegSubs = []; prepSegW = 0; prepSegH = 0; prepSegStrength = null; prepFeather = 0.5; prepSegLightboxIdx = -1;
   var bd = $('prep-backdrop');
   if (bd) bd.hidden = false;
   var rb = $('prep-removebg'); if (rb) rb.checked = !!state.removeBg;
@@ -472,6 +478,8 @@ function syncPrepSliders() {
   var sv = $('prep-sat-val'); if (sv) sv.textContent = state.prep.saturation;
   var ss = $('prep-seg-strength'); if (ss) ss.value = 10;
   var ssv = $('prep-seg-val'); if (ssv) ssv.textContent = prepSegStrength == null ? '自动' : prepSegStrength.toFixed(2);
+  var fe = $('prep-feather-strength'); if (fe) fe.value = Math.round(prepFeather * 100);
+  var fev = $('prep-feather-val'); if (fev) fev.textContent = prepFeather <= 0 ? '硬边' : (prepFeather >= 1 ? '最强' : (Math.abs(prepFeather - 0.5) < 0.01 ? '标准' : (prepFeather < 0.5 ? '偏弱' : '偏强')));
 }
 
 // 渲染预览（显示旋转/翻转/调色后的全图，叠加裁切框与笔刷遮罩）
@@ -534,7 +542,9 @@ function runAutoSeg() {
     prepSegW = cv.width; prepSegH = cv.height;
     var ctx = cv.getContext('2d');
     var id = ctx.getImageData(0, 0, cv.width, cv.height);
-    var opts = prepSegStrength != null ? { bgT: prepSegStrength } : {};
+    var opts = {};
+    if (prepSegStrength != null) opts.bgT = prepSegStrength;
+    if (prepFeather != null) opts.feather = prepFeather;
     var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
     prepSegSubs = subs;
     renderPrepSubjects(subs);
@@ -562,7 +572,7 @@ function renderPrepSubjects(subs) {
     c.width = sub.w; c.height = sub.h; c.className = 'subject-canvas';
     c.style.cursor = 'pointer'; c.title = '点击放大预览';
     try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
-    c.addEventListener('click', function () { try { openSegLightbox(c.toDataURL('image/png')); } catch (e) {} });
+    c.addEventListener('click', function () { try { openSegLightbox(idx, c.toDataURL('image/png')); } catch (e) {} });
     var btn = document.createElement('button');
     btn.className = 'prep-btn subject-to-pixel';
     btn.textContent = '转为像素图';
@@ -574,9 +584,12 @@ function renderPrepSubjects(subs) {
 
 // 将某个主体设为拼豆源图（透明底已是抠出主体，无需再去背景）；不关闭弹窗、不触渲染，供「单个转像素图」与「批量导出」共用
 function setSubjectSource(sub) {
+  // A3: 主体四周加透明 padding 居中，拼豆时不贴边（padAlphaImage 为纯函数、零 DOM）
+  var pad = Math.max(2, Math.round(Math.min(sub.w, sub.h) * 0.08));
+  var pimg = padAlphaImage(sub.data, sub.w, sub.h, pad);
   var c = document.createElement('canvas');
-  c.width = sub.w; c.height = sub.h;
-  try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
+  c.width = pimg.w; c.height = pimg.h;
+  try { var ic = c.getContext('2d'); var im = ic.createImageData(pimg.w, pimg.h); im.data.set(pimg.data); ic.putImageData(im, 0, 0); } catch (e) {}
   state.sourceImage = c;       // canvas 可当 Image 用
   state.crop = false;
   var tc = document.getElementById('toggle-crop'); if (tc) tc.checked = false;
@@ -595,12 +608,15 @@ function applySubjectAsPixel(sub) {
 // 所有主体按原构图合成一张透明底大图，整体拼豆化（一次出总稿）
 function applyAllAsOne() {
   if (!prepSegSubs.length) return;
-  var big = document.createElement('canvas'); big.width = prepSegW; big.height = prepSegH;
+  var gpad = Math.max(2, Math.round(Math.min(prepSegW, prepSegH) * 0.04));
+  var big = document.createElement('canvas'); big.width = prepSegW + gpad * 2; big.height = prepSegH + gpad * 2;
   var bctx = big.getContext('2d');
   prepSegSubs.forEach(function (sub) {
-    var c = document.createElement('canvas'); c.width = sub.w; c.height = sub.h;
-    try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
-    bctx.drawImage(c, sub.x, sub.y);
+    var lpad = Math.max(2, Math.round(Math.min(sub.w, sub.h) * 0.08));
+    var pimg = padAlphaImage(sub.data, sub.w, sub.h, lpad);
+    var c = document.createElement('canvas'); c.width = pimg.w; c.height = pimg.h;
+    try { var ic = c.getContext('2d'); var im = ic.createImageData(pimg.w, pimg.h); im.data.set(pimg.data); ic.putImageData(im, 0, 0); } catch (e) {}
+    bctx.drawImage(c, sub.x - lpad + gpad, sub.y - lpad + gpad);   // 保持原构图相对位置 + 四周留白
   });
   state.sourceImage = big;
   state.crop = false;
@@ -619,33 +635,68 @@ function exportAllSubjects() {
   var total = prepSegSubs.length;
   var saved = { sourceImage: state.sourceImage, removeBg: state.removeBg, crop: state.crop, prep: state.prep, userCrop: state.userCrop };
   var st = $('prep-seg-status');
+  var canvases = [];
   function step(i) {
     if (i >= total) {
+      try { composeSubjectSheet(canvases, total); } catch (e) {}
       state.sourceImage = saved.sourceImage;
       state.removeBg = saved.removeBg; state.crop = saved.crop; state.prep = saved.prep; state.userCrop = saved.userCrop;
-      if (st) { st.hidden = false; st.textContent = '已导出 ' + total + ' 张主体拼豆图 ✅（如被浏览器拦截，请允许本页多次下载）'; }
+      if (st) { st.hidden = false; st.textContent = '已生成 ' + total + ' 张主体对照长图 ✅（一次保存即可）'; }
+      canvases = [];
       processImage();
       return;
     }
     setSubjectSource(prepSegSubs[i]);
-    if (st) { st.hidden = false; st.textContent = '正在导出 ' + (i + 1) + ' / ' + total + ' …'; }
+    if (st) { st.hidden = false; st.textContent = '正在生成 ' + (i + 1) + ' / ' + total + ' …'; }
     processImage(function () {
       try {
-        var base = '狐狸爱拼豆_主体' + (i + 1) + '_' + state.N + 'x' + state.N + '_MARD_' + timeStamp();
-        downloadCanvasPNG(buildExportCanvas({ gridlines: false, interval: 5, coords: false, showcode: false, stats: true, bom: true }), base + '.png');
+        var cv = buildExportCanvas({ gridlines: false, interval: 5, coords: false, showcode: false, stats: true, bom: true });
+        if (cv) canvases.push(cv);
       } catch (e) {}
-      setTimeout(function () { step(i + 1); }, 450);
+      setTimeout(function () { step(i + 1); }, 350);
     });
   }
   step(0);
 }
 
-function openSegLightbox(dataURL) {
+// A4: 把每个主体的拼豆图纸（canvas）合成一张竖排对照长图，一次下载（规避浏览器拦截多次下载）
+function composeSubjectSheet(cvs, total) {
+  if (!cvs || !cvs.length) return;
+  var TARGETW = 1100, gap = 24;
+  var scaled = [], totalH = 0;
+  for (var i = 0; i < cvs.length; i++) {
+    var sc = TARGETW / cvs[i].width;
+    var w = TARGETW, h = Math.round(cvs[i].height * sc);
+    scaled.push({ w: w, h: h }); totalH += h + gap;
+  }
+  var MAX_CANVAS = 16384, HARD = isWeixin() ? 4096 : (isMobileDevice() ? 4096 : MAX_CANVAS);
+  var rs = 1;
+  if (totalH > HARD) rs = (HARD - gap * (cvs.length + 1)) / totalH;
+  var outW = Math.round(TARGETW * rs), outH = Math.round(totalH * rs);
+  var big = document.createElement('canvas'); big.width = outW; big.height = outH;
+  var c = big.getContext('2d'); c.imageSmoothingEnabled = false;
+  c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, outW, outH);
+  var y = Math.round(gap * rs);
+  for (var j = 0; j < cvs.length; j++) {
+    var ww = Math.round(scaled[j].w * rs), hh = Math.round(scaled[j].h * rs);
+    try { c.drawImage(cvs[j], 0, 0, cvs[j].width, cvs[j].height, Math.round((outW - ww) / 2), y, ww, hh); } catch (e) {}
+    y += hh + Math.round(gap * rs);
+  }
+  downloadCanvasPNG(big, '狐狸爱拼豆_主体对照图_' + state.N + 'x' + state.N + '_MARD_' + timeStamp() + '.png');
+}
+
+function openSegLightbox(idx, dataURL) {
   var lb = $('seg-lightbox'); if (!lb) return;
+  prepSegLightboxIdx = (typeof idx === 'number') ? idx : -1;
   var img = $('seg-lightbox-img'); if (img) img.src = dataURL;
+  var tb = $('seg-lightbox-topixel'); if (tb) tb.style.display = prepSegLightboxIdx >= 0 ? 'block' : 'none';
   lb.hidden = false;
 }
-function closeSegLightbox() { var lb = $('seg-lightbox'); if (lb) lb.hidden = true; }
+function closeSegLightbox() { var lb = $('seg-lightbox'); if (lb) lb.hidden = true; prepSegLightboxIdx = -1; }
+function toPixelFromLightbox() {
+  if (prepSegLightboxIdx >= 0 && prepSegSubs[prepSegLightboxIdx]) applySubjectAsPixel(prepSegSubs[prepSegLightboxIdx]);
+  closeSegLightbox();
+}
 
 function prepOverlayPoint(e) {
   var overlay = $('prep-overlay'); if (!overlay) return null;
@@ -713,6 +764,18 @@ function bindPrepModal() {
     }
   });
 
+  // 羽化强度（拖动即时重抠）
+  var feStrength = $('prep-feather-strength');
+  if (feStrength) feStrength.addEventListener('input', function () {
+    prepFeather = +feStrength.value / 100;
+    var v = $('prep-feather-val'); if (v) v.textContent = prepFeather <= 0 ? '硬边' : (prepFeather >= 1 ? '最强' : (Math.abs(prepFeather - 0.5) < 0.01 ? '标准' : (prepFeather < 0.5 ? '偏弱' : '偏强')));
+    if (prepSegSubs.length) {
+      var st = $('prep-seg-status'); if (st) { st.hidden = false; st.textContent = '正在按新羽化重新抠图…'; }
+      if (prepSegTimer) clearTimeout(prepSegTimer);
+      prepSegTimer = setTimeout(runAutoSeg, 250);
+    }
+  });
+
   // 全部拼成一张
   var segAll = $('prep-seg-all'); if (segAll) segAll.addEventListener('click', applyAllAsOne);
   // 逐个导出 N 张（批量分张）
@@ -763,6 +826,7 @@ function bindPrepModal() {
   if (lb) {
     lb.addEventListener('click', function (e) { if (e.target === lb) closeSegLightbox(); });
     var lbc = $('seg-lightbox-close'); if (lbc) lbc.addEventListener('click', closeSegLightbox);
+    var lbt = $('seg-lightbox-topixel'); if (lbt) lbt.addEventListener('click', toPixelFromLightbox);
   }
 }
 
@@ -959,11 +1023,13 @@ function mobileQuickExport() {
     showcode: $('m-showcode').checked,
     stats: $('m-stats').checked,
     bom: $('m-bom') ? $('m-bom').checked : true,
+    blocks: $('m-blocks').checked,
+    blockSize: +$('m-blocksize').value,
   };
   const loading = showGeneratingOverlay('正在生成图纸…');
   setTimeout(() => {
     try {
-      const cv = buildExportCanvas(opts);
+      const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
       genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
     } catch (e) {
       loading.close();

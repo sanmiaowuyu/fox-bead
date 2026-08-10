@@ -930,3 +930,111 @@ function isLight(hex) {
   return (0.299 * r + 0.587 * g + 0.114 * b) > 150;
 }
 
+/* B6: 分块多板导出 —— 大图按 blockSize×blockSize 切分，每块生成独立「对照图 + 色号清单」，
+ * 按原图块矩阵网格排成一张总图。拼大图时按块逐板烫，不翻车。独立函数，不改动 buildExportCanvas。 */
+function buildBlockExportCanvas(opts) {
+  const N = state.N;
+  if (!state.displayRect || !state.grid) return null;
+  const dr = state.displayRect;
+  const M = dr.M;
+  const MAX_CANVAS = 16384, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
+  const HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
+  const bs = (opts && opts.blockSize) ? opts.blockSize : 29;
+  const cols = Math.ceil(M / bs), rows = Math.ceil(M / bs);
+  const totalBlocks = cols * rows;
+  const pad = 16, titleH = 46, labelH = 30, palEntryW = 150, palCellH = 34, palPad = 10, gap = 14;
+
+  function blockColors(bx, by) {
+    const counts = {}; let total = 0;
+    const r0 = by * bs, r1 = Math.min((by + 1) * bs, M);
+    const c0 = bx * bs, c1 = Math.min((by + 1) * bs, M);
+    for (let y = r0; y < r1; y++) for (let x = c0; x < c1; x++) {
+      const id = state.grid[y][x];
+      if (id && !(state.bgMask && state.bgMask[y][x])) { counts[id] = (counts[id] || 0) + 1; total++; }
+    }
+    return { counts: counts, total: total };
+  }
+  function bpc(gx, gy) {
+    if (gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
+      var sx = dr.srcMinX + (gx - dr.offX);
+      var sy = dr.srcMinY + (gy - dr.offY);
+      var tid = state.grid[sy][sx];
+      var tbg = state.bgMask && state.bgMask[sy][sx];
+      var _pp = (tid && !tbg && PALETTE_BY_ID[tid]) ? PALETTE_BY_ID[tid] : null; return { id: tid, bg: tbg, hex: _pp ? _pp.hex : '#FFFFFF' };
+    }
+    return { id: null, bg: false, hex: '#FFFFFF' };
+  }
+
+  let cellB = isWeixin() ? 10 : (isMobileDevice() ? 8 : 16);
+  let blockW, blockH, palH, maxPalRows;
+  function layout(cb) {
+    const fullPatW = bs * cb, fullPatH = bs * cb;
+    let mpr = 1;
+    for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+      const cc = blockColors(bx, by);
+      const ids = Object.keys(cc.counts);
+      const palW = fullPatW - palPad * 2;
+      const pcols = Math.max(1, Math.floor(palW / palEntryW));
+      const pr = ids.length ? Math.ceil(ids.length / pcols) : 0;
+      if (pr > mpr) mpr = pr;
+    }
+    const ph = labelH + palPad + mpr * palCellH + palPad;
+    return { blockW: fullPatW + pad * 2, blockH: titleH + fullPatH + ph + pad, palH: ph, maxPalRows: mpr };
+  }
+  let _guard = 0;
+  while (_guard < 40) {
+    const L = layout(cellB);
+    if (rows * L.blockH + (rows + 1) * gap + titleH <= HARD) { blockW = L.blockW; blockH = L.blockH; palH = L.palH; maxPalRows = L.maxPalRows; break; }
+    cellB = Math.max(4, cellB - 1); _guard++;
+    if (cellB <= 4) { const L2 = layout(4); blockW = L2.blockW; blockH = L2.blockH; palH = L2.palH; maxPalRows = L2.maxPalRows; break; }
+  }
+
+  const totalW = cols * blockW + (cols + 1) * gap;
+  const totalH = rows * blockH + (rows + 1) * gap + titleH;
+  const cv = document.createElement('canvas'); cv.width = totalW; cv.height = totalH;
+  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+  c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, totalW, totalH);
+  c.fillStyle = '#211E2B'; c.font = 'bold 28px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText('狐狸爱拼豆 · 分块多板 (' + M + '×' + M + ')  共 ' + totalBlocks + ' 块  板尺寸 ' + bs + '×' + bs, pad, 8);
+
+  for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+    const ox = gap + bx * (blockW + gap);
+    const oy = titleH + gap + by * (blockH + gap);
+    const r0 = by * bs, r1 = Math.min((by + 1) * bs, M);
+    const c0 = bx * bs, c1 = Math.min((by + 1) * bs, M);
+    c.fillStyle = '#FFFFFF'; c.fillRect(ox, oy, blockW, blockH);
+    c.strokeStyle = '#E2D8F2'; c.lineWidth = 1; c.strokeRect(ox + 0.5, oy + 0.5, blockW - 1, blockH - 1);
+    c.fillStyle = '#6A4C93'; c.font = 'bold 20px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('第 ' + (by * cols + bx + 1) + ' 块 (行' + (r0 + 1) + '-' + r1 + '/列' + (c0 + 1) + '-' + c1 + ')', ox + pad, oy + 8);
+    const fullPatW = bs * cellB, fullPatH = bs * cellB;
+    const patOX = ox + pad + (fullPatW - (c1 - c0) * cellB) / 2;
+    const patOY = oy + titleH + (fullPatH - (r1 - r0) * cellB) / 2;
+    for (let gy2 = r0; gy2 < r1; gy2++) for (let gx2 = c0; gx2 < c1; gx2++) {
+      const info = bpc(gx2, gy2);
+      if (!info.id || info.bg) continue;
+      const px = state.mirror ? patOX + (c1 - 1 - gx2) * cellB : patOX + (gx2 - c0) * cellB;
+      const py = patOY + (gy2 - r0) * cellB;
+      c.fillStyle = info.hex; c.fillRect(px, py, cellB, cellB);
+    }
+    const cc2 = blockColors(bx, by);
+    const ids = Object.keys(cc2.counts).sort();
+    const palW = fullPatW - palPad * 2;
+    const pcols = Math.max(1, Math.floor(palW / palEntryW));
+    const palTop = oy + titleH + fullPatH + palPad;
+    c.fillStyle = '#211E2B'; c.font = 'bold 14px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('用料 ' + ids.length + ' 色 / ' + cc2.total + ' 颗', ox + pad, palTop);
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const col = i % pcols, row = Math.floor(i / pcols);
+      const gx = ox + pad + palPad + col * palEntryW;
+      const gy = palTop + labelH + row * palCellH;
+      c.fillStyle = PALETTE_BY_ID[id].hex; c.fillRect(gx, gy, 18, 18);
+      c.fillStyle = '#211E2B'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(id, gx + 22, gy + 9);
+      c.fillStyle = '#6B6675'; c.font = '12px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(String(cc2.counts[id]), gx + 56, gy + 9);
+    }
+  }
+  return cv;
+}
+
