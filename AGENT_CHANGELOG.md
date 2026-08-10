@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -281,3 +281,14 @@ fox-bead/
 - **B7（坐标标注）/ BOM（采购清单）核查结论**：`exporter.js` 已存在 `opts.coords` / `opts.bom` 及 export 弹窗 `m-coords`/`m-bom` 开关（前版已实现），本次确认为 no-op，未重复实现。
 - 改动文件：`src/core/image-prep.js`（featherAlpha strength + padAlphaImage）、`src/core/init.js`（APP_VERSION 141→142）、`src/web/template.html`（羽化滑块/灯箱按钮/分块导出开关/批量按钮文案）、`src/web/events.js`（变量/重置/实时羽化重抠/灯箱转像素/主体留边/A4 长图/分块监听/opts 透传）、`src/web/exporter.js`（buildBlockExportCanvas）。
 - 验证：node --check 过；build 成功（v142）；smoke-mini 全 PASS；铁律 `?.=0`（仅注释文本提及，无真实调用）/ `fromEntries=0`（同上）/ mini DOM=0；新控件已进 docs/index.html 产物。待部署 CloudStudio 预览 + 推送 Gitee main。
+
+## v143 P0 三件套 + 体验增强（2026-08-07，SeniorDeveloper）
+- 用户指令「按你的方案」→ P0（补货清单/分块多板PDF/小程序发版就绪）+ P1（保护笔刷/设置持久化/多色板切换）六件套，按版本纪律 **bump 到 v143**（均含新增对外功能）。
+- **① 补货清单导出（含拼货型号）**：豆仓面板加「复制补货清单」「导出补货图」按钮。基于豆仓库存缺口（`need - stock`，未填不计）列出 `拼豆型号(MARD221-色号) / 色号 / 缺口 / 现有`。复制为 TSV 文本（可直接发供应商/分销商），导出为 PNG 对照图。型号默认派生 `MARD221-色号`（如 A1→MARD221-A1），不依赖外部数据。
+- **② 分块多板导出补 PDF**：导出弹窗分块子面板加「PNG / PDF」格式选择。`exportBlocksPDF(opts)` 复用 `buildBlockExportCanvas` 拼图 → 按固定页宽（≤1400）切片成多页 → 每页 JPEG 内嵌（`/DCTDecode`，零依赖手写最小 PDF，不破单文件铁律）。桌面/移动端均触发下载。
+- **③ 小程序发版就绪**：`build.js §7` 修复版本注入（此前因 `CORE` 未定义导致小程序核心包显示 `N/A`，改为 `CORE` 定义后读 `APP_VERSION` → 现显示真实版本）；产出 `小程序真机验收清单.md`（appid 填写 / 基础链路 / 管线开关 / 性能兼容 / 已知非阻塞项 / 结论签名）。小程序核心零 DOM 已确认。
+- **④ 去背景保护笔刷**：`segmentSubjects` 新增 `opts.protect`（Uint8Array 强制前景），自动抠图绝不误删浅色主体（白猫脸/白衣物）。抠图弹窗加「🛡 保护笔刷」开关 + 笔刷大小 + 清除；预览叠加层源分辨率遮罩（绿色半透明），指针拖动涂抹；仅整图模式生效（裁切改变坐标空间，保护不映射）。纯算法、零 DOM。
+- **⑤ 用户设置持久化（localStorage）**：`foxbead-settings-v1` 保存羽化强度/分块尺寸/分块开关，抠图弹窗重开自动恢复（reset 时清除）。沿用既有 localStorage 模式，零新增依赖。
+- **⑥ 多色板切换**：`palette.js` 中 `PALETTE` / `PALETTE_BY_ID` / `PALETTE_LAB` / `LAB_BY_ID` 由 `const` 改 `var`，新增 `setActivePalette(list)` + `MARD_PALETTE_BY_ID`（冻结 Mard 映射，豆仓库存/补货仍按 Mard 实物统计）。顶栏加「色板」下拉 + 导入按钮：默认 Mard 221（C4 永不改动），可导入品牌色板 JSON（`[{id,name,hex}]`）并持久化（`foxbead-palettes-v1` / `foxbead-active-palette-v1`）。**不编造任何色值**——无导入数据则仅 Mard 221 可选。
+- 改动文件：`src/core/image-prep.js`（opts.protect）、`src/core/palette.js`（可变色板 + setActivePalette）、`src/core/init.js`（142→143）、`src/web/template.html`（补货按钮/分块PDF格式/保护笔刷栏/色板下拉）、`src/web/events.js`（补货导出/分块PDF分发/保护笔刷/设置持久化/色板绑定/豆仓改 MARD_PALETTE_BY_ID）、`src/web/exporter.js`（exportBlocksPDF + downloadBlob）、`src/web/css/style.css`（保护栏+色板样式）、`build.js`（§7 版本注入修复）、新增 `小程序真机验收清单.md`。
+- 验证：node --check 过；build 成功（v143，581KB）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / core+pipeline+mini DOM=0 全绿；小程序核心包版本头正确显示 `版本: 143`。已部署 CloudStudio 预览 + 推送 Gitee main（71efaa7..59bdc3f）。
