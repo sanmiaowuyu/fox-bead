@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-10（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换 / v144 分块多板补跨板对齐标记·CC复核意见②核查no-op）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -292,3 +292,14 @@ fox-bead/
 - **⑥ 多色板切换**：`palette.js` 中 `PALETTE` / `PALETTE_BY_ID` / `PALETTE_LAB` / `LAB_BY_ID` 由 `const` 改 `var`，新增 `setActivePalette(list)` + `MARD_PALETTE_BY_ID`（冻结 Mard 映射，豆仓库存/补货仍按 Mard 实物统计）。顶栏加「色板」下拉 + 导入按钮：默认 Mard 221（C4 永不改动），可导入品牌色板 JSON（`[{id,name,hex}]`）并持久化（`foxbead-palettes-v1` / `foxbead-active-palette-v1`）。**不编造任何色值**——无导入数据则仅 Mard 221 可选。
 - 改动文件：`src/core/image-prep.js`（opts.protect）、`src/core/palette.js`（可变色板 + setActivePalette）、`src/core/init.js`（142→143）、`src/web/template.html`（补货按钮/分块PDF格式/保护笔刷栏/色板下拉）、`src/web/events.js`（补货导出/分块PDF分发/保护笔刷/设置持久化/色板绑定/豆仓改 MARD_PALETTE_BY_ID）、`src/web/exporter.js`（exportBlocksPDF + downloadBlob）、`src/web/css/style.css`（保护栏+色板样式）、`build.js`（§7 版本注入修复）、新增 `小程序真机验收清单.md`。
 - 验证：node --check 过；build 成功（v143，581KB）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / core+pipeline+mini DOM=0 全绿；小程序核心包版本头正确显示 `版本: 143`。已部署 CloudStudio 预览 + 推送 Gitee main（71efaa7..59bdc3f）。
+
+## v144 分块多板导出补跨板对齐标记（2026-08-10，SeniorDeveloper）
+- 背景：CC 复核意见两条 → ① 跨板衔接处要对齐标记（拼豆实际制作板与板要边对边拼）；② 保护笔刷 vs 手动去背景笔刷别搞混。
+- 核查结论：② 不成立——手动去背景笔刷早在前版已移除（`pipeline.js:137` 空实现 + `events.js:525`「交互仅保留拖动裁切」），现存 `protect` 是唯一笔刷，逻辑仅「涂=强制前景」，无擦除/保留二义性，**无重叠、no-op**。
+- 落地 ①：在 `buildBlockExportCanvas` 复合画布上加三类对齐标记（PNG/PDF 同源，PDF 切片自该画布自动受益）：
+  1. 顶部**拼装示意图**：N×N 编号网格，定拼合顺序（防打印页打乱后无法复原）；
+  2. 每块**四角 + 定位点**：打印后边对边对齐参考；
+  3. 每块标题下**邻接方向行**（↑↓←→接第几块）：消除板间对齐歧义。
+- titleH 46→64 容纳两行块头（主标题 + 邻接行）；assembleH/ovW/ovH 计入 HARD 上限，cellB 降采样逻辑不变。
+- 改动文件：`src/web/exporter.js`（buildBlockExportCanvas 对齐标记）、`src/core/init.js`（143→144）。
+- 验证：node --check 过；build 成功（v144，583KB）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / core+pipeline+mini DOM=0 全绿。已部署 CloudStudio 预览 + 推送 Gitee main（64df4f5..d08dde2）。
