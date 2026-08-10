@@ -942,7 +942,9 @@ function buildBlockExportCanvas(opts) {
   const bs = (opts && opts.blockSize) ? opts.blockSize : 29;
   const cols = Math.ceil(M / bs), rows = Math.ceil(M / bs);
   const totalBlocks = cols * rows;
-  const pad = 16, titleH = 46, labelH = 30, palEntryW = 150, palCellH = 34, palPad = 10, gap = 14;
+  const pad = 16, titleH = 64, labelH = 30, palEntryW = 150, palCellH = 34, palPad = 10, gap = 14;
+  // ② 跨板对齐：拼装示意图（数字=块编号，按此网格顺序对齐拼合）
+  const cellA = 22, ovW = cols * cellA, ovH = rows * cellA, assembleH = 36 + ovH;
 
   function blockColors(bx, by) {
     const counts = {}; let total = 0;
@@ -984,28 +986,54 @@ function buildBlockExportCanvas(opts) {
   let _guard = 0;
   while (_guard < 40) {
     const L = layout(cellB);
-    if (rows * L.blockH + (rows + 1) * gap + titleH <= HARD) { blockW = L.blockW; blockH = L.blockH; palH = L.palH; maxPalRows = L.maxPalRows; break; }
+    if (rows * L.blockH + (rows + 1) * gap + titleH + assembleH <= HARD) { blockW = L.blockW; blockH = L.blockH; palH = L.palH; maxPalRows = L.maxPalRows; break; }
     cellB = Math.max(4, cellB - 1); _guard++;
     if (cellB <= 4) { const L2 = layout(4); blockW = L2.blockW; blockH = L2.blockH; palH = L2.palH; maxPalRows = L2.maxPalRows; break; }
   }
 
   const totalW = cols * blockW + (cols + 1) * gap;
-  const totalH = rows * blockH + (rows + 1) * gap + titleH;
+  const totalH = rows * blockH + (rows + 1) * gap + titleH + assembleH;
   const cv = document.createElement('canvas'); cv.width = totalW; cv.height = totalH;
   const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
   c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, totalW, totalH);
   c.fillStyle = '#211E2B'; c.font = 'bold 28px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
   c.fillText('狐狸爱拼豆 · 分块多板 (' + M + '×' + M + ')  共 ' + totalBlocks + ' 块  板尺寸 ' + bs + '×' + bs, pad, 8);
+  // 拼装示意图（对齐顺序参考）
+  c.fillStyle = '#6A4C93'; c.font = 'bold 15px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText('拼装示意图（数字=块编号，按此网格顺序对齐拼合；每块四角 + 为打印定位点）', pad, titleH + 8);
+  for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+    const bnum = by * cols + bx + 1;
+    const cx = pad + bx * cellA, cy = titleH + 30 + by * cellA;
+    c.fillStyle = '#F3EEFB'; c.fillRect(cx, cy, cellA - 2, cellA - 2);
+    c.strokeStyle = '#C9B8E8'; c.lineWidth = 1; c.strokeRect(cx + 0.5, cy + 0.5, cellA - 3, cellA - 3);
+    c.fillStyle = '#211E2B'; c.font = 'bold 12px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(bnum), cx + (cellA - 2) / 2, cy + (cellA - 2) / 2);
+  }
+  c.textAlign = 'left'; c.textBaseline = 'top';
 
   for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
     const ox = gap + bx * (blockW + gap);
-    const oy = titleH + gap + by * (blockH + gap);
+    const oy = titleH + assembleH + gap + by * (blockH + gap);
     const r0 = by * bs, r1 = Math.min((by + 1) * bs, M);
     const c0 = bx * bs, c1 = Math.min((by + 1) * bs, M);
+    const blockNum = by * cols + bx + 1;
+    const topN = by > 0 ? (by - 1) * cols + bx + 1 : 0;
+    const botN = by < rows - 1 ? (by + 1) * cols + bx + 1 : 0;
+    const leftN = bx > 0 ? by * cols + (bx - 1) + 1 : 0;
+    const rightN = bx < cols - 1 ? by * cols + (bx + 1) + 1 : 0;
     c.fillStyle = '#FFFFFF'; c.fillRect(ox, oy, blockW, blockH);
     c.strokeStyle = '#E2D8F2'; c.lineWidth = 1; c.strokeRect(ox + 0.5, oy + 0.5, blockW - 1, blockH - 1);
-    c.fillStyle = '#6A4C93'; c.font = 'bold 20px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
-    c.fillText('第 ' + (by * cols + bx + 1) + ' 块 (行' + (r0 + 1) + '-' + r1 + '/列' + (c0 + 1) + '-' + c1 + ')', ox + pad, oy + 8);
+    c.fillStyle = '#6A4C93'; c.font = 'bold 18px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('第 ' + blockNum + ' 块 (行' + (r0 + 1) + '-' + r1 + '/列' + (c0 + 1) + '-' + c1 + ')', ox + pad, oy + 10);
+    const dirs = [];
+    if (topN) dirs.push('↑' + topN);
+    if (botN) dirs.push('↓' + botN);
+    if (leftN) dirs.push('←' + leftN);
+    if (rightN) dirs.push('→' + rightN);
+    if (dirs.length) {
+      c.fillStyle = '#9A8FB5'; c.font = '13px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+      c.fillText('邻接 ' + dirs.join('  '), ox + pad, oy + 36);
+    }
     const fullPatW = bs * cellB, fullPatH = bs * cellB;
     const patOX = ox + pad + (fullPatW - (c1 - c0) * cellB) / 2;
     const patOY = oy + titleH + (fullPatH - (r1 - r0) * cellB) / 2;
@@ -1033,6 +1061,15 @@ function buildBlockExportCanvas(opts) {
       c.fillText(id, gx + 22, gy + 9);
       c.fillStyle = '#6B6675'; c.font = '12px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText(String(cc2.counts[id]), gx + 56, gy + 9);
+    }
+    // 角标 + 对齐定位点（四角，便于打印后对齐拼合）
+    c.strokeStyle = '#B79BE8'; c.lineWidth = 1.5;
+    const _m = 7;
+    const _corners = [[ox, oy], [ox + blockW, oy], [ox, oy + blockH], [ox + blockW, oy + blockH]];
+    for (let _k = 0; _k < _corners.length; _k++) {
+      const _px = _corners[_k][0], _py = _corners[_k][1];
+      c.beginPath(); c.moveTo(_px - _m, _py); c.lineTo(_px + _m, _py);
+      c.moveTo(_px, _py - _m); c.lineTo(_px, _py + _m); c.stroke();
     }
   }
   return cv;

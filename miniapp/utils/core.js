@@ -1,5 +1,5 @@
 // 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）
-// 版本: 143
+// 版本: 144
 
 /* ---------- 2. 颜色空间工具 ---------- */
 function hexToRgb(hex) {
