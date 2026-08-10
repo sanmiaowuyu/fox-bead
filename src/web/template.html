@@ -75,6 +75,13 @@
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         </button>
       </div>
+      <div class="palette-seg" id="palette-seg" title="色板切换（默认 Mard 221；可导入其他品牌色板）">
+        <select id="palette-select" class="palette-select" aria-label="色板切换">
+          <option value="mard221">Mard 221（默认）</option>
+        </select>
+        <button id="palette-import" class="btn-ghost sm" title="导入品牌色板 JSON（{id,name,hex}[]）">导入</button>
+        <input id="palette-file" type="file" accept="application/json,.json" hidden />
+      </div>
       <button id="btn-reset" class="btn-ghost">重置</button>
       <button id="btn-download-top" class="btn-primary">下载图纸</button>
     </div>
@@ -372,6 +379,13 @@
           <span class="slider-val" id="m-blocksize-val">29</span>
         </div>
         <input id="m-blocksize" class="range" type="range" min="15" max="40" value="29" step="1" />
+        <div class="modal-row sub">
+          <span class="modal-row-name sm">导出格式</span>
+          <div class="seg seg-sm" id="m-blocks-fmt-seg">
+            <button class="seg-item active" data-fmt="png">PNG</button>
+            <button class="seg-item" data-fmt="pdf">PDF（打印/发工厂）</button>
+          </div>
+        </div>
       </div>
 
       <div class="modal-btns">
@@ -456,6 +470,13 @@
         <input id="prep-feather-strength" class="range" type="range" min="0" max="100" value="50" step="1" />
         <div class="slider-hint">抠出主体边缘软硬：0=硬边、50=标准、100=羽化最明显（消除白边/锯齿）。</div>
       </div>
+      <div class="prep-protect-bar">
+        <button class="prep-btn prep-protect-toggle" id="prep-protect-toggle">🛡 保护笔刷：关</button>
+        <span class="prep-brush-label">笔刷</span>
+        <input id="prep-brush-size" class="range sm" type="range" min="6" max="80" value="24" step="1" />
+        <button class="prep-btn prep-protect-clear" id="prep-protect-clear">清除</button>
+      </div>
+      <div class="slider-hint">在主体（如白猫脸/白衣物）上涂抹，标记为「强制保留」，自动抠图不会误删。仅整图模式生效；若用了裁切则保护不生效。</div>
       <div class="prep-seg-status" id="prep-seg-status" hidden></div>
 
       <div class="prep-results" id="prep-results" hidden>
@@ -539,6 +560,8 @@
         <button class="btn-ghost" id="inv-fill">按用量一键填</button>
         <button class="btn-ghost" id="inv-add100">全部 +100</button>
         <button class="btn-ghost" id="inv-clear">清空库存</button>
+        <button class="btn-ghost" id="inv-restock-copy" title="复制为文本，可直接发供应商/分销商">复制补货清单</button>
+        <button class="btn-ghost" id="inv-restock-png" title="导出补货清单图（含拼豆型号）">导出补货图</button>
         <div class="seg seg-sm" id="inv-view-seg" style="margin-left:auto;">
           <button class="seg-item active" data-view="used">仅用到的</button>
           <button class="seg-item" data-view="all">全部 221</button>

@@ -127,6 +127,8 @@ function segmentSubjects(imgData, opts) {
     for (var xx = 0; xx < w; xx++) {
       var idx = (yy * w + xx) * 4;
       if (data[idx + 3] < 128) { isFg[yy * w + xx] = 0; continue; }
+      // ④ 保护笔刷：用户标记为强制前景的像素，自动抠图绝不误删（解决白猫脸/白衣物被当背景）
+      if (opts.protect && opts.protect[yy * w + xx]) { isFg[yy * w + xx] = 1; fgCount++; continue; }
       var lab = rgbToOklab({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
       if (oklabDist(lab, bgLab) < BG_T) isFg[yy * w + xx] = 0;
       else { isFg[yy * w + xx] = 1; fgCount++; }

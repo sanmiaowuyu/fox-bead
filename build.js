@@ -22,11 +22,22 @@ if (process.argv.indexOf('--bump') >= 0) {
     console.log('Version bumped: ' + verMatch[1] + ' → ' + newVer);
   }
 }
+// 读取当前 APP_VERSION（无论是否 bump，都注入到产物，避免小程序核心包显示 N/A）
+function getAppVersion() {
+  try {
+    var ic = fs.readFileSync(path.join(CORE, 'init.js'), 'utf8');
+    var m = ic.match(/const APP_VERSION = '(\d+)'/);
+    if (m) return m[1];
+  } catch (e) {}
+  return 'N/A';
+}
 var SRC = path.join(ROOT, 'src');
 var CORE = path.join(SRC, 'core');
 var WEB = path.join(SRC, 'web');
 var ASSETS = path.join(ROOT, 'assets');
 var DIST = path.join(ROOT, 'docs');
+// 读取当前 APP_VERSION（无论是否 bump，都注入产物，避免小程序核心包显示 N/A）—— 须在 CORE 定义后调用
+var APP_VER = getAppVersion();
 
 // JS 模块加载顺序（core/ 纯算法先加载，web/ 平台绑定后加载）
 var JS_MODULES = [
@@ -163,7 +174,7 @@ var MINIAPP_CORE = path.join(MINIAPP, 'utils', 'core.js');
 if (fs.existsSync(MINIAPP)) {
   // 仅打包纯模块（零 document / 零 $ / 零 canvas）：算法内核与网页版完全一致 = 单内核来源（解决 P0）
   var mpModules = ['color.js', 'palette.js', 'state.js', 'image-prep.js', 'pipeline-core.js'];
-  var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）\n// 版本: ' + (verMatch ? newVer : 'N/A') + '\n'];
+  var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）\n// 版本: ' + APP_VER + '\n'];
   for (var mi = 0; mi < mpModules.length; mi++) {
     mpParts.push(readTrim(path.join(CORE, mpModules[mi])));
   }

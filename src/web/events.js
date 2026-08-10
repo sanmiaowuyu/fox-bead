@@ -347,8 +347,13 @@ function bindEvents() {
   $('modal-backdrop').addEventListener('click', e => { if (e.target === $('modal-backdrop')) closeModal(); });
 
   $('m-gridlines').addEventListener('change', e => { $('m-grid-sub').style.display = e.target.checked ? 'flex' : 'none'; });
-  $('m-blocks').addEventListener('change', e => { $('m-blocks-sub').style.display = e.target.checked ? 'flex' : 'none'; });
-  $('m-blocksize').addEventListener('input', e => { $('m-blocksize-val').textContent = e.target.value; });
+  $('m-blocks').addEventListener('change', e => { prepBlocks = e.target.checked; $('m-blocks-sub').style.display = e.target.checked ? 'flex' : 'none'; savePrepSettings(); });
+  $('m-blocksize').addEventListener('input', e => { prepBlockSize = +e.target.value; $('m-blocksize-val').textContent = e.target.value; savePrepSettings(); });
+  $('m-blocks-fmt-seg').addEventListener('click', e => {
+    const b = e.target.closest('.seg-item'); if (!b) return;
+    document.querySelectorAll('#m-blocks-fmt-seg .seg-item').forEach(s => s.classList.remove('active'));
+    b.classList.add('active');
+  });
   $('m-interval').addEventListener('input', e => { $('m-interval-val').textContent = e.target.value; });
   $('format-seg').addEventListener('click', e => {
     const b = e.target.closest('.seg-item'); if (!b) return;
@@ -385,7 +390,12 @@ function bindEvents() {
     }
     const activeFmt = document.querySelector('#format-seg .seg-item.active');
     const fmt = (activeFmt && activeFmt.dataset.format) || 'png';
-    if (fmt === 'svg') {
+    const blockFmt = (function () { const s = document.querySelector('#m-blocks-fmt-seg .seg-item.active'); return s ? s.dataset.fmt : 'png'; })();
+    if (opts.blocks && blockFmt === 'pdf') {
+      const pdf = exportBlocksPDF(opts);
+      if (pdf) downloadBlob(pdf, base + '.pdf');
+      else downloadCanvasPNG(buildBlockExportCanvas(opts), base + '.png');
+    } else if (fmt === 'svg') {
       downloadSVG(buildExportSVG(opts), base + '.svg');
     } else {
       downloadCanvasPNG(opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts), base + '.png');
@@ -435,6 +445,80 @@ function bindEvents() {
   bindPrepModal();
   // 豆仓库存模块
   bindInventory();
+  // ⑥ 多色板切换
+  bindPalette();
+}
+
+/* ========== ⑥ 多色板切换 ==========
+ * 默认 Mard 221（实物豆，永不改动，铁律 C4）。可导入其他品牌色板 JSON（{id,name,hex}[]）。
+ * 不编造任何色值——无导入数据则只有 Mard 221 可选。 */
+var PALETTES_KEY = 'foxbead-palettes-v1';
+var ACTIVE_PALETTE_KEY = 'foxbead-active-palette-v1';
+function loadCustomPalettes() {
+  try { var s = localStorage.getItem(PALETTES_KEY); return s ? JSON.parse(s) : {}; } catch (e) { return {}; }
+}
+function saveCustomPalettes(obj) {
+  try { localStorage.setItem(PALETTES_KEY, JSON.stringify(obj)); } catch (e) {}
+}
+function bindPalette() {
+  var sel = $('palette-select'), imp = $('palette-import'), file = $('palette-file');
+  if (!sel) return;
+  function refresh() {
+    var custom = loadCustomPalettes();
+    sel.innerHTML = '<option value="mard221">Mard 221（默认）</option>';
+    Object.keys(custom).forEach(function (key) {
+      var o = document.createElement('option');
+      o.value = key; o.textContent = (custom[key].name || key) + '（' + custom[key].colors.length + ' 色）';
+      sel.appendChild(o);
+    });
+    var active = 'mard221';
+    try { active = localStorage.getItem(ACTIVE_PALETTE_KEY) || 'mard221'; } catch (e) {}
+    sel.value = active;
+    applyPalette(active, false);
+  }
+  function applyPalette(key, rerender) {
+    if (key === 'mard221' || !key) { setActivePalette(MARD_PALETTE); }
+    else {
+      var custom = loadCustomPalettes();
+      if (custom[key] && custom[key].colors && custom[key].colors.length) setActivePalette(custom[key].colors);
+      else { setActivePalette(MARD_PALETTE); key = 'mard221'; }
+    }
+    try { localStorage.setItem(ACTIVE_PALETTE_KEY, key); } catch (e) {}
+    if (rerender) { renderAll(); fbToast('已切换色板：' + (key === 'mard221' ? 'Mard 221' : (loadCustomPalettes()[key] ? loadCustomPalettes()[key].name : key))); }
+  }
+  sel.addEventListener('change', function () { applyPalette(sel.value, true); });
+  if (imp && file) {
+    imp.addEventListener('click', function () { file.click(); });
+    file.addEventListener('change', function () {
+      var f = file.files && file.files[0]; if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        try {
+          var data = JSON.parse(reader.result);
+          var colors = Array.isArray(data) ? data : (data.colors || data.palette || null);
+          if (!Array.isArray(colors)) throw new Error('格式应为 [{id,name,hex}] 数组');
+          var clean = [];
+          for (var i = 0; i < colors.length; i++) {
+            var c = colors[i];
+            if (!c || !c.id || !c.hex || !/^#[0-9A-Fa-f]{6}$/.test(c.hex)) continue;
+            clean.push({ id: String(c.id), name: c.name || c.id, hex: c.hex });
+          }
+          if (!clean.length) throw new Error('未解析到有效色值（需 id + #RRGGBB）');
+          var key = 'custom_' + Date.now();
+          var custom = loadCustomPalettes();
+          custom[key] = { name: (data.name || '自定义色板'), colors: clean };
+          saveCustomPalettes(custom);
+          refresh();
+          sel.value = key; applyPalette(key, true);
+        } catch (e2) {
+          fbToast('导入失败：' + (e2 && e2.message ? e2.message : 'JSON 格式错误'));
+        }
+        file.value = '';
+      };
+      reader.readAsText(f);
+    });
+  }
+  refresh();
 }
 
 /* ========== 图片处理模块：面板交互 ========== */
@@ -447,6 +531,14 @@ var prepCropDraft = null;        // 裁剪临时框（显示坐标）
 var prepSegSubs = [], prepSegW = 0, prepSegH = 0, prepSegStrength = null, prepSegTimer = null;
 var prepFeather = 0.5;          // 羽化强度（0=硬边，0.5=标准，1=强）
 var prepSegLightboxIdx = -1;    // 灯箱当前查看的主体序号（供「就此转像素图」）
+var prepBlocks = false;         // 分块多板导出开关（⑤ 持久化）
+// ④ 保护笔刷：在主体上涂抹标记强制前景，自动抠图不误删
+var prepProtectMode = false;    // 是否开启保护笔刷
+var prepBrushSize = 24;         // 笔刷显示尺寸（px）
+var prepProtectCanvas = null;   // 源分辨率保护遮罩画布（离屏，绘制高效）
+var prepProtectPainting = false;
+var prepProtectLast = null;
+var prepBlockSize = 29;         // 分块尺寸（格，⑤ 持久化）
 
 function timeStamp() {
   var d = new Date();
@@ -459,7 +551,18 @@ function openPrepModal() {
   state.prepBase = state.sourceImage;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
-  prepSegSubs = []; prepSegW = 0; prepSegH = 0; prepSegStrength = null; prepFeather = 0.5; prepSegLightboxIdx = -1;
+  prepSegSubs = []; prepSegW = 0; prepSegH = 0; prepSegStrength = null; prepSegLightboxIdx = -1;
+  prepProtectMode = false; prepProtectPainting = false; prepProtectLast = null; prepProtectCanvas = null;
+  state.segProtect = null;
+  var pt = $('prep-protect-toggle'); if (pt) { pt.textContent = '🛡 保护笔刷：关'; pt.classList.remove('active'); }
+  var pbs = $('prep-brush-size'); if (pbs) pbs.value = prepBrushSize;
+  // ⑤ 设置持久化：恢复上次羽化/分块偏好
+  var _ps = loadPrepSettings();
+  if (_ps) {
+    if (typeof _ps.feather === 'number') prepFeather = _ps.feather;
+    if (typeof _ps.blockSize === 'number') prepBlockSize = _ps.blockSize;
+    if (typeof _ps.blocks === 'boolean') prepBlocks = _ps.blocks;
+  }
   var bd = $('prep-backdrop');
   if (bd) bd.hidden = false;
   var rb = $('prep-removebg'); if (rb) rb.checked = !!state.removeBg;
@@ -499,6 +602,12 @@ function renderPrepPreview() {
   canvas.width = dw; canvas.height = dh;
   canvas.getContext('2d').drawImage(prepCanvas, 0, 0, dw, dh);
   overlay.width = dw; overlay.height = dh;
+  // ④ 保护笔刷遮罩按源分辨率分配（仅尺寸变化时重置，避免调色等重绘误清已涂区域）
+  if (!state.segProtect || state.segProtect.length !== prepW * prepH) {
+    state.segProtect = new Uint8Array(prepW * prepH);
+    prepProtectCanvas = document.createElement('canvas');
+    prepProtectCanvas.width = prepW; prepProtectCanvas.height = prepH;
+  }
   rebuildPrepOverlay();
 }
 
@@ -515,6 +624,44 @@ function rebuildPrepOverlay() {
     octx.strokeRect(x, y, w, h);
     octx.setLineDash([]);
   }
+  // ④ 保护笔刷遮罩（绿色半透明叠加）
+  if (prepProtectCanvas) {
+    octx.save();
+    octx.globalAlpha = 0.45;
+    octx.drawImage(prepProtectCanvas, 0, 0, prepW, prepH, 0, 0, overlay.width, overlay.height);
+    octx.restore();
+  }
+}
+
+// ④ 保护笔刷：在源分辨率遮罩上涂绿色圆点；display 坐标为输入
+function paintProtectAt(dispX, dispY) {
+  if (!state.segProtect || !prepProtectCanvas) return;
+  var sx = Math.floor(dispX / prepScale), sy = Math.floor(dispY / prepScale);
+  var rad = Math.max(1, Math.round(prepBrushSize / prepScale));
+  var ctx = prepProtectCanvas.getContext('2d');
+  ctx.fillStyle = '#2ECC71';
+  ctx.beginPath(); ctx.arc(sx, sy, rad, 0, Math.PI * 2); ctx.fill();
+  for (var dy = -rad; dy <= rad; dy++) {
+    for (var dx = -rad; dx <= rad; dx++) {
+      if (dx * dx + dy * dy > rad * rad) continue;
+      var px = sx + dx, py = sy + dy;
+      if (px < 0 || py < 0 || px >= prepW || py >= prepH) continue;
+      state.segProtect[py * prepW + px] = 1;
+    }
+  }
+}
+function paintProtectLine(a, b) {
+  var dist = Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
+  var steps = Math.max(1, Math.round(dist / 2));
+  for (var i = 0; i <= steps; i++) {
+    var t = i / steps;
+    paintProtectAt(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+  }
+}
+function clearProtectMask() {
+  if (state.segProtect) state.segProtect.fill(0);
+  if (prepProtectCanvas) { var c = prepProtectCanvas.getContext('2d'); c.clearRect(0, 0, prepProtectCanvas.width, prepProtectCanvas.height); }
+  rebuildPrepOverlay();
 }
 
 // 几何/调色变化：清空已抠结果（基于旧像素），重绘预览
@@ -545,6 +692,8 @@ function runAutoSeg() {
     var opts = {};
     if (prepSegStrength != null) opts.bgT = prepSegStrength;
     if (prepFeather != null) opts.feather = prepFeather;
+    // ④ 保护笔刷：仅整图模式生效（裁切会改变坐标空间，保护遮罩不映射）
+    if (state.segProtect && !state.userCrop) opts.protect = state.segProtect;
     var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
     prepSegSubs = subs;
     renderPrepSubjects(subs);
@@ -762,6 +911,7 @@ function bindPrepModal() {
     } else {
       var st2 = $('prep-seg-status'); if (st2) { st2.hidden = false; st2.textContent = '已设强度，点「自动抠图」分离主体'; }
     }
+    savePrepSettings();
   });
 
   // 羽化强度（拖动即时重抠）
@@ -774,30 +924,57 @@ function bindPrepModal() {
       if (prepSegTimer) clearTimeout(prepSegTimer);
       prepSegTimer = setTimeout(runAutoSeg, 250);
     }
+    savePrepSettings();
   });
+  // ④ 保护笔刷开关 / 笔刷大小 / 清除
+  var pToggle = $('prep-protect-toggle');
+  if (pToggle) pToggle.addEventListener('click', function () {
+    prepProtectMode = !prepProtectMode;
+    pToggle.textContent = '🛡 保护笔刷：' + (prepProtectMode ? '开' : '关');
+    pToggle.classList.toggle('active', prepProtectMode);
+    var ov = $('prep-overlay'); if (ov) ov.style.cursor = prepProtectMode ? 'cell' : 'crosshair';
+  });
+  var pSize = $('prep-brush-size');
+  if (pSize) pSize.addEventListener('input', function () { prepBrushSize = +pSize.value; });
+  var pClear = $('prep-protect-clear');
+  if (pClear) pClear.addEventListener('click', clearProtectMask);
 
   // 全部拼成一张
   var segAll = $('prep-seg-all'); if (segAll) segAll.addEventListener('click', applyAllAsOne);
   // 逐个导出 N 张（批量分张）
   var segExport = $('prep-seg-exportall'); if (segExport) segExport.addEventListener('click', exportAllSubjects);
 
-  // 预览画布：仅裁切拖拽（无笔刷）
+  // 预览画布：保护笔刷模式涂抹 / 普通模式拖拽裁切
   var overlay = $('prep-overlay');
   if (overlay) {
     overlay.style.cursor = 'crosshair';
     var startHandler = function (e) {
       e.preventDefault();
       var p = prepOverlayPoint(e); if (!p) return;
+      if (prepProtectMode) {
+        prepProtectPainting = true; prepProtectLast = p;
+        paintProtectAt(p.x, p.y); rebuildPrepOverlay();
+        return;
+      }
       prepCropStart = p; prepCropDraft = { x: p.x, y: p.y, w: 0, h: 0 };
     };
     var moveHandler = function (e) {
+      if (prepProtectMode) {
+        if (!prepProtectPainting) return;
+        e.preventDefault();
+        var p = prepOverlayPoint(e); if (!p) return;
+        if (prepProtectLast) paintProtectLine(prepProtectLast, p); else paintProtectAt(p.x, p.y);
+        prepProtectLast = p; rebuildPrepOverlay();
+        return;
+      }
       if (!prepCropDraft) return;
       e.preventDefault();
-      var p = prepOverlayPoint(e); if (!p) return;
-      prepCropDraft.w = p.x - prepCropStart.x; prepCropDraft.h = p.y - prepCropStart.y;
+      var p2 = prepOverlayPoint(e); if (!p2) return;
+      prepCropDraft.w = p2.x - prepCropStart.x; prepCropDraft.h = p2.y - prepCropStart.y;
       drawCropDraft();
     };
     var endHandler = function () {
+      if (prepProtectMode) { prepProtectPainting = false; prepProtectLast = null; return; }
       if (prepCropDraft) {
         // 提交裁切框（显示坐标 → 源坐标）
         var x0 = Math.min(prepCropStart.x, prepCropStart.x + prepCropDraft.w);
@@ -868,8 +1045,134 @@ function saveInventory() {
   try { localStorage.setItem(INV_KEY, JSON.stringify(state.inventory)); } catch (e) {}
 }
 
+// ⑤ 设置持久化：抠图/羽化/分块偏好存 localStorage，重开恢复
+var SETTINGS_KEY = 'foxbead-settings-v1';
+function loadPrepSettings() {
+  try { var s = localStorage.getItem(SETTINGS_KEY); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+}
+function savePrepSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ feather: prepFeather, blockSize: prepBlockSize, blocks: prepBlocks })); } catch (e) {}
+}
+
+/* 轻量 toast（不依赖外部库） */
+function fbToast(msg, ms) {
+  var old = document.getElementById('fb-toast');
+  if (old) old.remove();
+  var t = document.createElement('div');
+  t.id = 'fb-toast';
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:8%;transform:translateX(-50%);z-index:100000;background:rgba(33,30,43,.94);color:#fff;font-size:14px;padding:10px 18px;border-radius:22px;box-shadow:0 6px 24px rgba(0,0,0,.3);max-width:80vw;text-align:center;';
+  document.body.appendChild(t);
+  setTimeout(function () { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(function () { t.remove(); }, 320); }, ms || 2200);
+}
+
+/* ① 补货清单：基于豆仓库存缺口，列出「色号 + 缺口数 + 拼豆型号」
+   型号默认派生 MARD221-色号（如 A1 → MARD221-A1）；inventory 未填不算缺口。 */
+function buildRestockItems() {
+  var used = computeUsage();
+  var items = [];
+  Object.keys(used.counts).forEach(function (id) {
+    var need = used.counts[id];
+    var stockRaw = state.inventory[id];
+    var stock = (stockRaw === undefined || stockRaw === null || stockRaw === '') ? 0 : (parseInt(stockRaw, 10) || 0);
+    var gap = need - stock;
+    if (gap > 0) {
+      items.push({ id: id, model: 'MARD221-' + id, need: need, stock: stock, gap: gap });
+    }
+  });
+  items.sort(function (a, b) { return b.gap - a.gap; });
+  return items;
+}
+
+function restockText(items) {
+  var lines = ['【狐狸爱拼豆 · 补货清单】', '生成：' + new Date().toLocaleString(), ''];
+  lines.push('拼豆型号\t色号\t缺口\t现有库存');
+  items.forEach(function (it) {
+    lines.push(it.model + '\t' + it.id + '\t' + it.gap + '\t' + it.stock);
+  });
+  var totalGap = items.reduce(function (s, it) { return s + it.gap; }, 0);
+  lines.push('', '合计缺口：' + totalGap + ' 颗 · ' + items.length + ' 色');
+  return lines.join('\n');
+}
+
+function copyRestockText() {
+  if (!state.grid) { fbToast('请先生成图纸'); return; }
+  var items = buildRestockItems();
+  if (!items.length) { fbToast('库存充足，无需补货 ✓'); return; }
+  var text = restockText(items);
+  var done = function () { fbToast('已复制补货清单（' + items.length + ' 色，共 ' + items.reduce(function (s, i) { return s + i.gap; }, 0) + ' 颗）'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+  } else { fallbackCopy(text, done); }
+}
+
+function fallbackCopy(text, done) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;';
+    document.body.appendChild(ta); ta.focus(); ta.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) { done(); } else { fbToast('复制失败，请手动选择'); }
+  } catch (e) { fbToast('复制失败，请手动选择'); }
+}
+
+function exportRestockPNG() {
+  if (!state.grid) { fbToast('请先生成图纸'); return; }
+  var items = buildRestockItems();
+  if (!items.length) { fbToast('库存充足，无需补货 ✓'); return; }
+  var pad = 36, rowH = 72, headH = 150, swatch = 44;
+  var W = 1000;
+  var H = headH + items.length * rowH + pad;
+  var cv = document.createElement('canvas');
+  cv.width = W; cv.height = H;
+  var c = cv.getContext('2d');
+  c.imageSmoothingEnabled = false;
+  // 背景
+  c.fillStyle = '#FBF7F2'; c.fillRect(0, 0, W, H);
+  // 标题
+  c.fillStyle = '#211E2B'; c.font = 'bold 40px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText('📦 补货清单', pad, 34);
+  c.fillStyle = '#6B6675'; c.font = '20px sans-serif';
+  c.fillText('狐狸爱拼豆 · ' + new Date().toLocaleDateString(), pad, 86);
+  c.fillStyle = '#6A4C93'; c.font = '20px sans-serif';
+  c.textAlign = 'right';
+  c.fillText('缺口共 ' + items.reduce(function (s, i) { return s + i.gap; }, 0) + ' 颗 · ' + items.length + ' 色', W - pad, 86);
+  c.textAlign = 'left';
+  // 表头
+  var hy = 124;
+  c.fillStyle = '#211E2B'; c.font = 'bold 22px sans-serif';
+  c.fillText('拼豆型号', pad, hy);
+  c.fillText('色号', pad + 320, hy);
+  c.fillText('缺口', pad + 460, hy);
+  c.fillText('现有', pad + 600, hy);
+  // 分隔线
+  c.strokeStyle = '#E7DFD6'; c.lineWidth = 2;
+  c.beginPath(); c.moveTo(pad, hy + 26); c.lineTo(W - pad, hy + 26); c.stroke();
+  // 行
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    var y = headH + i * rowH;
+    var hex = (typeof PALETTE_BY_ID !== 'undefined' && PALETTE_BY_ID[it.id]) ? PALETTE_BY_ID[it.id].hex : '#cccccc';
+    // 色块
+    c.fillStyle = hex; c.fillRect(pad, y + (rowH - swatch) / 2, swatch, swatch);
+    c.strokeStyle = '#00000022'; c.lineWidth = 1; c.strokeRect(pad, y + (rowH - swatch) / 2, swatch, swatch);
+    c.fillStyle = '#211E2B'; c.font = 'bold 26px sans-serif'; c.textBaseline = 'middle';
+    c.fillText(it.model, pad + swatch + 18, y + rowH / 2);
+    c.fillStyle = '#6B6675'; c.font = '24px sans-serif';
+    c.fillText(it.id, pad + 320, y + rowH / 2);
+    c.fillStyle = '#C0392B'; c.font = 'bold 26px sans-serif';
+    c.fillText('+' + it.gap, pad + 460, y + rowH / 2);
+    c.fillStyle = '#6B6675'; c.font = '24px sans-serif';
+    c.fillText(String(it.stock), pad + 600, y + rowH / 2);
+  }
+  c.textBaseline = 'alphabetic';
+  downloadCanvasPNG(cv, '狐狸爱拼豆-补货清单.png');
+}
+
 function buildInvRow(id, need) {
-  var c = (typeof PALETTE_BY_ID !== 'undefined' && PALETTE_BY_ID[id]) ? PALETTE_BY_ID[id] : { hex: '#cccccc', name: '' };
+  // 豆仓库存按物理 Mard 221 实物统计，始终用冻结的 MARD_PALETTE_BY_ID（不随色板切换变化）
+  var c = (typeof MARD_PALETTE_BY_ID !== 'undefined' && MARD_PALETTE_BY_ID[id]) ? MARD_PALETTE_BY_ID[id] : { hex: '#cccccc', name: '' };
   var stock = state.inventory[id];
   var isSet = (stock !== undefined && stock !== null && stock !== '');
   var stockVal = isSet ? stock : '';
@@ -991,6 +1294,8 @@ function bindInventory() {
   var reset = $('inv-fill'); if (reset) reset.addEventListener('click', fillInventory);
   var add = $('inv-add100'); if (add) add.addEventListener('click', function () { addInventory(100); });
   var clr = $('inv-clear'); if (clr) clr.addEventListener('click', function () { state.inventory = {}; saveInventory(); renderInventory(); });
+  var rc = $('inv-restock-copy'); if (rc) rc.addEventListener('click', copyRestockText);
+  var rp = $('inv-restock-png'); if (rp) rp.addEventListener('click', exportRestockPNG);
   var bd = $('inv-backdrop'); if (bd) bd.addEventListener('click', function (e) { if (e.target === this) closeInventory(); });
   document.querySelectorAll('#inv-view-seg .seg-item').forEach(function (b) {
     b.addEventListener('click', function () {
@@ -1026,11 +1331,20 @@ function mobileQuickExport() {
     blocks: $('m-blocks').checked,
     blockSize: +$('m-blocksize').value,
   };
+  const blockFmt = (function () { const s = document.querySelector('#m-blocks-fmt-seg .seg-item.active'); return s ? s.dataset.fmt : 'png'; })();
+  const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_MARD_${timeStamp()}`;
   const loading = showGeneratingOverlay('正在生成图纸…');
   setTimeout(() => {
     try {
-      const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
-      genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
+      if (opts.blocks && blockFmt === 'pdf') {
+        const pdf = exportBlocksPDF(opts);
+        loading.close();
+        if (pdf) downloadBlob(pdf, base + '.pdf');
+        else showMobileSaveOverlay(null, '生成失败，请重试');
+      } else {
+        const cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
+        genPNGSource(cv, src => { loading.close(); showMobileSaveOverlay(src); });
+      }
     } catch (e) {
       loading.close();
       showMobileSaveOverlay(null, '生成失败，请重试');
@@ -1038,7 +1352,13 @@ function mobileQuickExport() {
   }, 30);
 }
 
-function openModal() { if (!state.grid) { alert('请先上传图片或载入示例'); return; } $('modal-backdrop').hidden = false; }
+function openModal() { if (!state.grid) { alert('请先上传图片或载入示例'); return; } $('modal-backdrop').hidden = false; syncExportSettings(); }
+function syncExportSettings() {
+  var mb = $('m-blocks'); if (mb) { mb.checked = !!prepBlocks; }
+  var mbs = $('m-blocks-sub'); if (mbs) mbs.style.display = prepBlocks ? 'flex' : 'none';
+  var mbsz = $('m-blocksize'); if (mbsz) mbsz.value = prepBlockSize;
+  var mbszv = $('m-blocksize-val'); if (mbszv) mbszv.textContent = prepBlockSize;
+}
 function closeModal() { $('modal-backdrop').hidden = true; }
 
 /* 载入示例图：固定为手捧白猫 sample.jpg（用户已确认不再更换）。

@@ -1,5 +1,5 @@
 // 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）
-// 版本: N/A
+// 版本: 143
 
 /* ---------- 2. 颜色空间工具 ---------- */
 function hexToRgb(hex) {
@@ -257,10 +257,21 @@ const MARD_PALETTE = [
 function fromEntries(entries) { const obj = {}; for (let i = 0; i < entries.length; i++) { obj[entries[i][0]] = entries[i][1]; } return obj; }
 
 const BRAND_LABEL = 'Mard';
-const PALETTE = MARD_PALETTE;
-const PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
-const PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
-const LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// ⑥ 多色板切换：PALETTE / PALETTE_BY_ID / PALETTE_LAB / LAB_BY_ID 改为可变，
+// setActivePalette() 可整体切换为其他品牌色板（MARD_PALETTE 本身永不被改动，满足铁律 C4）。
+var PALETTE = MARD_PALETTE;
+var PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
+const MARD_PALETTE_BY_ID = PALETTE_BY_ID; // 冻结的 Mard 映射，豆仓库存/补货始终按 Mard 实物统计
+var PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+var LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// 切换活动色板：list 为 [{id,name,hex}]，重建所有索引并刷新背景色号
+function setActivePalette(list) {
+  PALETTE = list;
+  PALETTE_BY_ID = fromEntries(list.map(function (c) { return [c.id, c]; }));
+  PALETTE_LAB = list.map(function (c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+  LAB_BY_ID = fromEntries(PALETTE_LAB.map(function (c) { return [c.id, c.lab]; }));
+  updateBgIds();
+}
 // 背景填充专用：最接近纯黑 / 纯白的调色板色号
 let BG_BLACK_ID = null, BG_WHITE_ID = null;
 function updateBgIds() {
@@ -465,6 +476,8 @@ function segmentSubjects(imgData, opts) {
     for (var xx = 0; xx < w; xx++) {
       var idx = (yy * w + xx) * 4;
       if (data[idx + 3] < 128) { isFg[yy * w + xx] = 0; continue; }
+      // ④ 保护笔刷：用户标记为强制前景的像素，自动抠图绝不误删（解决白猫脸/白衣物被当背景）
+      if (opts.protect && opts.protect[yy * w + xx]) { isFg[yy * w + xx] = 1; fgCount++; continue; }
       var lab = rgbToOklab({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
       if (oklabDist(lab, bgLab) < BG_T) isFg[yy * w + xx] = 0;
       else { isFg[yy * w + xx] = 1; fgCount++; }

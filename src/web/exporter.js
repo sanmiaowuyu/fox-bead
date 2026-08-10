@@ -1038,3 +1038,101 @@ function buildBlockExportCanvas(opts) {
   return cv;
 }
 
+/* ② 分块多板导出补 PDF —— 复用 buildBlockExportCanvas 的拼图，按固定页宽切片成多页，
+   每页 JPEG 内嵌（/DCTDecode），合成单文件 PDF。零依赖、不破单文件铁律。返回 Blob，失败 null。 */
+function sliceCanvasToPages(cv, pageW) {
+  const pages = [];
+  const ratio = cv.width / pageW;
+  const fullH = Math.round(cv.height / ratio);
+  let y = 0;
+  while (y < fullH) {
+    const ph = Math.min(fullH - y, 16383);
+    const pc = document.createElement('canvas');
+    pc.width = pageW; pc.height = ph;
+    const pctx = pc.getContext('2d');
+    pctx.imageSmoothingEnabled = false;
+    const sy = Math.round(y * ratio);
+    const sh = Math.round(ph * ratio);
+    pctx.drawImage(cv, 0, sy, cv.width, sh, 0, 0, pageW, ph);
+    pages.push(pc);
+    y += ph;
+  }
+  return pages;
+}
+function _strToBytes(s) {
+  const a = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 0xff;
+  return a;
+}
+function _dataURLtoBytes(dataURL) {
+  const b64 = dataURL.split(',')[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+function _concatBytes() {
+  let total = 0;
+  for (let i = 0; i < arguments.length; i++) total += arguments[i].length;
+  const out = new Uint8Array(total); let off = 0;
+  for (let j = 0; j < arguments.length; j++) { out.set(arguments[j], off); off += arguments[j].length; }
+  return out;
+}
+function _pad10(n) { let s = '' + n; while (s.length < 10) s = '0' + s; return s; }
+function _bytesToBlob(parts, type) {
+  let total = 0; for (let i = 0; i < parts.length; i++) total += parts[i].length;
+  const buf = new Uint8Array(total); let off = 0;
+  for (let j = 0; j < parts.length; j++) { buf.set(parts[j], off); off += parts[j].length; }
+  return new Blob([buf], { type: type });
+}
+function exportBlocksPDF(opts) {
+  const composite = buildBlockExportCanvas(opts);
+  if (!composite) return null;
+  const pageW = Math.min(composite.width, 1400);
+  const pages = sliceCanvasToPages(composite, pageW);
+  const n = pages.length;
+  const jpegs = [];
+  for (let i = 0; i < n; i++) jpegs.push(_dataURLtoBytes(pages[i].toDataURL('image/jpeg', 0.92)));
+  const objs = [];
+  const setObj = (id, bytes) => { objs[id] = bytes; };
+  setObj(1, _strToBytes('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'));
+  const kids = [];
+  for (let k = 0; k < n; k++) kids.push((3 + k * 3) + ' 0 R');
+  setObj(2, _strToBytes('2 0 obj\n<< /Type /Pages /Kids [' + kids.join(' ') + '] /Count ' + n + ' >>\nendobj\n'));
+  for (let p = 0; p < n; p++) {
+    const pageId = 3 + p * 3, imgId = 4 + p * 3, conId = 5 + p * 3;
+    const pw = pages[p].width, ph = pages[p].height;
+    setObj(pageId, _strToBytes(pageId + ' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pw + ' ' + ph + '] /Resources << /XObject << /Im0 ' + imgId + ' 0 R >> >> /Contents ' + conId + ' 0 R >>\nendobj\n'));
+    const imgDict = imgId + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + pw + ' /Height ' + ph + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpegs[p].length + ' >>\nstream\n';
+    setObj(imgId, _concatBytes(_strToBytes(imgDict), jpegs[p], _strToBytes('\nendstream\nendobj\n')));
+    const content = 'q ' + pw + ' 0 0 ' + ph + ' 0 0 cm /Im0 Do Q\n';
+    setObj(conId, _strToBytes(conId + ' 0 obj\n<< /Length ' + content.length + ' >>\nstream\n' + content + 'endstream\nendobj\n'));
+  }
+  const totalObjs = objs.length;
+  let offset = 9; // "%PDF-1.3\n"
+  const offsets = [];
+  for (let id = 1; id < totalObjs; id++) { if (objs[id]) { offsets[id] = offset; offset += objs[id].length; } }
+  let xref = 'xref\n0 ' + totalObjs + '\n0000000000 65535 f \n';
+  for (let id2 = 1; id2 < totalObjs; id2++) {
+    xref += objs[id2] ? (_pad10(offsets[id2]) + ' 00000 n \n') : '0000000000 65535 f \n';
+  }
+  const trailer = 'trailer\n<< /Size ' + totalObjs + ' /Root 1 0 R >>\nstartxref\n' + offset + '\n%%EOF\n';
+  const all = [_strToBytes('%PDF-1.3\n')];
+  for (let id3 = 1; id3 < totalObjs; id3++) if (objs[id3]) all.push(objs[id3]);
+  all.push(_strToBytes(xref + trailer));
+  return _bytesToBlob(all, 'application/pdf');
+}
+function downloadBlob(blob, name) {
+  const inIframe = (window.self !== window.top);
+  if (!inIframe) {
+    try {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = name;
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 1500);
+      return;
+    } catch (e) { /* 落到下方 */ }
+  }
+  try { const url = URL.createObjectURL(blob); window.open(url, '_blank'); } catch (e) {}
+}
+

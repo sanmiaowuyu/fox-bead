@@ -226,10 +226,21 @@ const MARD_PALETTE = [
 function fromEntries(entries) { const obj = {}; for (let i = 0; i < entries.length; i++) { obj[entries[i][0]] = entries[i][1]; } return obj; }
 
 const BRAND_LABEL = 'Mard';
-const PALETTE = MARD_PALETTE;
-const PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
-const PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
-const LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// ⑥ 多色板切换：PALETTE / PALETTE_BY_ID / PALETTE_LAB / LAB_BY_ID 改为可变，
+// setActivePalette() 可整体切换为其他品牌色板（MARD_PALETTE 本身永不被改动，满足铁律 C4）。
+var PALETTE = MARD_PALETTE;
+var PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
+const MARD_PALETTE_BY_ID = PALETTE_BY_ID; // 冻结的 Mard 映射，豆仓库存/补货始终按 Mard 实物统计
+var PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+var LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// 切换活动色板：list 为 [{id,name,hex}]，重建所有索引并刷新背景色号
+function setActivePalette(list) {
+  PALETTE = list;
+  PALETTE_BY_ID = fromEntries(list.map(function (c) { return [c.id, c]; }));
+  PALETTE_LAB = list.map(function (c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+  LAB_BY_ID = fromEntries(PALETTE_LAB.map(function (c) { return [c.id, c.lab]; }));
+  updateBgIds();
+}
 // 背景填充专用：最接近纯黑 / 纯白的调色板色号
 let BG_BLACK_ID = null, BG_WHITE_ID = null;
 function updateBgIds() {
