@@ -545,9 +545,10 @@ body {
 .prep-results { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
 .prep-results-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 .prep-results-title { font-size: 13px; font-weight: 600; color: var(--ink2); }
-.prep-seg-all { padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 9px; border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent-ink); cursor: pointer; transition: transform .12s, filter .12s; }
-.prep-seg-all:hover { transform: translateY(-1px); filter: brightness(1.03); }
-.prep-seg-all:active { transform: translateY(0); }
+.prep-results-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.prep-seg-all, .prep-seg-exportall { padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 9px; border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent-ink); cursor: pointer; transition: transform .12s, filter .12s; }
+.prep-seg-all:hover, .prep-seg-exportall:hover { transform: translateY(-1px); filter: brightness(1.03); }
+.prep-seg-all:active, .prep-seg-exportall:active { transform: translateY(0); }
 .prep-subjects { display: flex; flex-wrap: wrap; gap: 12px; }
 .subject-thumb {
   display: flex; flex-direction: column; align-items: center; gap: 6px;
@@ -1102,7 +1103,10 @@ body {
       <div class="prep-results" id="prep-results" hidden>
         <div class="prep-results-head">
           <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
-          <button class="prep-btn prep-seg-all" id="prep-seg-all" hidden>全部拼成一张</button>
+          <div class="prep-results-actions">
+            <button class="prep-btn prep-seg-all" id="prep-seg-all" hidden>全部拼成一张</button>
+            <button class="prep-btn prep-seg-exportall" id="prep-seg-exportall" hidden>逐个导出 N 张</button>
+          </div>
         </div>
         <div class="prep-subjects" id="prep-subjects"></div>
       </div>
@@ -1579,6 +1583,26 @@ function _segMedianLab(labs) {
   var mid = Math.floor(n / 2);
   var pick = function (arr) { return n % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2; };
   return { L: pick(Ls), a: pick(as), b: pick(bs) };
+}
+function featherAlpha(data, w, h) {
+  var has = new Uint8Array(w * h);
+  for (var i = 0; i < w * h; i++) has[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      var p = y * w + x;
+      if (has[p] !== 1) continue;
+      var nBg = 0;
+      if (x > 0 && !has[p - 1]) nBg++;
+      if (x < w - 1 && !has[p + 1]) nBg++;
+      if (y > 0 && !has[p - w]) nBg++;
+      if (y < h - 1 && !has[p + w]) nBg++;
+      if (nBg > 0) {
+        var r = nBg === 1 ? 0.7 : (nBg === 2 ? 0.45 : 0.25);
+        data[p * 4 + 3] = Math.round(data[p * 4 + 3] * r);
+      }
+    }
+  }
+  return data;
 }
 function segmentSubjects(imgData, opts) {
   opts = opts || {};
@@ -1666,6 +1690,7 @@ function segmentSubjects(imgData, opts) {
       var di = ((py - c.minY) * cw + (px - c.minX)) * 4;
       cdata[di] = data[si]; cdata[di + 1] = data[si + 1]; cdata[di + 2] = data[si + 2]; cdata[di + 3] = data[si + 3];
     }
+    featherAlpha(cdata, cw, ch); // 边缘羽化，消除硬锯齿/白边
     out.push({ data: cdata, x: c.minX, y: c.minY, w: cw, h: ch, area: c.area });
   }
   return out;
@@ -2573,7 +2598,7 @@ function buildSrcRGB(img, N) {
   }
   return arr;
 }
-function processImage() {
+function processImage(onDone) {
   if (!state.sourceImage) return;
   var _wrapEl = document.getElementById('canvas-wrap');
   if (_wrapEl) _wrapEl.classList.add('processing');
@@ -2588,7 +2613,7 @@ function processImage() {
   var dy = Math.floor((N - dh) / 2);
   var cw = cr.sw / dw, ch = cr.sh / dh;
   var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });
-  var onFinish = function() { _finishPipeline(grid, N, function() { renderAll(); }); };
+  var onFinish = function() { _finishPipeline(grid, N, function() { renderAll(); if (onDone) onDone(); }); };
   if (N <= 78) {
     _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish);
   } else {
@@ -4804,19 +4829,24 @@ function clearPrepResults() {
   var list = $('prep-subjects'); if (list) list.innerHTML = '';
   var st = $('prep-seg-status'); if (st) { st.hidden = true; st.textContent = ''; }
   var allb = $('prep-seg-all'); if (allb) allb.hidden = true;
+  var expb = $('prep-seg-exportall'); if (expb) expb.hidden = true;
   prepSegSubs = [];
 }
 function runAutoSeg() {
   var base = state.prepBase || state.sourceImage;
   var cv = computePrepCanvas(base, state.prep, state.userCrop);
   if (!cv) return;
-  prepSegW = cv.width; prepSegH = cv.height;
-  var ctx = cv.getContext('2d');
-  var id = ctx.getImageData(0, 0, cv.width, cv.height);
-  var opts = prepSegStrength != null ? { bgT: prepSegStrength } : {};
-  var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
-  prepSegSubs = subs;
-  renderPrepSubjects(subs);
+  var st = $('prep-seg-status');
+  if (st) { st.hidden = false; st.textContent = '正在分离主体…'; }
+  setTimeout(function () {
+    prepSegW = cv.width; prepSegH = cv.height;
+    var ctx = cv.getContext('2d');
+    var id = ctx.getImageData(0, 0, cv.width, cv.height);
+    var opts = prepSegStrength != null ? { bgT: prepSegStrength } : {};
+    var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
+    prepSegSubs = subs;
+    renderPrepSubjects(subs);
+  }, 0);
 }
 function renderPrepSubjects(subs) {
   var box = $('prep-results'), list = $('prep-subjects'), st = $('prep-seg-status');
@@ -4829,6 +4859,7 @@ function renderPrepSubjects(subs) {
   if (!subs.length) { box.hidden = true; return; }
   box.hidden = false;
   var allb = $('prep-seg-all'); if (allb) allb.hidden = !(subs.length >= 1);
+  var expb = $('prep-seg-exportall'); if (expb) expb.hidden = !(subs.length >= 1);
   subs.forEach(function (sub, idx) {
     var item = document.createElement('div'); item.className = 'subject-thumb';
     var label = document.createElement('div'); label.className = 'subject-label';
@@ -4846,7 +4877,7 @@ function renderPrepSubjects(subs) {
     list.appendChild(item);
   });
 }
-function applySubjectAsPixel(sub) {
+function setSubjectSource(sub) {
   var c = document.createElement('canvas');
   c.width = sub.w; c.height = sub.h;
   try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
@@ -4856,6 +4887,9 @@ function applySubjectAsPixel(sub) {
   state.removeBg = false;      // 主体已抠出，透明区域即空
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
+}
+function applySubjectAsPixel(sub) {
+  setSubjectSource(sub);
   closePrepModal();
   processImage();
 }
@@ -4876,6 +4910,31 @@ function applyAllAsOne() {
   state.userCrop = null;
   closePrepModal();
   processImage();
+}
+function exportAllSubjects() {
+  if (!prepSegSubs.length) return;
+  var total = prepSegSubs.length;
+  var saved = { sourceImage: state.sourceImage, removeBg: state.removeBg, crop: state.crop, prep: state.prep, userCrop: state.userCrop };
+  var st = $('prep-seg-status');
+  function step(i) {
+    if (i >= total) {
+      state.sourceImage = saved.sourceImage;
+      state.removeBg = saved.removeBg; state.crop = saved.crop; state.prep = saved.prep; state.userCrop = saved.userCrop;
+      if (st) { st.hidden = false; st.textContent = '已导出 ' + total + ' 张主体拼豆图 ✅（如被浏览器拦截，请允许本页多次下载）'; }
+      processImage();
+      return;
+    }
+    setSubjectSource(prepSegSubs[i]);
+    if (st) { st.hidden = false; st.textContent = '正在导出 ' + (i + 1) + ' / ' + total + ' …'; }
+    processImage(function () {
+      try {
+        var base = '狐狸爱拼豆_主体' + (i + 1) + '_' + state.N + 'x' + state.N + '_MARD_' + timeStamp();
+        downloadCanvasPNG(buildExportCanvas({ gridlines: false, interval: 5, coords: false, showcode: false, stats: true, bom: true }), base + '.png');
+      } catch (e) {}
+      setTimeout(function () { step(i + 1); }, 450);
+    });
+  }
+  step(0);
 }
 
 function openSegLightbox(dataURL) {
@@ -4942,6 +5001,7 @@ function bindPrepModal() {
     }
   });
   var segAll = $('prep-seg-all'); if (segAll) segAll.addEventListener('click', applyAllAsOne);
+  var segExport = $('prep-seg-exportall'); if (segExport) segExport.addEventListener('click', exportAllSubjects);
   var overlay = $('prep-overlay');
   if (overlay) {
     overlay.style.cursor = 'crosshair';

@@ -518,6 +518,7 @@ function clearPrepResults() {
   var list = $('prep-subjects'); if (list) list.innerHTML = '';
   var st = $('prep-seg-status'); if (st) { st.hidden = true; st.textContent = ''; }
   var allb = $('prep-seg-all'); if (allb) allb.hidden = true;
+  var expb = $('prep-seg-exportall'); if (expb) expb.hidden = true;
   prepSegSubs = [];
 }
 
@@ -526,13 +527,18 @@ function runAutoSeg() {
   var base = state.prepBase || state.sourceImage;
   var cv = computePrepCanvas(base, state.prep, state.userCrop);
   if (!cv) return;
-  prepSegW = cv.width; prepSegH = cv.height;
-  var ctx = cv.getContext('2d');
-  var id = ctx.getImageData(0, 0, cv.width, cv.height);
-  var opts = prepSegStrength != null ? { bgT: prepSegStrength } : {};
-  var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
-  prepSegSubs = subs;
-  renderPrepSubjects(subs);
+  var st = $('prep-seg-status');
+  if (st) { st.hidden = false; st.textContent = '正在分离主体…'; }
+  // 先让「正在分离」绘制，再跑重计算（大图会阻塞主线程）
+  setTimeout(function () {
+    prepSegW = cv.width; prepSegH = cv.height;
+    var ctx = cv.getContext('2d');
+    var id = ctx.getImageData(0, 0, cv.width, cv.height);
+    var opts = prepSegStrength != null ? { bgT: prepSegStrength } : {};
+    var subs = segmentSubjects({ data: id.data, width: cv.width, height: cv.height }, opts);
+    prepSegSubs = subs;
+    renderPrepSubjects(subs);
+  }, 0);
 }
 
 // 渲染抠出的主体缩略图，每个带「转为像素图」
@@ -547,6 +553,7 @@ function renderPrepSubjects(subs) {
   if (!subs.length) { box.hidden = true; return; }
   box.hidden = false;
   var allb = $('prep-seg-all'); if (allb) allb.hidden = !(subs.length >= 1);
+  var expb = $('prep-seg-exportall'); if (expb) expb.hidden = !(subs.length >= 1);
   subs.forEach(function (sub, idx) {
     var item = document.createElement('div'); item.className = 'subject-thumb';
     var label = document.createElement('div'); label.className = 'subject-label';
@@ -565,8 +572,8 @@ function renderPrepSubjects(subs) {
   });
 }
 
-// 将某个主体作为拼豆源图：透明底已是抠出主体，无需再去背景
-function applySubjectAsPixel(sub) {
+// 将某个主体设为拼豆源图（透明底已是抠出主体，无需再去背景）；不关闭弹窗、不触渲染，供「单个转像素图」与「批量导出」共用
+function setSubjectSource(sub) {
   var c = document.createElement('canvas');
   c.width = sub.w; c.height = sub.h;
   try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
@@ -576,6 +583,11 @@ function applySubjectAsPixel(sub) {
   state.removeBg = false;      // 主体已抠出，透明区域即空
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
+}
+
+// 单个主体转像素图：设源图 → 关闭弹窗 → 渲染主图
+function applySubjectAsPixel(sub) {
+  setSubjectSource(sub);
   closePrepModal();
   processImage();
 }
@@ -598,6 +610,34 @@ function applyAllAsOne() {
   state.userCrop = null;
   closePrepModal();
   processImage();
+}
+
+// 批量分张导出：每个主体各自生成拼豆图并下载一张 PNG（用户原始需求：一张图内一个主体 → 导出分张）
+// 串行处理（processImage 完成后导出再处理下一个），弹窗内显示进度，结束恢复主图显示。
+function exportAllSubjects() {
+  if (!prepSegSubs.length) return;
+  var total = prepSegSubs.length;
+  var saved = { sourceImage: state.sourceImage, removeBg: state.removeBg, crop: state.crop, prep: state.prep, userCrop: state.userCrop };
+  var st = $('prep-seg-status');
+  function step(i) {
+    if (i >= total) {
+      state.sourceImage = saved.sourceImage;
+      state.removeBg = saved.removeBg; state.crop = saved.crop; state.prep = saved.prep; state.userCrop = saved.userCrop;
+      if (st) { st.hidden = false; st.textContent = '已导出 ' + total + ' 张主体拼豆图 ✅（如被浏览器拦截，请允许本页多次下载）'; }
+      processImage();
+      return;
+    }
+    setSubjectSource(prepSegSubs[i]);
+    if (st) { st.hidden = false; st.textContent = '正在导出 ' + (i + 1) + ' / ' + total + ' …'; }
+    processImage(function () {
+      try {
+        var base = '狐狸爱拼豆_主体' + (i + 1) + '_' + state.N + 'x' + state.N + '_MARD_' + timeStamp();
+        downloadCanvasPNG(buildExportCanvas({ gridlines: false, interval: 5, coords: false, showcode: false, stats: true, bom: true }), base + '.png');
+      } catch (e) {}
+      setTimeout(function () { step(i + 1); }, 450);
+    });
+  }
+  step(0);
 }
 
 function openSegLightbox(dataURL) {
@@ -675,6 +715,8 @@ function bindPrepModal() {
 
   // 全部拼成一张
   var segAll = $('prep-seg-all'); if (segAll) segAll.addEventListener('click', applyAllAsOne);
+  // 逐个导出 N 张（批量分张）
+  var segExport = $('prep-seg-exportall'); if (segExport) segExport.addEventListener('click', exportAllSubjects);
 
   // 预览画布：仅裁切拖拽（无笔刷）
   var overlay = $('prep-overlay');

@@ -530,9 +530,10 @@ body {
 .prep-results { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 12px; }
 .prep-results-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
 .prep-results-title { font-size: 13px; font-weight: 600; color: var(--ink2); }
-.prep-seg-all { padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 9px; border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent-ink); cursor: pointer; transition: transform .12s, filter .12s; }
-.prep-seg-all:hover { transform: translateY(-1px); filter: brightness(1.03); }
-.prep-seg-all:active { transform: translateY(0); }
+.prep-results-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.prep-seg-all, .prep-seg-exportall { padding: 5px 12px; font-size: 12px; font-weight: 600; border-radius: 9px; border: 1px solid var(--line); background: var(--accent-soft); color: var(--accent-ink); cursor: pointer; transition: transform .12s, filter .12s; }
+.prep-seg-all:hover, .prep-seg-exportall:hover { transform: translateY(-1px); filter: brightness(1.03); }
+.prep-seg-all:active, .prep-seg-exportall:active { transform: translateY(0); }
 .prep-subjects { display: flex; flex-wrap: wrap; gap: 12px; }
 .subject-thumb {
   display: flex; flex-direction: column; align-items: center; gap: 6px;

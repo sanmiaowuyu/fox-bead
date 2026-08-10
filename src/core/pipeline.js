@@ -41,7 +41,7 @@ function buildSrcRGB(img, N) {
   }
   return arr;
 }
-function processImage() {
+function processImage(onDone) {
   if (!state.sourceImage) return;
   var _wrapEl = document.getElementById('canvas-wrap');
   if (_wrapEl) _wrapEl.classList.add('processing');
@@ -58,7 +58,7 @@ function processImage() {
   var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });
 
   // v140: 分帧处理（小板子一步完成，大板子分批异步）
-  var onFinish = function() { _finishPipeline(grid, N, function() { renderAll(); }); };
+  var onFinish = function() { _finishPipeline(grid, N, function() { renderAll(); if (onDone) onDone(); }); };
   if (N <= 78) {
     _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish);
   } else {

@@ -385,6 +385,29 @@ function _segMedianLab(labs) {
   return { L: pick(Ls), a: pick(as), b: pick(bs) };
 }
 
+// 边缘羽化（抗锯齿软边）：对主体前景边缘像素按相邻背景数降低 alpha，消除硬锯齿/白边。
+// 纯函数、零 DOM、兼容旧移动端（无 ?./spread）。返回同一 data（原地修改）。
+function featherAlpha(data, w, h) {
+  var has = new Uint8Array(w * h);
+  for (var i = 0; i < w * h; i++) has[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      var p = y * w + x;
+      if (has[p] !== 1) continue;
+      var nBg = 0;
+      if (x > 0 && !has[p - 1]) nBg++;
+      if (x < w - 1 && !has[p + 1]) nBg++;
+      if (y > 0 && !has[p - w]) nBg++;
+      if (y < h - 1 && !has[p + w]) nBg++;
+      if (nBg > 0) {
+        var r = nBg === 1 ? 0.7 : (nBg === 2 ? 0.45 : 0.25);
+        data[p * 4 + 3] = Math.round(data[p * 4 + 3] * r);
+      }
+    }
+  }
+  return data;
+}
+
 // 原图级多主体抠图（零 DOM，web / 小程序共用）：去背景 + 连通分量分离多个主体。
 // imgData: { data: Uint8ClampedArray, width, height }（ImageData 形状）
 // 返回 [{ data: Uint8ClampedArray, x, y, w, h, area }]，每张为透明背景的独立主体图（按面积降序）。
@@ -482,6 +505,7 @@ function segmentSubjects(imgData, opts) {
       var di = ((py - c.minY) * cw + (px - c.minX)) * 4;
       cdata[di] = data[si]; cdata[di + 1] = data[si + 1]; cdata[di + 2] = data[si + 2]; cdata[di + 3] = data[si + 3];
     }
+    featherAlpha(cdata, cw, ch); // 边缘羽化，消除硬锯齿/白边
     out.push({ data: cdata, x: c.minX, y: c.minY, w: cw, h: ch, area: c.area });
   }
   return out;

@@ -254,3 +254,11 @@ fox-bead/
 - ③ **「全部拼成一张」按钮**：所有主体按原构图 `drawImage` 合成一张透明底大图 → `processImage()` 一次出含全部主体的拼豆总稿；分张仍用逐个「转为像素图」。`applyAllAsOne` 复用 `prepSegSubs` 缓存。
 - 改动文件：`src/web/template.html`（滑块+结果区标题栏+全部按钮）、`src/web/events.js`（变量/重置/传参/标注/滑块+全部绑定/合成函数）、`src/web/css/style.css`（head/all/label 样式）。
 - 验证：node --check 过；docs ?.=0 / Object.fromEntries=0 / mini DOM=0；smoke-mini 全 PASS；新控件已进产物。
+
+## v141 优化（图片模块交互/下载体验，未 bump；2026-08-10）
+- 用户指令「继续优化吧」→ 在 v141 图片模块基础上再加三项低风险优化，按版本纪律**不 bump**（APP_VERSION 保持 141）。
+- ① **抠图强度滑块实时重抠**：拖动滑块 250ms 防抖后自动 `runAutoSeg()` 重新分离主体，所见即所得（原需手动点「自动抠图」）；未抠过时提示先点抠图。新增模块级 `prepSegTimer` 防抖变量。
+- ② **导出文件名带时间戳**：图纸 `狐狸爱拼豆_i喵绘工坊_${N}x${N}_MARD_${时间戳}.png`、分享图同步加时间戳，避免多次下载互相覆盖（原固定名无时间戳）。新增 `timeStamp()` helper（YYYYMMDD_HHMMSS）。
+- ③ **主体缩略图点击放大**：抠完点缩略图弹 lightbox 大图（透明棋盘格背景），确认抠图效果再「转为像素图」。新增全局 `seg-lightbox` 遮罩 + `openSegLightbox`/`closeSegLightbox` + `template.html` 节点 + `style.css` 棋盘格样式。
+- 改动文件：`src/web/events.js`、`src/web/template.html`、`src/web/css/style.css`。
+- 验证：node --check 过；build 成功（v141 未 bump）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / mini DOM=0；新控件（seg-lightbox/openSegLightbox/timeStamp/prepSegTimer/实时重抠文案）已进 docs/index.html 产物。已部署 CloudStudio 预览 + 推送 Gitee main（de58edf..7e92877）。
