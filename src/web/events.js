@@ -338,7 +338,7 @@ function bindEvents() {
   $('btn-share').addEventListener('click', async () => {
     if (!state.grid) { $('canvas-hint').textContent = '请先上传图片或载入示例，再下载分享图'; return; }
     const cv = await buildShareCanvas();
-    downloadCanvasPNG(cv, `狐狸爱拼豆_i喵绘工坊_分享图_${state.N}x${state.N}.png`);
+    downloadCanvasPNG(cv, `狐狸爱拼豆_i喵绘工坊_分享图_${state.N}x${state.N}_${timeStamp()}.png`);
   });
 
   // 弹窗
@@ -363,7 +363,7 @@ function bindEvents() {
       bom: $('m-bom') ? $('m-bom').checked : true,
     };
     if (!state.grid) { closeModal(); return; }
-    const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_${'MARD'}`;
+    const base = `狐狸爱拼豆_i喵绘工坊_${state.N}x${state.N}_MARD_${timeStamp()}`;
     if (isMobileDevice()) {
       // 手机端：先明确「生成中」，再显示图片长按保存（避免大图渲染时疑似卡死）
       closeModal();
@@ -440,7 +440,13 @@ var prepW = 0, prepH = 0;        // 当前预处理画布尺寸
 var prepCropStart = null;        // 裁剪起点（显示坐标）
 var prepCropDraft = null;        // 裁剪临时框（显示坐标）
 
-var prepSegSubs = [], prepSegW = 0, prepSegH = 0, prepSegStrength = null;
+var prepSegSubs = [], prepSegW = 0, prepSegH = 0, prepSegStrength = null, prepSegTimer = null;
+
+function timeStamp() {
+  var d = new Date();
+  function p(n) { return (n < 10 ? '0' : '') + n; }
+  return '' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
 
 function openPrepModal() {
   if (!state.sourceImage) return;
@@ -547,7 +553,9 @@ function renderPrepSubjects(subs) {
     label.textContent = (idx + 1) + ' · ' + sub.w + '×' + sub.h;
     var c = document.createElement('canvas');
     c.width = sub.w; c.height = sub.h; c.className = 'subject-canvas';
+    c.style.cursor = 'pointer'; c.title = '点击放大预览';
     try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
+    c.addEventListener('click', function () { try { openSegLightbox(c.toDataURL('image/png')); } catch (e) {} });
     var btn = document.createElement('button');
     btn.className = 'prep-btn subject-to-pixel';
     btn.textContent = '转为像素图';
@@ -591,6 +599,13 @@ function applyAllAsOne() {
   closePrepModal();
   processImage();
 }
+
+function openSegLightbox(dataURL) {
+  var lb = $('seg-lightbox'); if (!lb) return;
+  var img = $('seg-lightbox-img'); if (img) img.src = dataURL;
+  lb.hidden = false;
+}
+function closeSegLightbox() { var lb = $('seg-lightbox'); if (lb) lb.hidden = true; }
 
 function prepOverlayPoint(e) {
   var overlay = $('prep-overlay'); if (!overlay) return null;
@@ -644,12 +659,18 @@ function bindPrepModal() {
   // 自动抠图
   var autoSeg = $('prep-auto-seg'); if (autoSeg) autoSeg.addEventListener('click', runAutoSeg);
 
-  // 抠图强度（容差微调）
+  // 抠图强度（容差微调，拖动即时重抠）
   var segStrength = $('prep-seg-strength');
   if (segStrength) segStrength.addEventListener('input', function () {
     prepSegStrength = +segStrength.value / 100;
     var v = $('prep-seg-val'); if (v) v.textContent = prepSegStrength.toFixed(2);
-    var st = $('prep-seg-status'); if (st) { st.hidden = false; st.textContent = '已调整抠图强度，点「自动抠图」重新分离'; }
+    if (prepSegSubs.length) {
+      var st = $('prep-seg-status'); if (st) { st.hidden = false; st.textContent = '正在按新强度重新抠图…'; }
+      if (prepSegTimer) clearTimeout(prepSegTimer);
+      prepSegTimer = setTimeout(runAutoSeg, 250);
+    } else {
+      var st2 = $('prep-seg-status'); if (st2) { st2.hidden = false; st2.textContent = '已设强度，点「自动抠图」分离主体'; }
+    }
   });
 
   // 全部拼成一张
@@ -694,6 +715,12 @@ function bindPrepModal() {
     overlay.addEventListener('touchstart', startHandler, { passive: false });
     overlay.addEventListener('touchmove', moveHandler, { passive: false });
     overlay.addEventListener('touchend', endHandler);
+  }
+  // 主体放大预览关闭
+  var lb = $('seg-lightbox');
+  if (lb) {
+    lb.addEventListener('click', function (e) { if (e.target === lb) closeSegLightbox(); });
+    var lbc = $('seg-lightbox-close'); if (lbc) lbc.addEventListener('click', closeSegLightbox);
   }
 }
 

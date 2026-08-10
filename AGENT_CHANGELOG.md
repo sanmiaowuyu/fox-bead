@@ -238,6 +238,11 @@ fox-bead/
 - 验证：`node --check` 全过；`docs/index.html` `?.`=0 / `Object.fromEntries`=0；`miniapp/utils/core.js` DOM=0；`node tools/smoke-mini.js` 全 PASS（导出清单去掉 `applyBrighten`）；合成双主体图实测 `segmentSubjects` 返回 2 个主体。
 > 注：真实照片抠图精度受限于无模型算法（浅色主体/杂乱背景可能需多试旋转+调色/裁切）；彻底 AI 分割见文档 §9 生图模块（需后端+付费）。
 
+## v141 补丁 · 下载"生成失败"修复（2026-08-07，SeniorDeveloper）
+- **根因**：`buildExportCanvas` 只按宽度把每格像素 `cell` 钳到 ≤16384，但总高度 `H=标题栏+图案区+色板区` 里色板区随色卡数增长，导致 `N≥80`（真实照片拼豆常见）时 `H` 突破浏览器 canvas 硬上限 → `toBlob`/`toDataURL` 静默失败 → 回调空 → 弹"生成失败，请重试"。与抠图无关；历史"修复下载"只修了 iframe 拦截未修此坑。
+- **修复**：① 导出加总高度钳制（按 H 比例缩 `cell` 并完整重算布局，桌面/移动/微信单边上限统一覆盖）；② `PALETTE_BY_ID[tid]` 越界保护（两处 `_pngGetCell`）；③ `buildExportCanvas` 入口空 grid/displayRect 保护。
+- **验证**：node 模拟 N=40~221 × 色卡30/60 全部 H≤16384（旧逻辑 N≥80 及大色卡全超限）；`node --check`/smoke-mini 全过；铁律 `?.=0`、mini DOM=0。未 bump 版本（修 bug），保持 v141。
+
 ## ⚠️ 后续部署注意
 - v141 已推 Gitee main；Gitee Pages 部署目录 `/docs`，改代码后需在 Pages 页点「更新」重新部署（免费版仅公开仓库）
 - 分支陷阱仍在：本地 `master` → 远端 `main`，推送 `git push origin master:main`
