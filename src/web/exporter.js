@@ -196,21 +196,8 @@ function showMobileSaveOverlay(src, name, failMsg) {
 function downloadCanvasPNG(cv, name) {
   genPNGSource(cv, function (src) {
     if (!src) { alert('生成失败，请重试'); return; }
-    // 顶层页面：直接触发下载（普通浏览器/已部署站点）
-    var inIframe = (window.self !== window.top);
-    if (!inIframe) {
-      try {
-        var a = document.createElement('a');
-        if (src instanceof Blob) a.href = URL.createObjectURL(src); else a.href = src;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function () { document.body.removeChild(a); if (src instanceof Blob) URL.revokeObjectURL(a.href); }, 1500);
-        return;
-      } catch (e) { /* 落到下方弹窗兜底 */ }
-    }
-    // iframe 内（预览面板 / 部分托管沙箱）：先尝试真实下载，再给统一保存对话框兜底
-    tryRealDownload(src, name);
+    // 统一走保存对话框：顶层窗口点「下载图片」真实落文件；沙箱/iframe 用「复制图片」剪贴板兜底。
+    // 不再做「静默真实下载」——避免顶层环境下用户点了却看不到任何反馈（文件默默进 Downloads）。
     showMobileSaveOverlay(src, name);
   });
 }

@@ -3846,20 +3846,7 @@ function showMobileSaveOverlay(src, name, failMsg) {
 
 function downloadCanvasPNG(cv, name) {
   genPNGSource(cv, function (src) {
-    if (!src) { alert('生成失败，请重试'); return; }
-    var inIframe = (window.self !== window.top);
-    if (!inIframe) {
-      try {
-        var a = document.createElement('a');
-        if (src instanceof Blob) a.href = URL.createObjectURL(src); else a.href = src;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function () { document.body.removeChild(a); if (src instanceof Blob) URL.revokeObjectURL(a.href); }, 1500);
-        return;
-      } catch (e) {  }
-    }
-    tryRealDownload(src, name);
+    if (!src) { alert('生成失败，请重试'); return; }
     showMobileSaveOverlay(src, name);
   });
 }
