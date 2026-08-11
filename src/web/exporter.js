@@ -51,11 +51,48 @@ function genPNGSource(cv, cb) {
   try { cb(cv.toDataURL('image/png')); } catch (e) { cb(null); }
 }
 
-/* 保存对话框：覆盖层展示生成的图纸，并提供多种保存方式（专治 iframe/沙箱里「右键另存」拿不到文件）。
-   - 「下载图片」按钮：页内 <a download> 点击，沙箱允许下载时直接成功，且不会被宿主 UI 拦截右键
-   - 「新窗口打开」按钮：window.open(blobURL)，沙箱允许弹窗时在新标签保存
+/* dataURL 转 Blob（剪贴板兜底用） */
+function dataURLToBlob(dataURL) {
+  try {
+    var parts = String(dataURL).split(',');
+    var mime = 'image/png';
+    var m = parts[0].match(/:(.*?);/);
+    if (m && m[1]) mime = m[1];
+    var bstr = atob(parts[1]);
+    var arr = new Uint8Array(bstr.length);
+    for (var i = 0; i < bstr.length; i++) arr[i] = bstr.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  } catch (e) { return null; }
+}
+
+/* 复制图片到剪贴板：优先 Clipboard API 写入 image/png（沙箱里最可靠的「保存」方式），
+   失败则兜底复制 dataURL 文本（用户粘到浏览器地址栏可下载）。返回 Promise<'image'|'text'>。 */
+function copyImageToClipboard(blob, dataUrl) {
+  var fail = function () {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText && dataUrl) {
+        return navigator.clipboard.writeText(dataUrl).then(function () { return 'text'; });
+      }
+    } catch (e) {}
+    return Promise.reject(new Error('clipboard-unavailable'));
+  };
+  try {
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem && blob) {
+      try {
+        var item = new ClipboardItem({ 'image/png': blob });
+        return navigator.clipboard.write([item]).then(function () { return 'image'; }).catch(function () { return fail(); });
+      } catch (e) { return fail(); }
+    }
+  } catch (e) {}
+  return fail();
+}
+
+/* 保存对话框：覆盖层展示生成的图纸，并提供多种保存方式（专治 iframe/沙箱里下载被拦截）。
+   - 「复制图片」按钮（主）：Clipboard API 把 PNG 写入剪贴板，沙箱里也能用，用户去微信/画图/备忘录 Ctrl+V 即可
+   - 「下载图片」按钮：页内 <a download> 点击（顶层窗口或沙箱允许下载时成功）
+   - 「新窗口打开」按钮：window.open(blobURL)（沙箱允许弹窗时）
    - 图片本体：右键/长按「另存为」兜底
-   src 可以是 Blob 或 URL/dataURL 字符串；Blob 会转成 blob URL。name 为文件名（可选）。 */
+   src 可以是 Blob 或 URL/dataURL 字符串；name 决定是图片还是 PDF。 */
 function tryRealDownload(src, name) {
   try {
     var a = document.createElement('a');
@@ -68,9 +105,10 @@ function tryRealDownload(src, name) {
   } catch (e) { return false; }
 }
 function showMobileSaveOverlay(src, name, failMsg) {
-  var blob = null, url = null;
-  if (src instanceof Blob) { blob = src; url = URL.createObjectURL(blob); }
-  else if (typeof src === 'string') { url = src; }
+  var isPdf = /\.pdf$/i.test(name || '');
+  var blob = null, url = null, pngBlob = null, dataUrl = null;
+  if (src instanceof Blob) { blob = src; url = URL.createObjectURL(blob); if (!isPdf) pngBlob = src; }
+  else if (typeof src === 'string') { url = src; if (!isPdf) { dataUrl = src; pngBlob = dataURLToBlob(src); } }
   var mask = document.createElement('div');
   mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;overflow:auto;';
   var cleanup = function () { if (blob && url) URL.revokeObjectURL(url); mask.remove(); };
@@ -88,35 +126,70 @@ function showMobileSaveOverlay(src, name, failMsg) {
   }
   var title = document.createElement('div');
   var sub = document.createElement('div');
-  if (isMobileDevice()) {
-    title.textContent = '长按图片 → 保存到相册';
-    sub.textContent = '（若长按没出现菜单，点下方「下载图片」）';
-  } else {
-    title.textContent = '选择一种方式保存图纸';
-    sub.textContent = '（如未自动下载，点「下载图片」按钮，或右键图片「另存为」）';
-  }
+  title.textContent = '选择一种方式保存图纸';
+  sub.textContent = isPdf
+    ? '（点「下载 PDF」或「新窗口打开」；若都被拦截，请到真实浏览器打开 Gitee Pages）'
+    : '（「复制图片」最稳妥：复制到剪贴板后，去微信 / 画图 / 备忘录 Ctrl+V 即可）';
   title.style.cssText = 'color:#fff;font-size:17px;line-height:1.4;margin-bottom:6px;text-align:center;font-weight:600;';
   sub.style.cssText = 'color:#bbb;font-size:13px;margin-bottom:12px;text-align:center;';
-  var img = document.createElement('img');
-  img.src = url;
-  img.alt = '拼豆图纸';
-  img.style.cssText = 'max-width:100%;max-height:46vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);object-fit:contain;background:#fff;';
-  // 主按钮：页内 <a download> 点击（iframe/沙箱里最可靠的下载方式）
+  mask.appendChild(title); mask.appendChild(sub);
+
+  if (!isPdf) {
+    var img = document.createElement('img');
+    img.src = url;
+    img.alt = '拼豆图纸';
+    img.style.cssText = 'max-width:100%;max-height:40vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);object-fit:contain;background:#fff;';
+    mask.appendChild(img);
+  } else {
+    var box = document.createElement('div');
+    box.textContent = 'PDF 文件已生成';
+    box.style.cssText = 'margin:8px 0 4px;padding:28px 40px;border:1px dashed rgba(255,255,255,.4);border-radius:12px;color:#fff;font-size:15px;';
+    mask.appendChild(box);
+  }
+
+  // 主按钮：复制图片到剪贴板（沙箱里最可靠，绕过 download/popup 限制）
+  if (!isPdf) {
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = '复制图片';
+    copyBtn.style.cssText = 'margin-top:14px;padding:11px 38px;border:none;border-radius:24px;background:#fff;color:#222;font-size:15px;font-weight:600;';
+    copyBtn.onclick = function () {
+      copyImageToClipboard(pngBlob, dataUrl).then(function (kind) {
+        if (kind === 'image') copyBtn.textContent = '已复制图片，去粘贴';
+        else copyBtn.textContent = '已复制链接，粘到地址栏';
+      }).catch(function () {
+        copyBtn.textContent = '复制失败，请右键图片另存';
+      });
+    };
+    mask.appendChild(copyBtn);
+  }
+
+  // 下载按钮
   var dlBtn = document.createElement('button');
-  dlBtn.textContent = '下载图片';
-  dlBtn.style.cssText = 'margin-top:14px;padding:11px 34px;border:none;border-radius:24px;background:#fff;color:#222;font-size:15px;font-weight:600;';
-  dlBtn.onclick = function () { tryRealDownload(src, name || 'fox-bead.png'); };
-  // 次按钮：新窗口打开（沙箱允许弹窗时）
+  dlBtn.textContent = isPdf ? '下载 PDF' : '下载图片';
+  dlBtn.style.cssText = 'margin-top:10px;padding:10px 32px;border:none;border-radius:22px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.4);';
+  dlBtn.onclick = function () { tryRealDownload(src, name || (isPdf ? 'fox-bead.pdf' : 'fox-bead.png')); };
+  mask.appendChild(dlBtn);
+
+  // 新窗口打开（沙箱允许弹窗时）
   var openBtn = document.createElement('button');
   openBtn.textContent = '新窗口打开';
-  openBtn.style.cssText = 'margin-top:10px;padding:9px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.15);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.35);';
+  openBtn.style.cssText = 'margin-top:10px;padding:9px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.1);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.3);';
   openBtn.onclick = function () { try { var w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; } };
-  img.onerror = function () { img.style.display = 'none'; openBtn.style.display = 'block'; dlBtn.style.display = 'block'; };
+  mask.appendChild(openBtn);
+
+  if (!isPdf) {
+    var hint = document.createElement('div');
+    hint.textContent = '提示：若按钮无效，可右键图片选择「图片另存为」';
+    hint.style.cssText = 'color:#888;font-size:12px;margin-top:12px;text-align:center;max-width:300px;';
+    mask.appendChild(hint);
+  }
+
   var closeBtn = document.createElement('button');
   closeBtn.textContent = '关闭';
-  closeBtn.style.cssText = 'margin-top:10px;padding:8px 30px;border:none;border-radius:22px;background:transparent;color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.35);';
+  closeBtn.style.cssText = 'margin-top:10px;padding:8px 30px;border:none;border-radius:22px;background:transparent;color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.3);';
   closeBtn.onclick = cleanup;
-  mask.appendChild(title); mask.appendChild(sub); mask.appendChild(img); mask.appendChild(dlBtn); mask.appendChild(openBtn); mask.appendChild(closeBtn);
+  mask.appendChild(closeBtn);
+
   document.body.appendChild(mask);
 }
 
