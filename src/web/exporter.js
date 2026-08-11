@@ -977,30 +977,11 @@ function downloadSVG(svgStr, name) {
     im.src = url;
     return;
   }
+  // 统一走保存对话框（不再区分顶层/iframe）——桌面顶层静默 <a download> 会让用户以为没反应
   const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-  const inIframe = (window.self !== window.top);
-  if (!inIframe) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  } else {
-    // iframe 沙箱：SVG 直接下载常被拦，转 PNG 位图走统一保存对话框
-    const url = URL.createObjectURL(blob);
-    const im = new Image();
-    im.onload = () => {
-      const c = document.createElement('canvas');
-      const SCALE = 4;
-      c.width = (im.naturalWidth || 1000) * SCALE;
-      c.height = (im.naturalHeight || 1000) * SCALE;
-      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      genPNGSource(c, src => { tryRealDownload(src, name); showMobileSaveOverlay(src, name); });
-    };
-    im.onerror = () => { URL.revokeObjectURL(url); showMobileSaveOverlay(null, name, '生成失败，请重试'); };
-    im.src = url;
-  }
+  // SVG 在 <img> 里能渲染；下载按钮会下载 .svg 文件
+  tryRealDownload(blob, name);
+  showMobileSaveOverlay(blob, name);
 }
 
 /** 圆角矩形辅助 */
@@ -1252,17 +1233,8 @@ function exportBlocksPDF(opts) {
   return _bytesToBlob(all, 'application/pdf');
 }
 function downloadBlob(blob, name) {
-  const inIframe = (window.self !== window.top);
-  if (!inIframe) {
-    try {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = name;
-      document.body.appendChild(a); a.click();
-      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 1500);
-      return;
-    } catch (e) { /* 落到下方 */ }
-  }
-  // iframe 内：先尝试真实下载，再给统一保存对话框（PDF 在沙箱里 window.open 常被静默拦截）
+  // 统一走保存对话框：顶层窗口点「下载」真实落文件；沙箱/iframe 用「复制图片」剪贴板兜底。
+  // 不再做静默 <a download>——避免顶层环境下用户点了却看不到任何反馈（文件默默进 Downloads）。
   tryRealDownload(blob, name);
   showMobileSaveOverlay(blob, name);
 }

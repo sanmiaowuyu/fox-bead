@@ -4492,30 +4492,10 @@ function downloadSVG(svgStr, name) {
     };
     im.src = url;
     return;
-  }
-  const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-  const inIframe = (window.self !== window.top);
-  if (!inIframe) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  } else {
-    const url = URL.createObjectURL(blob);
-    const im = new Image();
-    im.onload = () => {
-      const c = document.createElement('canvas');
-      const SCALE = 4;
-      c.width = (im.naturalWidth || 1000) * SCALE;
-      c.height = (im.naturalHeight || 1000) * SCALE;
-      c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      genPNGSource(c, src => { tryRealDownload(src, name); showMobileSaveOverlay(src, name); });
-    };
-    im.onerror = () => { URL.revokeObjectURL(url); showMobileSaveOverlay(null, name, '生成失败，请重试'); };
-    im.src = url;
-  }
+  }
+  const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+  tryRealDownload(blob, name);
+  showMobileSaveOverlay(blob, name);
 }
 
 
@@ -4761,17 +4741,7 @@ function exportBlocksPDF(opts) {
   all.push(_strToBytes(xref + trailer));
   return _bytesToBlob(all, 'application/pdf');
 }
-function downloadBlob(blob, name) {
-  const inIframe = (window.self !== window.top);
-  if (!inIframe) {
-    try {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob); a.download = name;
-      document.body.appendChild(a); a.click();
-      setTimeout(function () { document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 1500);
-      return;
-    } catch (e) {  }
-  }
+function downloadBlob(blob, name) {
   tryRealDownload(blob, name);
   showMobileSaveOverlay(blob, name);
 }

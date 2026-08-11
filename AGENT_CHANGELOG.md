@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-10（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换 / v144 分块多板补跨板对齐标记·CC复核意见②核查no-op / iframe预览下载修复 / 下载修复v2-clipboard逃生通道）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-10（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换 / v144 分块多板补跨板对齐标记·CC复核意见②核查no-op / iframe预览下载修复 / 下载修复v2-clipboard逃生通道 / 下载修复v3-统一保存对话框消除静默下载）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 ---
@@ -136,7 +136,7 @@ fox-bead/
 | 2026-08-07 | **竞品分析文档**：新增 `竞品分析_可借鉴清单.md`，对比 pindouwuxian/Zippland/PixelBead/Jett-Wu 等 8 个项目，给出 P0(豆仓+分块多板PDF)/P1(多色板+补货清单)/P2(3D预览·多图层，需降级) 路线；结论：狐狸去背景算法/移动端/离线单文件已领先，AI 类不建议接（破铁律） | 用户问「Gitee/论坛有什么好的可学习」+ 明确要「做豆仓 + 写对比清单」 | 竞品分析_可借鉴清单.md | ✅ |
 | 2026-08-07 | **修复三处体验问题（用户反馈）**：①**下载修复**——`downloadCanvasPNG` 改用 `genPNGSource`（带 5s 超时回退 dataURL）；顶层页面走 `a.download` 直接下载，iframe/沙箱环境（预览面板、CloudStudio）改弹窗让用户右键/长按保存，`showMobileSaveOverlay` 文案按设备区分（桌面「右键另存为」/移动「长按存相册」）；②**图片处理预览放大**——`renderPrepPreview` 去掉 `scale>1` 上限（允许放大填充预览框，上限 4x 防内存爆），笔刷在显示坐标作画、`prepScale` 已正确处理放大映射；`.prep-card` 宽度 460→520、`.prep-preview-wrap` max-height 360→460；③**调色注释**——亮度/对比度/饱和度滑块下加 `.slider-hint` 说明高低影响；④**默认深色**——内联 head 脚本首次访问默认 `dark` | 用户反馈「下载不了 / 示例图太小笔刷看不清 / 默认暗色」 | src/web/exporter.js、src/web/events.js、src/web/template.html、src/web/css/style.css | ✅ |
 | 2026-08-10 | **修复 iframe 下载失效（CloudStudio 预览面板·纯 bug 修复·不 bump）**：根因——应用运行在预览 iframe 内，`downloadCanvasPNG`/`downloadBlob`/`downloadSVG` 检测到 `window.self!==window.top` 后**跳过真实下载**、只弹「右键另存」覆盖层，而预览沙箱右键常被宿主 UI 拦截 → 用户「一直无法下载图纸」。高度钳制修复(v141)早已在线、生成无问题，是保存这步在 iframe 里被废。修复——iframe 下新增 `tryRealDownload`（页内 `<a download>` 真实点击，不被宿主 UI 拦截）+ 统一保存对话框（`下载图片`主按钮 + `新窗口打开`次按钮 + 右键/长按兜底），PDF/SVG 同步走该对话框；顶层窗口逻辑不变。Gitee Pages 实测 404（未启用），确认用户走 CloudStudio 预览路径 | 用户「先排查一直无法下载图纸的原因」 | src/web/exporter.js、src/web/events.js | ✅ |
-| 2026-08-11 | **下载修复 v2（沙箱 clipboard 逃生通道·不 bump）**：用户反馈昨日 `下载图片`/`新窗口打开` 在 CloudStudio 预览里仍无效——根因是预览 iframe 为 **sandboxed 且无 `allow-downloads`/`allow-popups` 令牌**，`<a download>` 与 `window.open` 被静默拦截，右键又被宿主 UI 吞掉。新方案：保存对话框改以 **「复制图片」为主按钮**，调用 `navigator.clipboard.write`（`ClipboardItem` 写 image/png），在同源沙箱内可用，用户复制到剪贴板后去微信/画图/备忘录 `Ctrl+V` 即可存图；失败兜底复制 dataURL 文本（粘到浏览器地址栏下载）。新增 `dataURLToBlob`/`copyImageToClipboard` 辅助；`下载图片`/`新窗口打开` 保留为次按钮；PDF 走同名对话框但隐藏「复制图片」。仍为同一「无法下载」bug 的延续修复，不 bump | 用户「昨天还是无法下载图片」 | src/web/exporter.js | ✅ |
+| 2026-08-11 | **下载修复 v3（统一保存对话框·不 bump）**：用户反馈在 CloudStudio 顶层窗口打开仍「没有弹窗」——根因是顶层窗口下 `downloadCanvasPNG`/`downloadBlob`/`downloadSVG` 仍走静默 `<a download>`（文件默默进 Downloads，用户看不到任何反馈以为没下载）。修复——三条下载路径全部统一为**始终弹保存对话框**：①`downloadCanvasPNG` 不再区分顶层/iframe，直接 `showMobileSaveOverlay`；②`downloadBlob`（PDF）同理，去掉 `inIframe` 分支；③`downloadSVG` 桌面端去掉静默 `<a download>` 分支，统一走对话框。对话框内「复制图片」(剪贴板) / 「下载图片」(`<a download>`) / 「新窗口打开」三按钮覆盖所有环境。线上已验证含全部修复标记 | 用户「仍然无法下载，网页没有弹窗」 | src/web/exporter.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 
