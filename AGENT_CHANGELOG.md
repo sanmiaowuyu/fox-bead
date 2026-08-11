@@ -305,3 +305,31 @@ fox-bead/
 - titleH 46→64 容纳两行块头（主标题 + 邻接行）；assembleH/ovW/ovH 计入 HARD 上限，cellB 降采样逻辑不变。
 - 改动文件：`src/web/exporter.js`（buildBlockExportCanvas 对齐标记）、`src/core/init.js`（143→144）。
 - 验证：node --check 过；build 成功（v144，583KB）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / core+pipeline+mini DOM=0 全绿。已部署 CloudStudio 预览 + 推送 Gitee main（64df4f5..d08dde2）。
+
+---
+
+## 交接任务：GitHub Pages 发布（cc 执行，2026-08-11 由 SeniorDeveloper 整理）
+
+**背景**：CloudStudio 预览面板是 sandboxed iframe（无 allow-downloads / allow-popups 令牌），`<a download>` 与 `window.open` 被静默拦截，下载在沙箱内始终无法正常落文件。Gitee Pages 已确认不可用（账号服务菜单无 Pages 选项、`/pages` URL 404，Gitee 已收紧免费 Pages）。故改用 **GitHub Pages**——它是顶层窗口托管，`<a download>` 真实生效，下载能真正落文件。
+
+**当前状态（已 ready，cc 直接推即可，无需改代码）**：
+- 本地分支 `master`，最新提交 `cc6ec28`（v3 下载修复：PDF / SVG / PNG 三条下载路径统一弹保存对话框）
+- 构建产物 `docs/index.html` 已在 git 跟踪中（未被 .gitignore 忽略），含全部修复
+- 仅 `origin` 指向 Gitee，尚无 GitHub remote
+
+**cc 执行步骤**：
+1. 进目录 `C:\Users\余莎莎\WorkBuddy\2026-08-05-17-47-02\fox-bead`
+2. 加 GitHub remote：`git remote add github https://github.com/<用户名>/fox-bead.git`
+3. 推代码 + 构建产物（本地 `master` → 远程 `main`，与 Gitee 一致）：`git push github master:main`
+4. **不要重新 build**——`docs/index.html` 已在 git 中，会一起推上去
+5. GitHub 仓库 **Settings → Pages** → Source 选 **main** 分支、目录选 **/docs** → Save
+6. 等约 1 分钟，访问 `https://<用户名>.github.io/fox-bead/` 验证
+
+**关键配置点（务必核对）**：
+- 部署目录必须是 **`/docs`**（不是根目录）——`index.html` 构建在此
+- 分支用 **`main`**（我们一直 push `master:main`）
+- 仓库设**公开**最省事（私有也能用 Pages，但公开免额外配置）
+
+**验证标准**：网页 200 打开；顶层窗口下点「下载图纸」→ 弹保存对话框 → 点「下载图片」按钮真实落文件（GitHub Pages 是顶层窗口，`<a download>` 不被 sandbox 拦截，这点 CloudStudio 沙箱做不到）。
+
+**版本纪律**：本次仍为「下载」bug 延续修复，保持 v144 未 bump。
