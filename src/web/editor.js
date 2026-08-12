@@ -482,8 +482,6 @@ function bindEditCanvas() {
   editOvCtx = editOvCanvas.getContext('2d');
 
   function getPos(e) { if (e.touches && e.touches.length) return { x: e.touches[0].clientX, y: e.touches[0].clientY }; return { x: e.clientX, y: e.clientY }; }
-  function isPanBtn(e) { return e.button === 2 || e.button === 1 || (e.button === 0 && editSpaceDown); }
-
   // ---- 平移（左键直接拖即移动画面；另支持右键/中键/空格+左键）----
   function isPanEvent(e) { return e.button === 2 || e.button === 1 || (e.button === 0 && !e.shiftKey); }
   editViewEl.addEventListener('mousedown', function (e) {

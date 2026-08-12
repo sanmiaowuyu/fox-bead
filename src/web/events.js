@@ -348,7 +348,7 @@ function bindEvents() {
   $('modal-backdrop').addEventListener('click', e => { if (e.target === $('modal-backdrop')) closeModal(); });
 
   $('m-gridlines').addEventListener('change', e => { $('m-grid-sub').style.display = e.target.checked ? 'flex' : 'none'; });
-  $('m-blocks').addEventListener('change', e => { prepBlocks = e.target.checked; $('m-blocks-sub').style.display = e.target.checked ? 'flex' : 'none'; savePrepSettings(); });
+  $('m-blocks').addEventListener('change', e => { prepBlocks = e.target.checked; $('m-blocks-sub').style.display = e.target.checked ? 'flex' : 'none'; if (e.target.checked) { var af = document.querySelector('#format-seg .seg-item.active'); if (af && af.dataset.format === 'svg') { var png = document.querySelector('#format-seg .seg-item[data-format="png"]'); if (png) png.click(); } } savePrepSettings(); });
   $('m-blocksize').addEventListener('input', e => { prepBlockSize = +e.target.value; $('m-blocksize-val').textContent = e.target.value; savePrepSettings(); });
   $('m-blocks-fmt-seg').addEventListener('click', e => {
     const b = e.target.closest('.seg-item'); if (!b) return;
@@ -392,16 +392,31 @@ function bindEvents() {
     const activeFmt = document.querySelector('#format-seg .seg-item.active');
     const fmt = (activeFmt && activeFmt.dataset.format) || 'png';
     const blockFmt = (function () { const s = document.querySelector('#m-blocks-fmt-seg .seg-item.active'); return s ? s.dataset.fmt : 'png'; })();
-    if (opts.blocks && blockFmt === 'pdf') {
-      const pdf = exportBlocksPDF(opts);
-      if (pdf) downloadBlob(pdf, base + '.pdf');
-      else downloadCanvasPNG(buildBlockExportCanvas(opts), base + '.png');
-    } else if (fmt === 'svg') {
-      downloadSVG(buildExportSVG(opts), base + '.svg');
-    } else {
-      downloadCanvasPNG(opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts), base + '.png');
-    }
     closeModal();
+    var loading = showGeneratingOverlay('正在生成图纸…', true);
+    setTimeout(function () {
+      try {
+        if (opts.blocks && blockFmt === 'pdf') {
+          const pdf = exportBlocksPDF(opts);
+          loading.close();
+          if (pdf) downloadBlob(pdf, base + '.pdf');
+          else downloadCanvasPNG(buildBlockExportCanvas(opts), base + '.png');
+        } else if (fmt === 'svg') {
+          loading.close();
+          downloadSVG(buildExportSVG(opts), base + '.svg');
+        } else {
+          var cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
+          genPNGSource(cv, function (src) {
+            loading.close();
+            if (!src) { alert('生成失败，请重试'); return; }
+            showMobileSaveOverlay(src, base + '.png');
+          });
+        }
+      } catch (e) {
+        loading.close();
+        alert('生成失败，请重试');
+      }
+    }, 30);
   });
 
   // 重置
@@ -721,8 +736,24 @@ function runAutoSeg() {
   // 先让「正在分离」绘制，再跑重计算（大图会阻塞主线程）
   setTimeout(function () {
     prepSegW = cv.width; prepSegH = cv.height;
+    var MAX_SEG_PX = 8e6; // 800万像素上限，手机低配环境 getImageData 超此易 OOM
+    if (cv.width * cv.height > MAX_SEG_PX) {
+      var scl = Math.sqrt(MAX_SEG_PX / (cv.width * cv.height));
+      var oldCv = cv;
+      cv = document.createElement('canvas');
+      cv.width = Math.round(oldCv.width * scl);
+      cv.height = Math.round(oldCv.height * scl);
+      var sctx = cv.getContext('2d');
+      sctx.imageSmoothingEnabled = true;
+      sctx.drawImage(oldCv, 0, 0, cv.width, cv.height);
+      if (st) st.textContent = '图片较大，已自动缩放到 ' + cv.width + '×' + cv.height + ' 进行抠图…';
+    }
     var ctx = cv.getContext('2d');
-    var id = ctx.getImageData(0, 0, cv.width, cv.height);
+    var id;
+    try { id = ctx.getImageData(0, 0, cv.width, cv.height); } catch (e) {
+      if (st) st.textContent = '抠图失败：图片过大，请先裁切或缩小后再试';
+      return;
+    }
     var opts = {};
     if (prepSegStrength != null) opts.bgT = prepSegStrength;
     if (prepFeather != null) opts.feather = prepFeather;
@@ -754,7 +785,9 @@ function renderPrepSubjects(subs) {
     var c = document.createElement('canvas');
     c.width = sub.w; c.height = sub.h; c.className = 'subject-canvas';
     c.style.cursor = 'pointer'; c.title = '点击放大预览';
-    try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) {}
+    var errd = false;
+    try { var ic = c.getContext('2d'); var im = ic.createImageData(sub.w, sub.h); im.data.set(sub.data); ic.putImageData(im, 0, 0); } catch (e) { errd = true; console.warn('renderPrepSubjects: 第' + (idx + 1) + '个主体渲染失败', e); }
+    if (errd) { label.textContent += ' ⚠渲染失败'; }
     c.addEventListener('click', function () { try { openSegLightbox(idx, c.toDataURL('image/png')); } catch (e) {} });
     var btn = document.createElement('button');
     btn.className = 'prep-btn subject-to-pixel';
@@ -791,8 +824,11 @@ function applySubjectAsPixel(sub) {
 // 所有主体按原构图合成一张透明底大图，整体拼豆化（一次出总稿）
 function applyAllAsOne() {
   if (!prepSegSubs.length) return;
+  var MAX_ALL = 8192;
   var gpad = Math.max(2, Math.round(Math.min(prepSegW, prepSegH) * 0.04));
-  var big = document.createElement('canvas'); big.width = prepSegW + gpad * 2; big.height = prepSegH + gpad * 2;
+  var cw = Math.min(MAX_ALL, prepSegW + gpad * 2);
+  var ch = Math.min(MAX_ALL, prepSegH + gpad * 2);
+  var big = document.createElement('canvas'); big.width = cw; big.height = ch;
   var bctx = big.getContext('2d');
   prepSegSubs.forEach(function (sub) {
     var lpad = Math.max(2, Math.round(Math.min(sub.w, sub.h) * 0.08));
@@ -835,7 +871,8 @@ function exportAllSubjects() {
       try {
         var cv = buildExportCanvas({ gridlines: false, interval: 5, coords: false, showcode: false, stats: true, bom: true });
         if (cv) canvases.push(cv);
-      } catch (e) {}
+        else console.warn('exportAllSubjects: 第' + (i + 1) + '个主体生成失败');
+      } catch (e) { console.warn('exportAllSubjects: 第' + (i + 1) + '个主体生成异常', e); }
       setTimeout(function () { step(i + 1); }, 350);
     });
   }
@@ -854,8 +891,9 @@ function composeSubjectSheet(cvs, total) {
   }
   var MAX_CANVAS = 16384, HARD = isWeixin() ? 4096 : (isMobileDevice() ? 4096 : MAX_CANVAS);
   var rs = 1;
-  if (totalH > HARD) rs = (HARD - gap * (cvs.length + 1)) / totalH;
-  var outW = Math.round(TARGETW * rs), outH = Math.round(totalH * rs);
+  if (totalH > HARD) rs = Math.max(0.05, (HARD - gap * (cvs.length + 1)) / totalH);
+  if (rs <= 0) rs = 0.05;
+  var outW = Math.max(1, Math.round(TARGETW * rs)), outH = Math.max(1, Math.round(totalH * rs));
   var big = document.createElement('canvas'); big.width = outW; big.height = outH;
   var c = big.getContext('2d'); c.imageSmoothingEnabled = false;
   c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, outW, outH);

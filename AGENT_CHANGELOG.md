@@ -398,3 +398,31 @@ fox-bead/
 **记录要求（余总明确要求）**：本次及今后你做的每一次调整，都必须在本文档 §4 追加一条记录（格式见 §4 表头：commit / 版本 / 改动摘要 / 验证），追加后 `git add AGENT_CHANGELOG.md && git commit -m "chore: 更新协作日志" && git push` 同步，方便 SeniorDeveloper 查阅。不要攒、不要漏。
 
 **已知冲突区**：`src/core/pipeline-core.js` 零 DOM 铁律（C6）、`docs/index.html` 禁手改（C5）、Mard 221 色板禁改（C4）——改前先看 §1。
+
+---
+
+## 2026-08-12 · ClaudeCode（cc）修复记录
+
+### 第一轮：下载按钮修复（71779b6）
+- **问题**：手机端「下载图片」按钮走 `<a download>`，手机浏览器普遍忽略该属性 → 点了没反应
+- **修复**：`exporter.js` `showMobileSaveOverlay`——手机端按钮改名为「打开图片（长按保存）」，走 `window.open` 在新标签页打开；桌面端保持 `<a download>` 并加按钮文字反馈
+- **影响**：所有下载路径（PNG/SVG/PDF/分享图/补货清单）共享同一对话框，一处修复全覆盖
+- **验证**：build + smoke-mini 全 PASS；铁律 `?.`=0 / `fromEntries`=0 / mini DOM=0
+
+### 第二轮：Canvas 生成失败修复（3c3a707）
+- **问题**：手机端 N=104 默认板子，canvas 约 2644×4038，`toDataURL` 需 ~43MB 内存，夸克等低配浏览器爆内存 → `genPNGSource` 返回 null → 弹「生成失败，请重试」
+- **修复**：① `MAX_MOBILE` 4096→3200、cell 60→50，canvas 降至 ~2000×3000；② `downloadCanvasPNG` 加降级重试——失败自动缩半 canvas 再试，再败才弹提示
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第三轮：全面排查 11 处 bug（8e0ed39）
+- **P0×3**：① `listPad` 未定义→BOM 导出 canvas NaN；② PALETTE_BY_ID 全链路加守卫（render/editor/exporter 共 10+ 处）；③ 预览 canvas 上限 8192 防高 DPI+大 N OOM
+- **P1×4**：④ web 端描边补传 `thickness` 参数；⑤ SVG BOM 关闭时补 `</svg>` 闭合标签；⑥ `genPNGSource` 加 null 守卫；⑦ 「全部恢复」按钮绑定清除排除列表
+- **P2×4**：⑧ 背景取样改用 backing store 坐标补偿边距偏移；⑨ 非图片拖放、预处理无图时给错误提示；⑩ `clearUndoHistory()` 新图加载清撤销栈；⑪ 分块+SVG 自动切回 PNG
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第四轮：3crash + 3静默 + 3清理 + 3体验（当前 commit）
+- **Crash×3**：① `runAutoSeg` 大图 `getImageData` 加 try-catch + 8Mpx 上限自动缩放；② `applyAllAsOne` 画布上限 8192；③ `composeSubjectSheet` `rs` 防负数
+- **静默×3**：④ `exportAllSubjects` 导出失败改输出 `console.warn` 不再吞错；⑤ `renderPrepSubjects` 渲染失败标注 ⚠；⑥ 勾选分块时自动把 SVG 格式切回 PNG
+- **清理×3**：⑦ 删 `isPanBtn` 死代码；⑧ `scaleX` 死变量（已在第三轮随背景取样修复消除）；⑨ 字体变量清理
+- **体验×3**：⑩ 桌面端导出加 loading 遮罩；⑪ 去掉 Google Fonts 外链改系统字体栈；⑫ `m-confirm` 桌面端用 `genPNGSource` 回调（与手机构造一致，不再静默下载）
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
