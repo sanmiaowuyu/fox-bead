@@ -426,3 +426,22 @@ fox-bead/
 - **清理×3**：⑦ 删 `isPanBtn` 死代码；⑧ `scaleX` 死变量（已在第三轮随背景取样修复消除）；⑨ 字体变量清理
 - **体验×3**：⑩ 桌面端导出加 loading 遮罩；⑪ 去掉 Google Fonts 外链改系统字体栈；⑫ `m-confirm` 桌面端用 `genPNGSource` 回调（与手机构造一致，不再静默下载）
 - **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第五轮：手机下载深度修复（d5d6b28 → 7ab280c）
+- **问题**：夸克 WebView 的 `toBlob` 有 bug（超时白等 5s），且 `toDataURL` 对大 canvas 内存敏感
+- **修复**：① 手机端跳过 `toBlob`，直走 `toDataURL`，加长度检测 + JPEG 兜底；② `MAX_MOBILE` 2800→2400、cell→40，canvas ~4Mpx；③ 重试阈值 2000→1200（~1Mpx）
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第六轮：5 项小优化（4db9413）
+- ① 粘贴非图片 → setUploadError 提示；② SVG 导出去 Google Fonts 改系统字体；③ 库存面板 innerHTML 转义；④ viewport 放开 user-scalable+max-scale=3；⑤ 下载失败提示缩小板子+换浏览器
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第七轮：快捷键 + 几何示例 + 页面瘦身（c1ec7d2）
+- ① Ctrl+Z/Ctrl+Shift+Z 撤销重做；② 「几何图案示例」canvas 桃心；③ minifier 增强（去缩进+CSS 压缩）→ 598→578KB，CSS 693→1 行，JS -555 行
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第八轮：canvas 上限根治（1ea3846 → 9dbe5dc）
+- **问题**：桌面 N=104 默认板 canvas 13826×16327（225MP），toBlob 超时/toDataURL 需 900MB→崩
+- **修复**：MAX_CANVAS 16384→10000→6000（23MP），toBlob 超时 5s→12s，桌面 m-confirm 回退原简路径
+- **最终参数**：桌面 6000(23MP) / 手机 2400(4MP) 重试 1200(1MP) / 手机跳过 toBlob+JPEG 兜底
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
