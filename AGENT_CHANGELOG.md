@@ -1,7 +1,7 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-10（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换 / v144 分块多板补跨板对齐标记·CC复核意见②核查no-op / iframe预览下载修复 / 下载修复v2-clipboard逃生通道 / 下载修复v3-统一保存对话框消除静默下载）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-12（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换 / v144 分块多板补跨板对齐标记·CC复核意见②核查no-op / iframe预览下载修复 / 下载修复v2-clipboard逃生通道 / 下载修复v3-统一保存对话框消除静默下载）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
 > ⚠️ **版本号纪律更新（2026-08-12 余总）**：版本号已从 v145 重置为 **v1**；今后任何升版（bump）都必须先经余总明确同意，AI 不再自主升版。详见 §1 约束表。
@@ -380,4 +380,21 @@ fox-bead/
 
 **验证**：`node --check` OK / `node build.js` OK（JS 4949 行）/ 「在浏览器打开此页」文案已打进 `docs/index.html`。
 
-**部署待办**：尚未 git commit/push；需重新部署（CloudStudio 重部署或 cc 推 GitHub Pages）后线上才生效。根因提示：若 CloudStudio 预览链接本身仍套壳，最稳路径是用 GitHub Pages 顶层链接 `https://sanmiaowuyu.github.io/fox-bead/` 直接在浏览器打开。
+**部署（2026-08-12 用户要求重部署）**：commit `f846673` 已提交并推 Gitee（`git push origin master:main`）；CloudStudio 重新部署成功（curl 确认线上 `APP_VERSION='1'` + 「在浏览器打开此页」文案）。GitHub Pages 仍 v144——当前环境连不上 github.com 无法代推，**交由 cc 处理（见下方「待 cc 处理」章节）**。用户用夸克浏览器；若从 WorkBuddy/CloudStudio 预览面板（iframe 套壳）打开则沙箱必拦下载，须点对话框「在浏览器打开此页」跳出到顶层窗口再保存。
+
+---
+
+## 待 cc 处理 · 发布 V1 到 GitHub Pages（2026-08-12 余总交办）
+
+**任务**：把最新 commit `f846673`（V1 + 下载逃生通道加固）发布到 GitHub Pages，使 `https://sanmiaowuyu.github.io/fox-bead/` 从 v144 升到 V1。
+
+**步骤**：
+1. 先 `git pull` 拿到 `f846673`（已推到 Gitee `origin/main`；若你侧 remote 指向 github，请先从 Gitee 或本机同步该 commit 再推）。
+2. `git push github master:main` 触发 GitHub Pages 重新部署。
+3. 验证线上 `APP_VERSION='1'`、含「在浏览器打开此页」按钮。
+
+**版本纪律（务必遵守，见上方 ⚠️）**：当前基线 **V1**。今后任何升版（bump `APP_VERSION`）都必须先经余总明确同意，AI 不再自主升版。本次只是发布已有的 V1，不要顺手 bump 版本号。
+
+**记录要求（余总明确要求）**：本次及今后你做的每一次调整，都必须在本文档 §4 追加一条记录（格式见 §4 表头：commit / 版本 / 改动摘要 / 验证），追加后 `git add AGENT_CHANGELOG.md && git commit -m "chore: 更新协作日志" && git push` 同步，方便 SeniorDeveloper 查阅。不要攒、不要漏。
+
+**已知冲突区**：`src/core/pipeline-core.js` 零 DOM 铁律（C6）、`docs/index.html` 禁手改（C5）、Mard 221 色板禁改（C4）——改前先看 §1。
