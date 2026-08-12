@@ -58,9 +58,17 @@ function showGeneratingOverlay(text, cancellable) {
    关键：回调【一定】会被调用，避免手机浏览器对大图 toBlob 静默失败导致「点了没反应」。 */
 function genPNGSource(cv, cb) {
   if (!cv) { cb(null); return; }
-  // 手机端跳过 toBlob（部分浏览器如夸克 WebView 的 toBlob 有 bug，超时后才回退 toDataURL 白白等 5 秒）
   if (isMobileDevice()) {
-    try { cb(cv.toDataURL('image/png')); } catch (e) { cb(null); }
+    // 手机端直接走 toDataURL，跳过 toBlob
+    // 夸克等 WebView 对大 canvas 的 toDataURL 可能静默返回空字符串，加二次检测
+    try {
+      var data = cv.toDataURL('image/png');
+      if (data && data.length > 100) { cb(data); return; }
+      // toDataURL 返回空/异常短 → 可能是内存不足，尝试 JPEG（压缩率更高，内存占用更低）
+      try { data = cv.toDataURL('image/jpeg', 0.7); } catch (e2) {}
+      if (data && data.length > 100) { cb(data); return; }
+      cb(null);
+    } catch (e) { cb(null); }
     return;
   }
   if (typeof cv.toBlob === 'function') {
@@ -261,10 +269,10 @@ function showMobileSaveOverlay(src, name, failMsg) {
 function downloadCanvasPNG(cv, name) {
   genPNGSource(cv, function (src) {
     if (!src) {
-      if (isMobileDevice() && cv && Math.max(cv.width, cv.height) > 1600) {
-        // 手机浏览器 toDataURL 内存敏感，缩到 1600 以内再试
+      if (isMobileDevice() && cv && Math.max(cv.width, cv.height) > 1200) {
+        // 手机浏览器 toDataURL 内存敏感，缩到 1200 以内再试
         var half = document.createElement('canvas');
-        var scale = Math.min(1, 1600 / Math.max(cv.width, cv.height));
+        var scale = Math.min(1, 1200 / Math.max(cv.width, cv.height));
         half.width = Math.round(cv.width * scale);
         half.height = Math.round(cv.height * scale);
         var hctx = half.getContext('2d');
@@ -436,11 +444,11 @@ function buildExportCanvas(opts) {
   // v91: 导出超高清尺寸，每格 140 像素（桌面），放大后色号仍清晰
   const MAX_CANVAS = 16384;        // 浏览器画布单边上限
   const CANVAS_RESERVE = 2000;     // 标题栏+色号卡预留空间，确保总 canvas 不超限
-  const MAX_MOBILE = 2800;         // 手机端导出单边上限（低配 WebView 如夸克 toDataURL 内存敏感）
-  const MAX_WEIXIN = 2800;         // 微信端导入上限
+  const MAX_MOBILE = 2400;         // 手机端导出单边上限（夸克等 WebView 的 toDataURL 对大 canvas 兼容性极差）
+  const MAX_WEIXIN = 2400;         // 微信端导入上限
   let cell = 140;                  // 桌面超高清 140px/格（v91: 80→140，放大空间+75%）
-  if (isWeixin()) cell = 45;       // 微信 45px/格
-  else if (isMobileDevice()) cell = 45;   // 其他手机 45px/格
+  if (isWeixin()) cell = 40;       // 微信 40px/格
+  else if (isMobileDevice()) cell = 40;   // 其他手机 40px/格
   if (N * cell + CANVAS_RESERVE > MAX_CANVAS) cell = Math.floor((MAX_CANVAS - CANVAS_RESERVE) / N);
   if (isMobileDevice() && N * cell > MAX_MOBILE) cell = Math.floor(MAX_MOBILE / N);
   if (isWeixin() && N * cell > MAX_WEIXIN) cell = Math.floor(MAX_WEIXIN / N);
