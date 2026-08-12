@@ -254,9 +254,25 @@ function showMobileSaveOverlay(src, name, failMsg) {
 
 function downloadCanvasPNG(cv, name) {
   genPNGSource(cv, function (src) {
-    if (!src) { alert('生成失败，请重试'); return; }
-    // 统一走保存对话框：顶层窗口点「下载图片」真实落文件；沙箱/iframe 用「复制图片」剪贴板兜底。
-    // 不再做「静默真实下载」——避免顶层环境下用户点了却看不到任何反馈（文件默默进 Downloads）。
+    if (!src) {
+      // 大图可能在手机低配浏览器上 toBlob/toDataURL 都爆内存 → 自动缩半重试
+      if (isMobileDevice() && cv && Math.max(cv.width, cv.height) > 2000) {
+        var half = document.createElement('canvas');
+        var scale = Math.min(1, 2000 / Math.max(cv.width, cv.height));
+        half.width = Math.round(cv.width * scale);
+        half.height = Math.round(cv.height * scale);
+        var hctx = half.getContext('2d');
+        hctx.imageSmoothingEnabled = true;
+        hctx.drawImage(cv, 0, 0, half.width, half.height);
+        genPNGSource(half, function (src2) {
+          if (!src2) { alert('生成失败，请尝试缩小板子尺寸后重试'); return; }
+          showMobileSaveOverlay(src2, name);
+        });
+        return;
+      }
+      alert('生成失败，请重试');
+      return;
+    }
     showMobileSaveOverlay(src, name);
   });
 }
@@ -414,11 +430,11 @@ function buildExportCanvas(opts) {
   // v91: 导出超高清尺寸，每格 140 像素（桌面），放大后色号仍清晰
   const MAX_CANVAS = 16384;        // 浏览器画布单边上限
   const CANVAS_RESERVE = 2000;     // 标题栏+色号卡预留空间，确保总 canvas 不超限
-  const MAX_MOBILE = 4096;         // 手机端导出单边上限
-  const MAX_WEIXIN = 4096;         // 微信端导出单边上限
+  const MAX_MOBILE = 3200;         // 手机端导出单边上限（3200 保证低配机 toDataURL 不爆内存）
+  const MAX_WEIXIN = 3200;         // 微信端导入上限
   let cell = 140;                  // 桌面超高清 140px/格（v91: 80→140，放大空间+75%）
-  if (isWeixin()) cell = 90;       // 微信 90px/格
-  else if (isMobileDevice()) cell = 60;   // 其他手机 60px/格
+  if (isWeixin()) cell = 50;       // 微信 50px/格
+  else if (isMobileDevice()) cell = 50;   // 其他手机 50px/格
   if (N * cell + CANVAS_RESERVE > MAX_CANVAS) cell = Math.floor((MAX_CANVAS - CANVAS_RESERVE) / N);
   if (isMobileDevice() && N * cell > MAX_MOBILE) cell = Math.floor(MAX_MOBILE / N);
   if (isWeixin() && N * cell > MAX_WEIXIN) cell = Math.floor(MAX_WEIXIN / N);
