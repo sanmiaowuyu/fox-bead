@@ -2,6 +2,7 @@
 /* 本文件不含任何 document / window / canvas 引用，可由 build.js 同时打入网页版与小程序版。
    平台相关的像素获取在 web 端由 src/web 的 canvas 完成，小程序端由 processImageMini 直接消费 ImageData。 */
 
+var _genActive = true; // v145: 生成取消标志（全局；processImage 开始时置 true，cancelGenerate 置 false 中止异步分批）
 function getCropRect(w, h) {
   if (!state.crop) return { sx: 0, sy: 0, sw: w, sh: h };
   var side = Math.min(w, h);
@@ -88,7 +89,8 @@ function mapCell(sd, x0, y0, x1, y1, mode) {
 
 // v140: 分帧批处理 — 把 N×N 逐格映射拆成每批 2000 格，setTimeout 之间让浏览器渲染
 var _chunkSize = 2000;
-function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone) {
+function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone, onProgress) {
+  if (!_genActive) return; // v145: 取消时中止采样分批
   var endIdx = Math.min(startIdx + _chunkSize, N * N);
   for (var idx = startIdx; idx < endIdx; idx++) {
     var y = Math.floor(idx / N);
@@ -101,8 +103,9 @@ function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone
     var rgb = sampleCellRGB(sd, x0, y0, x1, y1, state.mode);
     grid[y][x] = rgb ? mapToPalette(rgb) : null;
   }
+  if (typeof onProgress === 'function') onProgress(endIdx / (N * N));
   if (endIdx < N * N) {
-    setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone); }, 0);
+    setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone, onProgress); }, 0);
   } else {
     onDone();
   }
@@ -145,7 +148,7 @@ function applyFloydSteinberg(grid, srcRGB, N) {
 }
 
 // v140: 异步分帧 Floyd-Steinberg（大板子，逐行 setTimeout）
-function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
+function applyFloydSteinbergAsync(grid, srcRGB, N, onDone, onProgress) {
   if (!srcRGB) { onDone(); return; }
   var acc = Array.from({ length: N }, function() { return new Array(N).fill(null); });
   for (var y = 0; y < N; y++)
@@ -154,15 +157,17 @@ function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
   var row = 0;
   var batchSize = 4; // 每批处理 4 行
   function nextBatch() {
+    if (!_genActive) return; // v145: 取消时中止抖动分批
     var end = Math.min(row + batchSize, N);
     for (; row < end; row++) _fsProcessRow(grid, acc, row, N);
+    if (typeof onProgress === 'function') onProgress(row / N);
     if (row < N) { setTimeout(nextBatch, 0); }
     else { onDone(); }
   }
   nextBatch();
 }
 
-function _finishPipeline(grid, N, onDone) {
+function _finishPipeline(grid, N, onDone, onProgress) {
   // v140: Floyd-Steinberg 抖动（在降噪之前，利用原图 RGB 信息）
   if (state.dither) {
     if (N <= 78) {
@@ -173,7 +178,7 @@ function _finishPipeline(grid, N, onDone) {
       applyFloydSteinbergAsync(grid, state.srcRGB, N, function() {
         _finishAfter(grid, N);
         if (onDone) onDone();
-      });
+      }, onProgress);
       return; // async, _finishAfter 稍后调用
     }
   }
@@ -196,10 +201,8 @@ function _finishAfter(grid, N) {
   }
   // 颜色数量上限：合并肉眼难分的相近色
   reduceColors(grid, state.maxColors);
-  // 提亮一档
-  applyBrighten(grid);
   // v123: 像素描边（后处理）
-  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId);
+  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);
   state.grid = grid;
   // 图片实际覆盖的有效格子数
   let eminX = N, eminY = N, emaxX = -1, emaxY = -1;
@@ -493,7 +496,7 @@ function removeBackground(grid = state.grid) {
       }
     }
   }
-  if (!mainGate && !cornerGate && !manualBg && !state.userMask) {
+  if (!mainGate && !cornerGate && !manualBg) {
     state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -502,7 +505,7 @@ function removeBackground(grid = state.grid) {
     }
     return;
   }
-  if (N <= 52 && !state.userMask) {
+  if (N <= 52) {
     state.bgStatus = 'small';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -537,17 +540,6 @@ function removeBackground(grid = state.grid) {
         isBgArr[y][x] = true;
       } else {
         cover[y][x] = true;
-      }
-    }
-  }
-  // 手动遮罩（userMask，由图片处理模块的笔刷生成）：'keep' 强制保留主体、'erase' 强制当背景。
-  // 在色彩距离判定之上叠加，使洪水填充尊重用户笔触，无需改动种子/安全逻辑。
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        var _um = state.userMask[y][x];
-        if (_um === 'keep') { cover[y][x] = true; isBgArr[y][x] = false; }
-        else if (_um === 'erase') { isBgArr[y][x] = true; if (grid[y][x] == null) grid[y][x] = bgColorId; }
       }
     }
   }
@@ -592,10 +584,6 @@ function removeBackground(grid = state.grid) {
   };
   for (let x = 0; x < N; x++) { seed(x, 0); seed(x, N - 1); }
   for (let y = 0; y < N; y++) { seed(0, y); seed(N - 1, y); }
-  // 手动 erase 笔触也作为种子，使没有背景边界的主体贴边区域也能被抠掉
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (state.userMask[y][x] === 'erase') seed(x, y);
-  }
   while (queue.length) {
     const [x, y] = queue.pop();
     toFill.push([x, y]);
@@ -605,14 +593,8 @@ function removeBackground(grid = state.grid) {
   var gateConfident = (mL > 0.95 && vL < 0.05) || (mL < 0.08 && vL < 0.05) ||
                       (midL > 0.95 && vL < 0.06) || (midL < 0.06 && vL < 0.06);
   var safetyLimit = gateConfident ? 0.98 : 0.85;
-  if (nonNull && toFill.length / nonNull > safetyLimit && !state.userMask) { state.bgStatus = 'full'; return; }
+  if (nonNull && toFill.length / nonNull > safetyLimit) { state.bgStatus = 'full'; return; }
   for (const [x, y] of toFill) { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
-  // 强制应用 erase 笔触（即便未被洪水覆盖，用户明确要抠掉的区域也置为背景）
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (state.userMask[y][x] === 'erase') { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
-    }
-  }
   {
     const visited2 = Array.from({ length: N }, () => new Array(N).fill(false));
     for (let y = minY; y <= maxY; y++) {
@@ -852,21 +834,6 @@ function reduceColors(grid, maxColors) {
       if (id && mapping[id] !== id) {
         if (state.bgMask && state.bgMask[y][x]) continue;
         grid[y][x] = mapping[id];
-      }
-    }
-  }
-}
-function applyBrighten(grid) {
-  if (!state.brighten) return;
-  var N = grid.length;
-  for (var y = 0; y < N; y++) {
-    for (var x = 0; x < N; x++) {
-      var id = grid[y][x];
-      if (!id) continue;
-      if (state.bgMask && state.bgMask[y][x]) continue;
-      var brighter = BRIGHTEN_MAP[id];
-      if (brighter && brighter !== id && !state.excluded.has(brighter)) {
-        grid[y][x] = brighter;
       }
     }
   }

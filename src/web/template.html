@@ -5,13 +5,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=3.0, viewport-fit=cover" />
   <title>狐狸爱拼豆 ｜ i 喵绘工坊 · 一键生成拼豆图纸</title>
   <link rel="icon" type="image/x-icon" href="<!-- BUILD:FAVICON_ICO -->" />
   <link rel="icon" type="image/png" sizes="64x64" href="<!-- BUILD:FAVICON_PNG -->" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
 /* BUILD:CSS */
   </style>
@@ -74,6 +71,13 @@
         <button type="button" class="theme-opt" data-theme="system" title="跟随系统" aria-label="跟随系统">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         </button>
+      </div>
+      <div class="palette-seg" id="palette-seg" title="色板切换（默认 Mard 221；可导入其他品牌色板）">
+        <select id="palette-select" class="palette-select" aria-label="色板切换">
+          <option value="mard221">Mard 221（默认）</option>
+        </select>
+        <button id="palette-import" class="btn-ghost sm" title="导入品牌色板 JSON（{id,name,hex}[]）">导入</button>
+        <input id="palette-file" type="file" accept="application/json,.json" hidden />
       </div>
       <button id="btn-reset" class="btn-ghost">重置</button>
       <button id="btn-download-top" class="btn-primary">下载图纸</button>
@@ -150,11 +154,6 @@
         </div>
         <div class="help-text tight">默认关：整张图都拼豆。打开后自动识别并抠掉纯色背景（白底/黑底均可自动识别），只保留主体豆子。<br>自动识别失败时，点下方按钮后在画布背景区域点一下即可手动指定背景色。</div>
         <button id="btn-sample-bg" class="btn-ghost full" style="margin-top:4px;padding:6px 12px;font-size:12px;">手动取样背景色</button>
-        <div class="toggle-row" style="margin-top:14px;">
-          <span class="toggle-name">提亮一档</span>
-          <label class="switch"><input id="toggle-brighten" type="checkbox" /><span class="knob"></span></label>
-        </div>
-        <div class="help-text tight">把每个色号替换成同色系里更亮一档的真实色号，适合原图偏暗、想整体提亮的场景。关闭则用原始配色。</div>
     </section>
 
     <section class="block collapsible collapsed">
@@ -186,6 +185,7 @@
         <div class="help-text tight">在拼豆预览上叠加格子辅助线，方便对照每一颗豆的位置。</div>
         <button id="btn-sample" class="btn-outline full">载入示例图片</button>
         <div class="help-text tight">没有图？点这里载入内置示例，先看看生成效果。</div>
+        <button id="btn-sample-geo" class="btn-ghost full" style="margin-top:4px;">几何图案示例</button>
         </div>
       </section>
 
@@ -367,6 +367,24 @@
         <span class="modal-row-name">包含采购清单<small class="help-inline">按色系分组的购物清单</small></span>
         <label class="switch"><input id="m-bom" type="checkbox" checked /><span class="knob"></span></label>
       </div>
+      <div class="modal-row">
+        <span class="modal-row-name">分块多板导出<small class="help-inline">大图按 N×N 板切分，每块独立对照图+色号（拼大图不翻车）</small></span>
+        <label class="switch"><input id="m-blocks" type="checkbox" /><span class="knob"></span></label>
+      </div>
+      <div class="modal-sub" id="m-blocks-sub" style="display:none">
+        <div class="modal-row sub">
+          <span class="modal-row-name sm">每块尺寸 (格)</span>
+          <span class="slider-val" id="m-blocksize-val">29</span>
+        </div>
+        <input id="m-blocksize" class="range" type="range" min="15" max="40" value="29" step="1" />
+        <div class="modal-row sub">
+          <span class="modal-row-name sm">导出格式</span>
+          <div class="seg seg-sm" id="m-blocks-fmt-seg">
+            <button class="seg-item active" data-fmt="png">PNG</button>
+            <button class="seg-item" data-fmt="pdf">PDF（打印/发工厂）</button>
+          </div>
+        </div>
+      </div>
 
       <div class="modal-btns">
         <button id="m-cancel" class="btn-ghost full">取消</button>
@@ -436,14 +454,38 @@
       <div class="prep-preview-wrap" id="prep-preview-wrap">
         <canvas id="prep-canvas"></canvas>
         <canvas id="prep-overlay"></canvas>
-        <div class="prep-preview-hint" id="prep-preview-hint">拖动选择裁切区域 · 笔刷涂抹去背景</div>
+        <div class="prep-preview-hint" id="prep-preview-hint">拖动选择裁切区域（可留空，整图参与抠图）</div>
       </div>
 
-      <div class="prep-toolbar">
-        <div class="seg" id="prep-tool-seg">
-          <button class="seg-item active" data-tool="brush">去背景笔刷</button>
-          <button class="seg-item" data-tool="crop">裁剪</button>
+      <button class="prep-btn prep-auto-seg" id="prep-auto-seg">✨ 自动抠图（自动分离多个主体）</button>
+      <div class="slider-row prep-seg-strength-row">
+        <div class="slider-top"><span class="slider-name">抠图强度</span><span id="prep-seg-val" class="slider-val">自动</span></div>
+        <input id="prep-seg-strength" class="range" type="range" min="4" max="22" value="10" step="1" />
+        <div class="slider-hint">默认「自动」最稳；照片抠不净（留背景边）往右调，抠过头（主体缺角）往左调。</div>
+      </div>
+      <div class="slider-row prep-feather-row">
+        <div class="slider-top"><span class="slider-name">羽化强度</span><span id="prep-feather-val" class="slider-val">标准</span></div>
+        <input id="prep-feather-strength" class="range" type="range" min="0" max="100" value="50" step="1" />
+        <div class="slider-hint">抠出主体边缘软硬：0=硬边、50=标准、100=羽化最明显（消除白边/锯齿）。</div>
+      </div>
+      <div class="prep-protect-bar">
+        <button class="prep-btn prep-protect-toggle" id="prep-protect-toggle">🛡 保护笔刷：关</button>
+        <span class="prep-brush-label">笔刷</span>
+        <input id="prep-brush-size" class="range sm" type="range" min="6" max="80" value="24" step="1" />
+        <button class="prep-btn prep-protect-clear" id="prep-protect-clear">清除</button>
+      </div>
+      <div class="slider-hint">在主体（如白猫脸/白衣物）上涂抹，标记为「强制保留」，自动抠图不会误删。仅整图模式生效；若用了裁切则保护不生效。</div>
+      <div class="prep-seg-status" id="prep-seg-status" hidden></div>
+
+      <div class="prep-results" id="prep-results" hidden>
+        <div class="prep-results-head">
+          <div class="prep-results-title">抠出的主体 — 点「转为像素图」生成拼豆图</div>
+          <div class="prep-results-actions">
+            <button class="prep-btn prep-seg-all" id="prep-seg-all" hidden>全部拼成一张</button>
+            <button class="prep-btn prep-seg-exportall" id="prep-seg-exportall" hidden>导出对照长图 (N张)</button>
+          </div>
         </div>
+        <div class="prep-subjects" id="prep-subjects"></div>
       </div>
 
       <div class="prep-section">
@@ -476,21 +518,12 @@
       </div>
 
       <div class="prep-section">
-        <div class="prep-section-title">去背景（手动笔刷）</div>
+        <div class="prep-section-title">整图去背景（一键）</div>
         <div class="toggle-row">
           <span class="toggle-name">自动去背景</span>
           <label class="switch"><input id="prep-removebg" type="checkbox" /><span class="knob"></span></label>
         </div>
-        <div class="prep-btn-row">
-          <button class="prep-btn active" id="prep-brush-erase">🩹 擦除背景</button>
-          <button class="prep-btn" id="prep-brush-keep">✋ 保留主体</button>
-          <button class="prep-btn" id="prep-brush-clear">清除笔刷</button>
-        </div>
-        <div class="slider-row">
-          <div class="slider-top"><span class="slider-name">笔刷大小</span><span id="prep-brush-val" class="slider-val">14</span></div>
-          <input id="prep-brush-size" type="range" min="4" max="60" value="14" step="1" />
-        </div>
-        <div class="help-text tight">选「擦除背景」沿要抠掉的区域涂抹；若算法误删了主体，切「保留主体」涂抹补回。笔刷按当前网格尺寸生效，改网格尺寸会清空笔刷。</div>
+        <div class="help-text tight">开启后「应用到图纸」会把整张图（含所有主体）按边缘色自动去背景，适合单主体或一次性拼整张。多主体分张请用上方「自动抠图」。</div>
       </div>
 
       <div class="modal-btns">
@@ -498,6 +531,15 @@
         <button id="prep-cancel" class="btn-ghost">取消</button>
         <button id="prep-apply" class="btn-primary">应用到图纸</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 主体放大预览 lightbox -->
+  <div class="seg-lightbox" id="seg-lightbox" hidden>
+    <div class="seg-lightbox-card">
+      <img id="seg-lightbox-img" alt="主体预览" />
+      <button class="seg-lightbox-close" id="seg-lightbox-close" aria-label="关闭">✕</button>
+      <button class="seg-lightbox-btn" id="seg-lightbox-topixel">就此转像素图</button>
     </div>
   </div>
 
@@ -516,6 +558,8 @@
         <button class="btn-ghost" id="inv-fill">按用量一键填</button>
         <button class="btn-ghost" id="inv-add100">全部 +100</button>
         <button class="btn-ghost" id="inv-clear">清空库存</button>
+        <button class="btn-ghost" id="inv-restock-copy" title="复制为文本，可直接发供应商/分销商">复制补货清单</button>
+        <button class="btn-ghost" id="inv-restock-png" title="导出补货清单图（含拼豆型号）">导出补货图</button>
         <div class="seg seg-sm" id="inv-view-seg" style="margin-left:auto;">
           <button class="seg-item active" data-view="used">仅用到的</button>
           <button class="seg-item" data-view="all">全部 221</button>
@@ -528,6 +572,23 @@
         <span class="inv-hint">库存保存在本机浏览器，换设备不共享。缺口色号会标红提醒。</span>
         <button id="inv-close2" class="btn-primary">完成</button>
       </div>
+    </div>
+  </div>
+
+  <div id="onboard-mask" class="onboard-mask">
+    <div class="onboard-card">
+      <h2 class="onboard-title">欢迎使用 狐狸爱拼豆</h2>
+      <p class="onboard-sub">三步，把照片变成可拼的拼豆图纸（手机上可双指缩放查看细节）</p>
+      <ol class="onboard-steps">
+        <li><b>上传图片</b>：点「上传图片」或按 <b>Ctrl+V</b> 粘贴，也可先点「载入示例图片」看效果</li>
+        <li><b>选尺寸与色板</b>：左侧选像素数（如 29×29），色板默认 Mard 221</li>
+        <li><b>下载图纸</b>：点「下载图纸」导出 PNG / PDF，照图拼豆即可</li>
+      </ol>
+      <div class="onboard-actions">
+        <button id="onboard-sample" class="btn-primary">载入示例图体验</button>
+        <button id="onboard-skip" class="btn-ghost">我知道了</button>
+      </div>
+      <div class="onboard-foot">此引导仅首次打开时显示</div>
     </div>
   </div>
 

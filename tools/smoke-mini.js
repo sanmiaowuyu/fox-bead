@@ -18,7 +18,7 @@ ok('PALETTE_LAB 预算完整', core.PALETTE_LAB.length === core.PALETTE.length);
 console.log('--- 2. 关键导出 ---');
 var need = ['hexToRgb', 'rgbToOklab', 'oklabDist', 'mapToPalette', 'mapCell', 'reduceColors',
             'applyFloydSteinberg', 'cleanupNoise', 'removeBackground', 'applyOutline',
-            'applyBrighten', 'computeMaxRegion', 'processImageMini', 'state'];
+            'computeMaxRegion', 'processImageMini', 'state'];
 var missing = [];
 for (var k = 0; k < need.length; k++) {
   if (typeof core[need[k]] === 'undefined') missing.push(need[k]);

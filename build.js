@@ -22,11 +22,22 @@ if (process.argv.indexOf('--bump') >= 0) {
     console.log('Version bumped: ' + verMatch[1] + ' → ' + newVer);
   }
 }
+// 读取当前 APP_VERSION（无论是否 bump，都注入到产物，避免小程序核心包显示 N/A）
+function getAppVersion() {
+  try {
+    var ic = fs.readFileSync(path.join(CORE, 'init.js'), 'utf8');
+    var m = ic.match(/const APP_VERSION = '(\d+)'/);
+    if (m) return m[1];
+  } catch (e) {}
+  return 'N/A';
+}
 var SRC = path.join(ROOT, 'src');
 var CORE = path.join(SRC, 'core');
 var WEB = path.join(SRC, 'web');
 var ASSETS = path.join(ROOT, 'assets');
 var DIST = path.join(ROOT, 'docs');
+// 读取当前 APP_VERSION（无论是否 bump，都注入产物，避免小程序核心包显示 N/A）—— 须在 CORE 定义后调用
+var APP_VER = getAppVersion();
 
 // JS 模块加载顺序（core/ 纯算法先加载，web/ 平台绑定后加载）
 var JS_MODULES = [
@@ -106,27 +117,25 @@ var jsContent = jsParts.join('\n\n');
 
 // ========== 4. 基础压缩 ==========
 function minifyJS(code) {
-  // 去掉多行注释（保留的不去：/*! ... */ 这类 license 注释本项目没有）
   code = code.replace(/\/\*[\s\S]*?\*\//g, '');
-  // 去掉单行注释（整行以 // 开头的）
   code = code.replace(/^\s*\/\/.*$/gm, '');
-  // 去掉多余空行（连续空行合并为一行）
-  code = code.replace(/\n{3,}/g, '\n\n');
-  // 去掉行尾空格
   code = code.replace(/[ \t]+$/gm, '');
-  // 去掉行首空格（保留缩进结构不做处理，安全性优先）
+  code = code.replace(/^[ \t]+/gm, '');  // 去行首缩进（JS 语义无关）
+  code = code.replace(/\n{3,}/g, '\n');
   return code.trim();
 }
 
 function minifyCSS(code) {
-  // 去掉多行注释
   code = code.replace(/\/\*[\s\S]*?\*\//g, '');
-  // 去掉单行注释
-  code = code.replace(/\/\/.*$/gm, '');
-  // 去掉多余空行
-  code = code.replace(/\n{3,}/g, '\n\n');
-  // 去掉行尾空格
   code = code.replace(/[ \t]+$/gm, '');
+  code = code.replace(/^[ \t]+/gm, '');  // 去行首缩进
+  code = code.replace(/\n{3,}/g, '\n');
+  // 合并 { 前和 } 后的空格
+  code = code.replace(/\s*\{\s*/g, '{');
+  code = code.replace(/\s*\}\s*/g, '}');
+  code = code.replace(/;\s*/g, ';');
+  code = code.replace(/:\s*/g, ':');
+  code = code.replace(/,\s*/g, ',');
   return code.trim();
 }
 
@@ -163,7 +172,7 @@ var MINIAPP_CORE = path.join(MINIAPP, 'utils', 'core.js');
 if (fs.existsSync(MINIAPP)) {
   // 仅打包纯模块（零 document / 零 $ / 零 canvas）：算法内核与网页版完全一致 = 单内核来源（解决 P0）
   var mpModules = ['color.js', 'palette.js', 'state.js', 'image-prep.js', 'pipeline-core.js'];
-  var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）\n// 版本: ' + (verMatch ? newVer : 'N/A') + '\n'];
+  var mpParts = ['// 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）\n// 版本: ' + APP_VER + '\n'];
   for (var mi = 0; mi < mpModules.length; mi++) {
     mpParts.push(readTrim(path.join(CORE, mpModules[mi])));
   }
@@ -184,7 +193,6 @@ if (fs.existsSync(MINIAPP)) {
     '  state.cleanup = (opts.cleanup != null) ? opts.cleanup : 5;',
     '  state.maxColors = (opts.maxColors != null) ? opts.maxColors : 24;',
     '  state.removeBg = !!opts.removeBg;',
-    '  state.brighten = !!opts.brighten;',
     '  state.outline = opts.outline || { on: false, strength: 50, colorId: \'H7\', thickness: 1 };',
     '  state.excluded = opts.excluded || new Set();',
     '  var cr = computeCropRect(imgData.width, imgData.height);',
@@ -213,7 +221,6 @@ if (fs.existsSync(MINIAPP)) {
     '  if (state.removeBg) { state.bgStatus = \'ok\'; removeBackground(grid); }',
     '  else { state.bgMask = Array.from({ length: N }, function () { return new Array(N).fill(false); }); state.bgStatus = \'\'; }',
     '  reduceColors(grid, state.maxColors);',
-    '  applyBrighten(grid);',
     '  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);',
     '  state.grid = grid;',
     '  var counts = {}; var total = 0;',
@@ -230,7 +237,7 @@ if (fs.existsSync(MINIAPP)) {
     '  mapToPalette: mapToPalette, mapCell: mapCell, sampleCellRGB: sampleCellRGB, reduceColors: reduceColors,',
     '  buildBrightenMap: buildBrightenMap, updateBgIds: updateBgIds,',
     '  applyFloydSteinberg: applyFloydSteinberg, cleanupNoise: cleanupNoise,',
-    '  removeBackground: removeBackground, applyOutline: applyOutline, applyBrighten: applyBrighten,',
+    '  removeBackground: removeBackground, applyOutline: applyOutline,',
     '  computeMaxRegion: computeMaxRegion, processImageMini: processImageMini',
     '};'
   ];

@@ -16,30 +16,68 @@ function ensureFoxSpinStyle() {
 }
 
 /* 生成中遮罩：点击下载后先明确反馈「生成中」，避免大图渲染时疑似卡死 */
-function showGeneratingOverlay(text) {
+function showGeneratingOverlay(text, cancellable) {
   ensureFoxSpinStyle();
   const mask = document.createElement('div');
-  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;';
+  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
   const sp = document.createElement('div');
   sp.style.cssText = 'width:42px;height:42px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:fox-spin .8s linear infinite;';
   const tip = document.createElement('div');
   tip.textContent = text || '正在生成图纸…';
-  tip.style.cssText = 'color:#fff;font-size:15px;margin-top:16px;';
-  mask.appendChild(sp); mask.appendChild(tip);
+  tip.style.cssText = 'color:#fff;font-size:15px;margin-top:16px;text-align:center;';
+  const barWrap = document.createElement('div');
+  barWrap.style.cssText = 'width:min(280px,72vw);height:8px;background:rgba(255,255,255,.18);border-radius:5px;margin-top:14px;overflow:hidden;';
+  const bar = document.createElement('div');
+  bar.style.cssText = 'height:100%;width:0%;background:#fff;border-radius:5px;transition:width .15s linear;';
+  barWrap.appendChild(bar);
+  const pct = document.createElement('div');
+  pct.textContent = '';
+  pct.style.cssText = 'color:rgba(255,255,255,.8);font-size:12px;margin-top:6px;';
+  mask.appendChild(sp); mask.appendChild(tip); mask.appendChild(barWrap); mask.appendChild(pct);
+  let cancelBtn = null;
+  if (cancellable) {
+    cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '取消';
+    cancelBtn.style.cssText = 'margin-top:16px;padding:8px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.4);';
+    cancelBtn.onclick = function () { if (typeof cancelGenerate === 'function') cancelGenerate(); };
+    mask.appendChild(cancelBtn);
+  }
   document.body.appendChild(mask);
-  return { close: () => mask.remove() };
+  return {
+    close: function () { mask.remove(); },
+    setProgress: function (p, label) {
+      const v = Math.max(0, Math.min(100, Math.round(p || 0)));
+      bar.style.width = v + '%';
+      pct.textContent = v + '%';
+      if (label) tip.textContent = label;
+    }
+  };
 }
 
 /* 生成 PNG 源：优先 toBlob（体积小、加载快），失败或超时回退 toDataURL。
    关键：回调【一定】会被调用，避免手机浏览器对大图 toBlob 静默失败导致「点了没反应」。 */
 function genPNGSource(cv, cb) {
+  if (!cv) { cb(null); return; }
+  if (isMobileDevice()) {
+    // 手机端直接走 toDataURL，跳过 toBlob
+    // 夸克等 WebView 对大 canvas 的 toDataURL 可能静默返回空字符串，加二次检测
+    try {
+      var data = cv.toDataURL('image/png');
+      if (data && data.length > 100) { cb(data); return; }
+      // toDataURL 返回空/异常短 → 可能是内存不足，尝试 JPEG（压缩率更高，内存占用更低）
+      try { data = cv.toDataURL('image/jpeg', 0.7); } catch (e2) {}
+      if (data && data.length > 100) { cb(data); return; }
+      cb(null);
+    } catch (e) { cb(null); }
+    return;
+  }
   if (typeof cv.toBlob === 'function') {
     try {
       let done = false;
       const timer = setTimeout(() => {
         if (done) return; done = true;
         try { cb(cv.toDataURL('image/png')); } catch (e2) { cb(null); }
-      }, 5000); // 5 秒超时兜底
+      }, 12000); // 12 秒超时兜底（桌面大 canvas 的 toBlob 可能需要较长时间）
       cv.toBlob(blob => {
         if (done) return; done = true; clearTimeout(timer);
         if (blob && blob.size > 0) cb(blob);
@@ -51,27 +89,72 @@ function genPNGSource(cv, cb) {
   try { cb(cv.toDataURL('image/png')); } catch (e) { cb(null); }
 }
 
-/* 手机端：a.download 常被浏览器拦截，改为弹出图片让用户「长按保存到相册」。
-   src 可以是 Blob 或 URL/dataURL 字符串；Blob 会转成 blob URL。
-   额外提供「在新窗口打开」按钮作为备份（部分浏览器长按无菜单时可用）。 */
-function showMobileSaveOverlay(src, failMsg) {
-  let url = src;
-  let blob = null;
-  if (src instanceof Blob) {
-    blob = src;
-    url = URL.createObjectURL(blob);
-  }
-  const mask = document.createElement('div');
-  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;overflow:auto;';
-  const cleanup = () => {
-    if (blob && url) URL.revokeObjectURL(url);
-    mask.remove();
+/* dataURL 转 Blob（剪贴板兜底用） */
+function dataURLToBlob(dataURL) {
+  try {
+    var parts = String(dataURL).split(',');
+    var mime = 'image/png';
+    var m = parts[0].match(/:(.*?);/);
+    if (m && m[1]) mime = m[1];
+    var bstr = atob(parts[1]);
+    var arr = new Uint8Array(bstr.length);
+    for (var i = 0; i < bstr.length; i++) arr[i] = bstr.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+  } catch (e) { return null; }
+}
+
+/* 复制图片到剪贴板：优先 Clipboard API 写入 image/png（沙箱里最可靠的「保存」方式），
+   失败则兜底复制 dataURL 文本（用户粘到浏览器地址栏可下载）。返回 Promise<'image'|'text'>。 */
+function copyImageToClipboard(blob, dataUrl) {
+  var fail = function () {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText && dataUrl) {
+        return navigator.clipboard.writeText(dataUrl).then(function () { return 'text'; });
+      }
+    } catch (e) {}
+    return Promise.reject(new Error('clipboard-unavailable'));
   };
+  try {
+    if (navigator.clipboard && navigator.clipboard.write && window.ClipboardItem && blob) {
+      try {
+        var item = new ClipboardItem({ 'image/png': blob });
+        return navigator.clipboard.write([item]).then(function () { return 'image'; }).catch(function () { return fail(); });
+      } catch (e) { return fail(); }
+    }
+  } catch (e) {}
+  return fail();
+}
+
+/* 保存对话框：覆盖层展示生成的图纸，并提供多种保存方式（专治 iframe/沙箱里下载被拦截）。
+   - 「复制图片」按钮（主）：Clipboard API 把 PNG 写入剪贴板，沙箱里也能用，用户去微信/画图/备忘录 Ctrl+V 即可
+   - 「下载图片」按钮：页内 <a download> 点击（顶层窗口或沙箱允许下载时成功）
+   - 「新窗口打开」按钮：window.open(blobURL)（沙箱允许弹窗时）
+   - 图片本体：右键/长按「另存为」兜底
+   src 可以是 Blob 或 URL/dataURL 字符串；name 决定是图片还是 PDF。 */
+function tryRealDownload(src, name) {
+  try {
+    var a = document.createElement('a');
+    if (src instanceof Blob) a.href = URL.createObjectURL(src); else a.href = src;
+    a.download = name || 'fox-bead';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { document.body.removeChild(a); if (src instanceof Blob) URL.revokeObjectURL(a.href); }, 1500);
+    return true;
+  } catch (e) { return false; }
+}
+function showMobileSaveOverlay(src, name, failMsg) {
+  var isPdf = /\.pdf$/i.test(name || '');
+  var blob = null, url = null, pngBlob = null, dataUrl = null;
+  if (src instanceof Blob) { blob = src; url = URL.createObjectURL(blob); if (!isPdf) pngBlob = src; }
+  else if (typeof src === 'string') { url = src; if (!isPdf) { dataUrl = src; pngBlob = dataURLToBlob(src); } }
+  var mask = document.createElement('div');
+  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;overflow:auto;';
+  var cleanup = function () { if (blob && url) URL.revokeObjectURL(url); mask.remove(); };
   if (!src) {
-    const t = document.createElement('div');
+    var t = document.createElement('div');
     t.textContent = failMsg || '生成失败，请重试';
     t.style.cssText = 'color:#fff;font-size:15px;text-align:center;';
-    const b = document.createElement('button');
+    var b = document.createElement('button');
     b.textContent = '关闭';
     b.style.cssText = 'margin-top:16px;padding:10px 34px;border:none;border-radius:22px;background:#fff;color:#333;font-size:15px;';
     b.onclick = cleanup;
@@ -79,52 +162,132 @@ function showMobileSaveOverlay(src, failMsg) {
     document.body.appendChild(mask);
     return;
   }
-  const title = document.createElement('div');
-  const sub = document.createElement('div');
-  if (isMobileDevice()) {
-    title.textContent = '长按图片 → 保存到相册';
-    sub.textContent = '（若长按没出现菜单，点下方「在新窗口打开」再保存）';
-  } else {
-    title.textContent = '右键图片 → 选择「图片另存为」';
-    sub.textContent = '（或点下方「在新窗口打开」后保存）';
-  }
+  var title = document.createElement('div');
+  var sub = document.createElement('div');
+  title.textContent = '选择一种方式保存图纸';
+  sub.textContent = isPdf
+    ? '（点「下载 PDF」或「新窗口打开」；若都被拦截，请到真实浏览器打开 Gitee Pages）'
+    : '（「复制图片」最稳妥：复制到剪贴板后，去微信 / 画图 / 备忘录 Ctrl+V 即可）';
   title.style.cssText = 'color:#fff;font-size:17px;line-height:1.4;margin-bottom:6px;text-align:center;font-weight:600;';
   sub.style.cssText = 'color:#bbb;font-size:13px;margin-bottom:12px;text-align:center;';
-  const img = document.createElement('img');
-  img.src = url;
-  img.alt = '拼豆图纸';
-  img.style.cssText = 'max-width:100%;max-height:56vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);object-fit:contain;background:#fff;';
-  const openBtn = document.createElement('button');
-  openBtn.textContent = '在新窗口打开';
-  openBtn.style.cssText = 'display:none;margin-top:14px;padding:9px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.15);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.35);';
-  openBtn.onclick = () => { try { const w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; } };
-  img.onerror = () => { img.style.display = 'none'; openBtn.style.display = 'block'; };
-  const closeBtn = document.createElement('button');
+  mask.appendChild(title); mask.appendChild(sub);
+
+  var isIframe = (window.self !== window.top);
+  // 受限预览框（iframe/沙箱）专用逃生通道：跳出到顶层浏览器窗口，那里下载不受限
+  if (isIframe) {
+    var warn = document.createElement('div');
+    warn.textContent = '检测到你在预览框内打开，下载 / 复制可能被拦截。点下方按钮在真实浏览器打开本页，即可正常保存。';
+    warn.style.cssText = 'color:#ffd479;font-size:13px;line-height:1.5;margin-bottom:10px;text-align:center;max-width:320px;background:rgba(255,212,121,.12);border:1px solid rgba(255,212,121,.35);border-radius:10px;padding:10px 12px;';
+    mask.appendChild(warn);
+
+    var escapeBtn = document.createElement('button');
+    escapeBtn.textContent = '在浏览器打开此页';
+    escapeBtn.style.cssText = 'margin-bottom:14px;padding:12px 40px;border:none;border-radius:24px;background:#ffd479;color:#3a2c00;font-size:15px;font-weight:700;';
+    escapeBtn.onclick = function () {
+      var ok = false;
+      try { var w = window.open(location.href, '_blank'); ok = !!w; } catch (e) {}
+      if (ok) { escapeBtn.textContent = '已在新窗口打开，去那里保存'; return; }
+      warn.textContent = '弹窗被拦截，请手动复制下面链接到浏览器打开：';
+      var linkBox = document.createElement('div');
+      linkBox.textContent = location.href;
+      linkBox.style.cssText = 'color:#fff;font-size:12px;word-break:break-all;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px 10px;max-width:320px;margin-top:8px;text-align:left;';
+      mask.appendChild(linkBox);
+      escapeBtn.textContent = '已显示链接，请复制';
+    };
+    mask.appendChild(escapeBtn);
+  }
+
+  if (!isPdf) {
+    var img = document.createElement('img');
+    img.src = url;
+    img.alt = '拼豆图纸';
+    img.style.cssText = 'max-width:100%;max-height:40vh;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.4);object-fit:contain;background:#fff;';
+    mask.appendChild(img);
+  } else {
+    var box = document.createElement('div');
+    box.textContent = 'PDF 文件已生成';
+    box.style.cssText = 'margin:8px 0 4px;padding:28px 40px;border:1px dashed rgba(255,255,255,.4);border-radius:12px;color:#fff;font-size:15px;';
+    mask.appendChild(box);
+  }
+
+  // 主按钮：复制图片到剪贴板（顶层窗口/部分沙箱可用，绕过 download/popup 限制）
+  if (!isPdf) {
+    var canClip = !!(navigator.clipboard && (navigator.clipboard.write || navigator.clipboard.writeText) && window.ClipboardItem);
+    var copyBtn = document.createElement('button');
+    copyBtn.textContent = canClip ? '复制图片' : '复制图片（受限）';
+    copyBtn.style.cssText = 'margin-top:14px;padding:11px 38px;border:none;border-radius:24px;background:#fff;color:#222;font-size:15px;font-weight:600;';
+    copyBtn.onclick = function () {
+      copyImageToClipboard(pngBlob, dataUrl).then(function (kind) {
+        if (kind === 'image') copyBtn.textContent = '已复制图片，去粘贴';
+        else copyBtn.textContent = '已复制链接，粘到地址栏';
+      }).catch(function () {
+        copyBtn.textContent = isIframe ? '复制受限→用上方【在浏览器打开】' : '复制失败，请右键图片另存';
+      });
+    };
+    mask.appendChild(copyBtn);
+  }
+
+  // 下载按钮：手机端 <a download> 普遍被浏览器忽略，改用新窗口打开（长按/右键可保存）
+  var dlBtn = document.createElement('button');
+  dlBtn.textContent = isPdf ? '下载 PDF' : (isMobileDevice() ? '打开图片（长按保存）' : '下载图片');
+  dlBtn.style.cssText = 'margin-top:10px;padding:10px 32px;border:none;border-radius:22px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.4);';
+  dlBtn.onclick = function () {
+    if (isMobileDevice() && !isPdf) {
+      // 手机端：打开图片到新标签页，用户长按即可保存（浏览器拦截 download 属性时仍可用）
+      try { var w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; }
+      dlBtn.textContent = '已打开，长按图片保存';
+    } else {
+      tryRealDownload(src, name || (isPdf ? 'fox-bead.pdf' : 'fox-bead.png'));
+      dlBtn.textContent = '已下载（如无反应请右键/长按图片另存）';
+    }
+  };
+  mask.appendChild(dlBtn);
+
+  // 新窗口打开（沙箱允许弹窗时）
+  var openBtn = document.createElement('button');
+  openBtn.textContent = '新窗口打开';
+  openBtn.style.cssText = 'margin-top:10px;padding:9px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.1);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.3);';
+  openBtn.onclick = function () { try { var w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; } };
+  mask.appendChild(openBtn);
+
+  if (!isPdf) {
+    var hint = document.createElement('div');
+    hint.textContent = isIframe ? '若以上按钮都无效：请在浏览器打开本页（上方按钮）后再保存。' : '提示：若按钮无效，可右键图片选择「图片另存为」';
+    hint.style.cssText = 'color:#888;font-size:12px;margin-top:12px;text-align:center;max-width:300px;';
+    mask.appendChild(hint);
+  }
+
+  var closeBtn = document.createElement('button');
   closeBtn.textContent = '关闭';
-  closeBtn.style.cssText = 'margin-top:10px;padding:8px 30px;border:none;border-radius:22px;background:transparent;color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.35);';
+  closeBtn.style.cssText = 'margin-top:10px;padding:8px 30px;border:none;border-radius:22px;background:transparent;color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.3);';
   closeBtn.onclick = cleanup;
-  mask.appendChild(title); mask.appendChild(sub); mask.appendChild(img); mask.appendChild(openBtn); mask.appendChild(closeBtn);
+  mask.appendChild(closeBtn);
+
   document.body.appendChild(mask);
 }
 
 function downloadCanvasPNG(cv, name) {
   genPNGSource(cv, function (src) {
-    if (!src) { alert('生成失败，请重试'); return; }
-    // 顶层页面：直接触发下载（普通浏览器/已部署站点）
-    var inIframe = (window.self !== window.top);
-    if (!inIframe) {
-      try {
-        var a = document.createElement('a');
-        if (src instanceof Blob) a.href = URL.createObjectURL(src); else a.href = src;
-        a.download = name;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(function () { document.body.removeChild(a); if (src instanceof Blob) URL.revokeObjectURL(a.href); }, 1500);
+    if (!src) {
+      if (isMobileDevice() && cv && Math.max(cv.width, cv.height) > 1200) {
+        // 手机浏览器 toDataURL 内存敏感，缩到 1200 以内再试
+        var half = document.createElement('canvas');
+        var scale = Math.min(1, 1200 / Math.max(cv.width, cv.height));
+        half.width = Math.round(cv.width * scale);
+        half.height = Math.round(cv.height * scale);
+        var hctx = half.getContext('2d');
+        hctx.imageSmoothingEnabled = true;
+        hctx.drawImage(cv, 0, 0, half.width, half.height);
+        genPNGSource(half, function (src2) {
+          if (!src2) { alert('生成失败\n\n请尝试：\n1. 缩小板子尺寸（当前 ' + state.N + '×' + state.N + ' → 试试 58×58）\n2. 换用系统自带浏览器打开\n3. 桌面端访问 sanmiaowuyu.github.io/fox-bead/'); return; }
+          showMobileSaveOverlay(src2, name);
+        });
         return;
-      } catch (e) { /* 落到下方弹窗兜底 */ }
+      }
+      alert('生成失败，请重试');
+      return;
     }
-    // iframe 内（预览面板 / 部分托管沙箱）或下载被拦截：弹窗让用户右键/长按保存
-    showMobileSaveOverlay(src);
+    showMobileSaveOverlay(src, name);
   });
 }
 
@@ -237,7 +400,7 @@ async function buildShareCanvas() {
     const dx = state.mirror ? N - 1 - x : x;       // 镜像：水平翻转列，与工作图纸一致
     const px = Math.round(artX + dx * cell);
     const py = Math.round(artY + y * cell);
-    c.fillStyle = PALETTE_BY_ID[id].hex;
+    c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
     c.fillRect(px, py, Math.ceil(cell), Math.ceil(cell));
   }
 
@@ -274,29 +437,23 @@ async function buildShareCanvas() {
 
 function buildExportCanvas(opts) {
   const N = state.N;
+  if (!state.displayRect || !state.grid) return null;
   // v100: 导出固定 (N-4)×(N-4) 正方形，内容居中、四周填背景色（适配电子拼豆板导入）
   const dr = state.displayRect;
   const M = dr.M;
   // v91: 导出超高清尺寸，每格 140 像素（桌面），放大后色号仍清晰
-  const MAX_CANVAS = 16384;        // 浏览器画布单边上限
-  const CANVAS_RESERVE = 2000;     // 标题栏+色号卡预留空间，确保总 canvas 不超限
-  const MAX_MOBILE = 4096;         // 手机端导出单边上限
-  const MAX_WEIXIN = 4096;         // 微信端导出单边上限
+  const MAX_CANVAS = 4000;         // 桌面导出单边上限（分享图 1440 工作正常，下载图对齐到 7MP 级别）
+  const CANVAS_RESERVE = 1200;     // 标题栏+色号卡预留空间
+  const MAX_MOBILE = 2400;         // 手机端导出单边上限（夸克等 WebView 的 toDataURL 对大 canvas 兼容性极差）
+  const MAX_WEIXIN = 2400;         // 微信端导入上限
   let cell = 140;                  // 桌面超高清 140px/格（v91: 80→140，放大空间+75%）
-  if (isWeixin()) cell = 90;       // 微信 90px/格
-  else if (isMobileDevice()) cell = 60;   // 其他手机 60px/格
+  if (isWeixin()) cell = 40;       // 微信 40px/格
+  else if (isMobileDevice()) cell = 40;   // 其他手机 40px/格
   if (N * cell + CANVAS_RESERVE > MAX_CANVAS) cell = Math.floor((MAX_CANVAS - CANVAS_RESERVE) / N);
   if (isMobileDevice() && N * cell > MAX_MOBILE) cell = Math.floor(MAX_MOBILE / N);
   if (isWeixin() && N * cell > MAX_WEIXIN) cell = Math.floor(MAX_WEIXIN / N);
   cell = Math.max(10, cell);
-  const k = cell / 24;
-  const pad = Math.round(20 * k);                    // 图案区内边距
-  const titleH = Math.round(300 * k);                 // 标题栏高度（两行信息，v138 放大3倍字体）
-  const gap = 1;                     // 图案与色板间距线
-  const labelH = Math.round(80 * k);                 // "用料详情"标签高度（v138 放大3倍）
-
-  // ===== 统计色号（跳过背景填充格）=====
-  // v98: 按 subject（主体边界）统计，排除四周背景留白豆子
+  // ===== 统计色号（跳过背景填充格，不依赖 cell，先算）=====
   const counts = {};
   let totalBeads = 0;
   var sub = state.subject || state.effective;
@@ -309,7 +466,6 @@ function buildExportCanvas(opts) {
     if (id && !(state.bgMask && state.bgMask[y][x])) { counts[id] = (counts[id] || 0) + 1; totalBeads++; }
   }
   const sorted = Object.entries(counts).sort((a, b) => {
-    // v90: 按色号字母+数字升序排序，方便拼豆时按字母系一次性找完
     const ma = a[0].match(/^([A-Za-z]+)(\d+)$/);
     const mb = b[0].match(/^([A-Za-z]+)(\d+)$/);
     if (!ma || !mb) return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
@@ -317,21 +473,37 @@ function buildExportCanvas(opts) {
     return parseInt(ma[2], 10) - parseInt(mb[2], 10);
   });
 
-  // ===== 色板区布局计算 =====
-  const showStats = opts.stats !== false;  // 默认显示
-  const palPad = 14;                        // 色板区内边距
-  const palEntryW = Math.round(280 * k);    // 每个色号条目宽度 — v138 放大3倍(100→280)
-  const palCellH = Math.round(120 * k);      // 每个色号条目高度 — v138 放大3倍
-
-  // ===== 总画布尺寸 =====（v100: 图案区固定 M×M 正方形）
-  const patternW = pad * 2 + M * cell;
-  const patternH = pad * 2 + M * cell;
-  const W = patternW;   // 整图宽度以图案区为准，用料详情横向铺满此宽度
-  // 关键修复：按可用宽度自动计算列数，横向填满后自动换行（不再固定 8 列挤在左侧）
-  const palCols = showStats ? Math.max(1, Math.floor((W - palPad * 2) / palEntryW)) : 0;
-  const palRows = showStats ? Math.ceil(sorted.length / palCols) : 0;
-  const palH = showStats ? (labelH + palPad + palRows * palCellH + palPad) : 0;
-  const H = titleH + patternH + gap + palH;
+  // ===== 派生尺寸 + 总高度钳制（关键修复：旧逻辑只钳宽度，色板区高使 H 超 16384
+  //       浏览器 canvas 上限 -> toBlob 静默失败 -> 弹"生成失败"。现按 H 比例缩 cell 重算）=====
+  const showStats = opts.stats !== false;
+  const palPad = 14;
+  const sortedLen = sorted.length;
+  let k, pad, titleH, labelH, patternW, patternH, W, palEntryW, palCellH, palCols, palRows, palH, H;
+  const gap = 1;
+  function _recalcLayout() {
+    k = cell / 24;
+    pad = Math.round(20 * k);
+    titleH = Math.round(300 * k);
+    labelH = Math.round(80 * k);
+    patternW = pad * 2 + M * cell;
+    patternH = pad * 2 + M * cell;
+    W = patternW;
+    palEntryW = Math.round(280 * k);
+    palCellH = Math.round(120 * k);
+    palCols = showStats ? Math.max(1, Math.floor((W - palPad * 2) / palEntryW)) : 0;
+    palRows = showStats ? Math.ceil(sortedLen / palCols) : 0;
+    palH = showStats ? (labelH + palPad + palRows * palCellH + palPad) : 0;
+    H = titleH + patternH + gap + palH;
+  }
+  // 钳制上限兼容移动端/微信（单边更严），避免这些环境 H 仍超限
+  var HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
+  _recalcLayout();
+  let _guard = 0;
+  while (H > HARD && cell > 10 && _guard < 40) {
+    cell = Math.max(10, Math.floor(cell * (HARD - gap) / H));
+    _recalcLayout();
+    _guard++;
+  }
 
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
@@ -374,7 +546,7 @@ function buildExportCanvas(opts) {
       var sy = dr.srcMinY + (gy - dr.offY);
       var tid = state.grid[sy][sx];
       var tbg = state.bgMask && state.bgMask[sy][sx];
-      return { id: tid, bg: tbg, hex: (tid && !tbg) ? PALETTE_BY_ID[tid].hex : '#FFFFFF' };
+      var _pp = (tid && !tbg && PALETTE_BY_ID[tid]) ? PALETTE_BY_ID[tid] : null; return { id: tid, bg: tbg, hex: _pp ? _pp.hex : '#FFFFFF' };
     }
     return { id: null, bg: false, hex: '#FFFFFF' };
   };
@@ -415,7 +587,7 @@ function buildExportCanvas(opts) {
   }
 
   // 豆子间隔线（始终显示，极淡）：让白色/浅色豆在白底上也有边界
-  drawBeadBorders(c, patOX, patOY, M, M, cell, '#F0F0F0');
+  drawBeadTexture(c, patOX, patOY, M, M, cell);
 
   // 网格线：每 1 格细线(极浅，作辅助参考) + 每 10 格计数线(深色加粗，作分组标识，醒目清晰)
   if (opts.gridlines) {
@@ -440,7 +612,7 @@ function buildExportCanvas(opts) {
 
   // 坐标数字
   if (opts.coords) {
-    c.fillStyle = '#999'; c.font = `${Math.max(7, cell * 0.35)}px monospace`;
+    c.fillStyle = '#666'; c.font = `bold ${Math.max(8, Math.round(cell * 0.5))}px monospace`;
     c.textAlign = 'center'; c.textBaseline = 'top';
     for (let i = 0; i < M; i++) c.fillText(i.toString(), patOX + i * cell + cell / 2, patOY + M * cell + 2);
     c.textAlign = 'right'; c.textBaseline = 'middle';
@@ -456,7 +628,7 @@ function buildExportCanvas(opts) {
     c.beginPath(); c.moveTo(0, palTop); c.lineTo(W, palTop); c.stroke();
 
     // "用料详情" 标签 — v90 放大
-    c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(18 * k)}px sans-serif`;
+    c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(22 * k)}px sans-serif`;
     c.textAlign = 'left'; c.textBaseline = 'top';
     c.fillText('用料详情', palPad, palTop + 4);
 
@@ -473,17 +645,17 @@ function buildExportCanvas(opts) {
       const swatchSize = Math.round(28 * k);
       const sx = gx + 2;
       const sy = gy + (palCellH - swatchSize) / 2;
-      c.fillStyle = PALETTE_BY_ID[id].hex;
+      c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
       roundRect(c, sx, sy, swatchSize, swatchSize, Math.max(3, 3 * k));
       c.fill();
 
       // 色号（粗体、加大）— v90 放大
-      c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(20 * k)}px sans-serif`;
+      c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(26 * k)}px sans-serif`;
       c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText(id, sx + swatchSize + 6, sy + swatchSize / 2 - 8 * k);
 
       // 数量 — v90 放大
-      c.fillStyle = '#6B6675'; c.font = `${Math.round(16 * k)}px sans-serif`;
+      c.fillStyle = '#6B6675'; c.font = `${Math.round(18 * k)}px sans-serif`;
       c.fillText(cnt.toString(), sx + swatchSize + 6, sy + swatchSize / 2 + 9 * k);
     }
   }
@@ -513,7 +685,7 @@ function buildExportCanvas(opts) {
     for (const s of seriesOrder) {
       listTotalH += listSeriesGap + Math.ceil(bySeries[s].items.length / 2) * listLineH;
     }
-    listTotalH += listPad * 3;
+    listTotalH += palPad * 3;
 
     const listTop = titleH + patternH + gap + palH;
     const finalH = listTop + listTotalH;
@@ -555,7 +727,7 @@ function buildExportCanvas(opts) {
           const item = items[idx];
           const cx = col === 0 ? palPad + 6 : palPad + listColW + 6;
           const sw = Math.round(20 * k);
-          ctx2.fillStyle = PALETTE_BY_ID[item.id].hex;
+          ctx2.fillStyle = (PALETTE_BY_ID[item.id] || {}).hex || '#cccccc';
           ctx2.fillRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
           ctx2.strokeStyle = '#E2D8F2'; ctx2.lineWidth = 0.5;
           ctx2.strokeRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
@@ -655,8 +827,7 @@ function buildExportSVG(opts) {
   const patOY = titleH + pad;
 
   const p = [];
-  p.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Noto Sans SC, PingFang SC, Microsoft YaHei, sans-serif">');
-  p.push('<style>@import url("https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&amp;family=Ma+Shan+Zheng&amp;display=swap");</style>');
+  p.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="system-ui, PingFang SC, Microsoft YaHei, sans-serif">');
   // v136: 白底背景矩形（v128 透明底在手机/部分查看器中显示为黑色）
   p.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="#FFFFFF"/>');
   // 标题栏：品牌名 + 豆板/模式/规格/总豆数/总色卡
@@ -678,7 +849,7 @@ function buildExportSVG(opts) {
         var sy = dr.srcMinY + (gy - dr.offY);
         var tid = state.grid[sy][sx];
         var tbg = state.bgMask && state.bgMask[sy][sx];
-        return { id: tid, bg: tbg, hex: (tid && !tbg) ? PALETTE_BY_ID[tid].hex : '#FFFFFF' };
+        var _pp = (tid && !tbg && PALETTE_BY_ID[tid]) ? PALETTE_BY_ID[tid] : null; return { id: tid, bg: tbg, hex: _pp ? _pp.hex : '#FFFFFF' };
       }
       return { id: null, bg: false, hex: '#FFFFFF' };
     };
@@ -769,7 +940,8 @@ function buildExportSVG(opts) {
       const gy = gridStartY + palPad + row * entryH;
       const sw = 78;                   // v138 色块大小3倍(26→78)
       const sx = gx, sy = gy + (entryH - sw) / 2;
-      p.push('<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sw + '" rx="3" fill="' + PALETTE_BY_ID[id].hex + '" stroke="#E2D8F2" stroke-width="0.5"/>');
+      var _svgh = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
+      p.push('<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sw + '" rx="3" fill="' + _svgh + '" stroke="#E2D8F2" stroke-width="0.5"/>');
       const tx = sx + sw + 7;
       p.push('<text x="' + tx + '" y="' + (gy + entryH / 2 - 14) + '" font-size="54" font-weight="700" fill="#211E2B" dominant-baseline="middle">' + id + '</text>');   // v138 色号3倍(18→54)
       p.push('<text x="' + tx + '" y="' + (gy + entryH / 2 + 26) + '" font-size="45" fill="#6B6675" dominant-baseline="middle">' + cnt + '</text>');   // v138 数量3倍(15→45)
@@ -819,7 +991,8 @@ function buildExportSVG(opts) {
           if (idx >= items.length) break;
           const item = items[idx];
           const cx = col === 0 ? palPad + 6 : palPad + svgColW + 6;
-          p.push('<rect x="' + cx + '" y="' + (syPos + (svgLineH - 24) / 2) + '" width="24" height="24" fill="' + PALETTE_BY_ID[item.id].hex + '" stroke="#E2D8F2" stroke-width="0.5"/>');
+          var _svgh2 = (PALETTE_BY_ID[item.id] || {}).hex || '#cccccc';
+          p.push('<rect x="' + cx + '" y="' + (syPos + (svgLineH - 24) / 2) + '" width="24" height="24" fill="' + _svgh2 + '" stroke="#E2D8F2" stroke-width="0.5"/>');
           p.push('<text x="' + (cx + 34) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" font-weight="700" font-family="monospace" fill="#211E2B" dominant-baseline="middle">' + item.id + '</text>');
           p.push('<text x="' + (cx + 90) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" fill="#6B6675" dominant-baseline="middle">' + item.cnt.toLocaleString() + ' 颗</text>');
         }
@@ -857,7 +1030,7 @@ function buildExportSVG(opts) {
 
   // 水印：斜向平铺 SVG pattern
   // If采购清单 was already added, it handled watermark + </svg> + return
-  var _hasList = (showStats && sorted.length > 0);
+  var _hasList = (showStats && sorted.length > 0 && opts.bom !== false);
   if (_hasList) {
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + p.join('');
   }
@@ -886,7 +1059,7 @@ function downloadSVG(svgStr, name) {
       c.height = (im.naturalHeight || 1000) * SCALE;
       c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
       URL.revokeObjectURL(url);
-      genPNGSource(c, src => showMobileSaveOverlay(src));
+      genPNGSource(c, src => showMobileSaveOverlay(src, name));
     };
     im.onerror = () => {
       URL.revokeObjectURL(url);
@@ -895,12 +1068,27 @@ function downloadSVG(svgStr, name) {
     im.src = url;
     return;
   }
+  // 统一走保存对话框（不再区分顶层/iframe）——桌面顶层静默 <a download> 会让用户以为没反应
   const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  // SVG 在 <img> 里能渲染；下载按钮会下载 .svg 文件
+  tryRealDownload(blob, name);
+  showMobileSaveOverlay(blob, name);
+}
+
+/** 导出图拼豆质感：每颗豆加圆角描边，呈现珠子轮廓（仅导出使用，不影响实时预览渲染） */
+function drawBeadTexture(c, ox, oy, cols, rows, cell) {
+  c.save();
+  c.strokeStyle = 'rgba(0,0,0,0.12)';
+  c.lineWidth = Math.max(1, cell * 0.045);
+  const r = Math.max(1, cell * 0.14);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const px = ox + x * cell, py = oy + y * cell;
+      roundRect(c, px + 0.5, py + 0.5, cell - 1, cell - 1, r);
+      c.stroke();
+    }
+  }
+  c.restore();
 }
 
 /** 圆角矩形辅助 */
@@ -920,5 +1108,242 @@ function escapeXml(s) {
 function isLight(hex) {
   const { r, g, b } = hexToRgb(hex);
   return (0.299 * r + 0.587 * g + 0.114 * b) > 150;
+}
+
+/* B6: 分块多板导出 —— 大图按 blockSize×blockSize 切分，每块生成独立「对照图 + 色号清单」，
+ * 按原图块矩阵网格排成一张总图。拼大图时按块逐板烫，不翻车。独立函数，不改动 buildExportCanvas。 */
+function buildBlockExportCanvas(opts) {
+  const N = state.N;
+  if (!state.displayRect || !state.grid) return null;
+  const dr = state.displayRect;
+  const M = dr.M;
+  const MAX_CANVAS = 4000, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
+  const HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
+  const bs = (opts && opts.blockSize) ? opts.blockSize : 29;
+  const cols = Math.ceil(M / bs), rows = Math.ceil(M / bs);
+  const totalBlocks = cols * rows;
+  const pad = 16, titleH = 64, labelH = 30, palEntryW = 150, palCellH = 34, palPad = 10, gap = 14;
+  // ② 跨板对齐：拼装示意图（数字=块编号，按此网格顺序对齐拼合）
+  const cellA = 22, ovW = cols * cellA, ovH = rows * cellA, assembleH = 36 + ovH;
+
+  function blockColors(bx, by) {
+    const counts = {}; let total = 0;
+    const r0 = by * bs, r1 = Math.min((by + 1) * bs, M);
+    const c0 = bx * bs, c1 = Math.min((by + 1) * bs, M);
+    for (let y = r0; y < r1; y++) for (let x = c0; x < c1; x++) {
+      const id = state.grid[y][x];
+      if (id && !(state.bgMask && state.bgMask[y][x])) { counts[id] = (counts[id] || 0) + 1; total++; }
+    }
+    return { counts: counts, total: total };
+  }
+  function bpc(gx, gy) {
+    if (gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
+      var sx = dr.srcMinX + (gx - dr.offX);
+      var sy = dr.srcMinY + (gy - dr.offY);
+      var tid = state.grid[sy][sx];
+      var tbg = state.bgMask && state.bgMask[sy][sx];
+      var _pp = (tid && !tbg && PALETTE_BY_ID[tid]) ? PALETTE_BY_ID[tid] : null; return { id: tid, bg: tbg, hex: _pp ? _pp.hex : '#FFFFFF' };
+    }
+    return { id: null, bg: false, hex: '#FFFFFF' };
+  }
+
+  let cellB = isWeixin() ? 10 : (isMobileDevice() ? 8 : 16);
+  let blockW, blockH, palH, maxPalRows;
+  function layout(cb) {
+    const fullPatW = bs * cb, fullPatH = bs * cb;
+    let mpr = 1;
+    for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+      const cc = blockColors(bx, by);
+      const ids = Object.keys(cc.counts);
+      const palW = fullPatW - palPad * 2;
+      const pcols = Math.max(1, Math.floor(palW / palEntryW));
+      const pr = ids.length ? Math.ceil(ids.length / pcols) : 0;
+      if (pr > mpr) mpr = pr;
+    }
+    const ph = labelH + palPad + mpr * palCellH + palPad;
+    return { blockW: fullPatW + pad * 2, blockH: titleH + fullPatH + ph + pad, palH: ph, maxPalRows: mpr };
+  }
+  let _guard = 0;
+  while (_guard < 40) {
+    const L = layout(cellB);
+    if (rows * L.blockH + (rows + 1) * gap + titleH + assembleH <= HARD) { blockW = L.blockW; blockH = L.blockH; palH = L.palH; maxPalRows = L.maxPalRows; break; }
+    cellB = Math.max(4, cellB - 1); _guard++;
+    if (cellB <= 4) { const L2 = layout(4); blockW = L2.blockW; blockH = L2.blockH; palH = L2.palH; maxPalRows = L2.maxPalRows; break; }
+  }
+
+  const totalW = cols * blockW + (cols + 1) * gap;
+  const totalH = rows * blockH + (rows + 1) * gap + titleH + assembleH;
+  const cv = document.createElement('canvas'); cv.width = totalW; cv.height = totalH;
+  const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+  c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, totalW, totalH);
+  c.fillStyle = '#211E2B'; c.font = 'bold 28px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText('狐狸爱拼豆 · 分块多板 (' + M + '×' + M + ')  共 ' + totalBlocks + ' 块  板尺寸 ' + bs + '×' + bs, pad, 8);
+  // 拼装示意图（对齐顺序参考）
+  c.fillStyle = '#6A4C93'; c.font = 'bold 15px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+  c.fillText('拼装示意图（数字=块编号，按此网格顺序对齐拼合；每块四角 + 为打印定位点）', pad, titleH + 8);
+  for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+    const bnum = by * cols + bx + 1;
+    const cx = pad + bx * cellA, cy = titleH + 30 + by * cellA;
+    c.fillStyle = '#F3EEFB'; c.fillRect(cx, cy, cellA - 2, cellA - 2);
+    c.strokeStyle = '#C9B8E8'; c.lineWidth = 1; c.strokeRect(cx + 0.5, cy + 0.5, cellA - 3, cellA - 3);
+    c.fillStyle = '#211E2B'; c.font = 'bold 12px monospace'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(bnum), cx + (cellA - 2) / 2, cy + (cellA - 2) / 2);
+  }
+  c.textAlign = 'left'; c.textBaseline = 'top';
+
+  for (let by = 0; by < rows; by++) for (let bx = 0; bx < cols; bx++) {
+    const ox = gap + bx * (blockW + gap);
+    const oy = titleH + assembleH + gap + by * (blockH + gap);
+    const r0 = by * bs, r1 = Math.min((by + 1) * bs, M);
+    const c0 = bx * bs, c1 = Math.min((by + 1) * bs, M);
+    const blockNum = by * cols + bx + 1;
+    const topN = by > 0 ? (by - 1) * cols + bx + 1 : 0;
+    const botN = by < rows - 1 ? (by + 1) * cols + bx + 1 : 0;
+    const leftN = bx > 0 ? by * cols + (bx - 1) + 1 : 0;
+    const rightN = bx < cols - 1 ? by * cols + (bx + 1) + 1 : 0;
+    c.fillStyle = '#FFFFFF'; c.fillRect(ox, oy, blockW, blockH);
+    c.strokeStyle = '#E2D8F2'; c.lineWidth = 1; c.strokeRect(ox + 0.5, oy + 0.5, blockW - 1, blockH - 1);
+    c.fillStyle = '#6A4C93'; c.font = 'bold 18px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('第 ' + blockNum + ' 块 (行' + (r0 + 1) + '-' + r1 + '/列' + (c0 + 1) + '-' + c1 + ')', ox + pad, oy + 10);
+    const dirs = [];
+    if (topN) dirs.push('↑' + topN);
+    if (botN) dirs.push('↓' + botN);
+    if (leftN) dirs.push('←' + leftN);
+    if (rightN) dirs.push('→' + rightN);
+    if (dirs.length) {
+      c.fillStyle = '#9A8FB5'; c.font = '13px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+      c.fillText('邻接 ' + dirs.join('  '), ox + pad, oy + 36);
+    }
+    const fullPatW = bs * cellB, fullPatH = bs * cellB;
+    const patOX = ox + pad + (fullPatW - (c1 - c0) * cellB) / 2;
+    const patOY = oy + titleH + (fullPatH - (r1 - r0) * cellB) / 2;
+    for (let gy2 = r0; gy2 < r1; gy2++) for (let gx2 = c0; gx2 < c1; gx2++) {
+      const info = bpc(gx2, gy2);
+      if (!info.id || info.bg) continue;
+      const px = state.mirror ? patOX + (c1 - 1 - gx2) * cellB : patOX + (gx2 - c0) * cellB;
+      const py = patOY + (gy2 - r0) * cellB;
+      c.fillStyle = info.hex; c.fillRect(px, py, cellB, cellB);
+    }
+    if (cellB >= 6) drawBeadTexture(c, patOX, patOY, c1 - c0, r1 - r0, cellB);
+    const cc2 = blockColors(bx, by);
+    const ids = Object.keys(cc2.counts).sort();
+    const palW = fullPatW - palPad * 2;
+    const pcols = Math.max(1, Math.floor(palW / palEntryW));
+    const palTop = oy + titleH + fullPatH + palPad;
+    c.fillStyle = '#211E2B'; c.font = 'bold 14px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'top';
+    c.fillText('用料 ' + ids.length + ' 色 / ' + cc2.total + ' 颗', ox + pad, palTop);
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      const col = i % pcols, row = Math.floor(i / pcols);
+      const gx = ox + pad + palPad + col * palEntryW;
+      const gy = palTop + labelH + row * palCellH;
+      c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc'; c.fillRect(gx, gy, 18, 18);
+      c.fillStyle = '#211E2B'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(id, gx + 22, gy + 9);
+      c.fillStyle = '#6B6675'; c.font = '12px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+      c.fillText(String(cc2.counts[id]), gx + 56, gy + 9);
+    }
+    // 角标 + 对齐定位点（四角，便于打印后对齐拼合）
+    c.strokeStyle = '#B79BE8'; c.lineWidth = 1.5;
+    const _m = 7;
+    const _corners = [[ox, oy], [ox + blockW, oy], [ox, oy + blockH], [ox + blockW, oy + blockH]];
+    for (let _k = 0; _k < _corners.length; _k++) {
+      const _px = _corners[_k][0], _py = _corners[_k][1];
+      c.beginPath(); c.moveTo(_px - _m, _py); c.lineTo(_px + _m, _py);
+      c.moveTo(_px, _py - _m); c.lineTo(_px, _py + _m); c.stroke();
+    }
+  }
+  return cv;
+}
+
+/* ② 分块多板导出补 PDF —— 复用 buildBlockExportCanvas 的拼图，按固定页宽切片成多页，
+   每页 JPEG 内嵌（/DCTDecode），合成单文件 PDF。零依赖、不破单文件铁律。返回 Blob，失败 null。 */
+function sliceCanvasToPages(cv, pageW) {
+  const pages = [];
+  const ratio = cv.width / pageW;
+  const fullH = Math.round(cv.height / ratio);
+  let y = 0;
+  while (y < fullH) {
+    const ph = Math.min(fullH - y, 16383);
+    const pc = document.createElement('canvas');
+    pc.width = pageW; pc.height = ph;
+    const pctx = pc.getContext('2d');
+    pctx.imageSmoothingEnabled = false;
+    const sy = Math.round(y * ratio);
+    const sh = Math.round(ph * ratio);
+    pctx.drawImage(cv, 0, sy, cv.width, sh, 0, 0, pageW, ph);
+    pages.push(pc);
+    y += ph;
+  }
+  return pages;
+}
+function _strToBytes(s) {
+  const a = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 0xff;
+  return a;
+}
+function _dataURLtoBytes(dataURL) {
+  const b64 = dataURL.split(',')[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+function _concatBytes() {
+  let total = 0;
+  for (let i = 0; i < arguments.length; i++) total += arguments[i].length;
+  const out = new Uint8Array(total); let off = 0;
+  for (let j = 0; j < arguments.length; j++) { out.set(arguments[j], off); off += arguments[j].length; }
+  return out;
+}
+function _pad10(n) { let s = '' + n; while (s.length < 10) s = '0' + s; return s; }
+function _bytesToBlob(parts, type) {
+  let total = 0; for (let i = 0; i < parts.length; i++) total += parts[i].length;
+  const buf = new Uint8Array(total); let off = 0;
+  for (let j = 0; j < parts.length; j++) { buf.set(parts[j], off); off += parts[j].length; }
+  return new Blob([buf], { type: type });
+}
+function exportBlocksPDF(opts) {
+  const composite = buildBlockExportCanvas(opts);
+  if (!composite) return null;
+  const pageW = Math.min(composite.width, 1400);
+  const pages = sliceCanvasToPages(composite, pageW);
+  const n = pages.length;
+  const jpegs = [];
+  for (let i = 0; i < n; i++) jpegs.push(_dataURLtoBytes(pages[i].toDataURL('image/jpeg', 0.92)));
+  const objs = [];
+  const setObj = (id, bytes) => { objs[id] = bytes; };
+  setObj(1, _strToBytes('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n'));
+  const kids = [];
+  for (let k = 0; k < n; k++) kids.push((3 + k * 3) + ' 0 R');
+  setObj(2, _strToBytes('2 0 obj\n<< /Type /Pages /Kids [' + kids.join(' ') + '] /Count ' + n + ' >>\nendobj\n'));
+  for (let p = 0; p < n; p++) {
+    const pageId = 3 + p * 3, imgId = 4 + p * 3, conId = 5 + p * 3;
+    const pw = pages[p].width, ph = pages[p].height;
+    setObj(pageId, _strToBytes(pageId + ' 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + pw + ' ' + ph + '] /Resources << /XObject << /Im0 ' + imgId + ' 0 R >> >> /Contents ' + conId + ' 0 R >>\nendobj\n'));
+    const imgDict = imgId + ' 0 obj\n<< /Type /XObject /Subtype /Image /Width ' + pw + ' /Height ' + ph + ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + jpegs[p].length + ' >>\nstream\n';
+    setObj(imgId, _concatBytes(_strToBytes(imgDict), jpegs[p], _strToBytes('\nendstream\nendobj\n')));
+    const content = 'q ' + pw + ' 0 0 ' + ph + ' 0 0 cm /Im0 Do Q\n';
+    setObj(conId, _strToBytes(conId + ' 0 obj\n<< /Length ' + content.length + ' >>\nstream\n' + content + 'endstream\nendobj\n'));
+  }
+  const totalObjs = objs.length;
+  let offset = 9; // "%PDF-1.3\n"
+  const offsets = [];
+  for (let id = 1; id < totalObjs; id++) { if (objs[id]) { offsets[id] = offset; offset += objs[id].length; } }
+  let xref = 'xref\n0 ' + totalObjs + '\n0000000000 65535 f \n';
+  for (let id2 = 1; id2 < totalObjs; id2++) {
+    xref += objs[id2] ? (_pad10(offsets[id2]) + ' 00000 n \n') : '0000000000 65535 f \n';
+  }
+  const trailer = 'trailer\n<< /Size ' + totalObjs + ' /Root 1 0 R >>\nstartxref\n' + offset + '\n%%EOF\n';
+  const all = [_strToBytes('%PDF-1.3\n')];
+  for (let id3 = 1; id3 < totalObjs; id3++) if (objs[id3]) all.push(objs[id3]);
+  all.push(_strToBytes(xref + trailer));
+  return _bytesToBlob(all, 'application/pdf');
+}
+function downloadBlob(blob, name) {
+  // 统一走保存对话框：顶层窗口点「下载」真实落文件；沙箱/iframe 用「复制图片」剪贴板兜底。
+  // 不再做静默 <a download>——避免顶层环境下用户点了却看不到任何反馈（文件默默进 Downloads）。
+  tryRealDownload(blob, name);
+  showMobileSaveOverlay(blob, name);
 }
 

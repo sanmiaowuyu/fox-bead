@@ -33,13 +33,15 @@ function drawBeadBorders(c, ox, oy, cols, rows, cell, color) {
 /** 白底模式下，极浅色豆（如 A1/H1/H2）和白底同色会看不见。
  *  这里不改变色号，只把渲染填充色稍微加深为 #F5F5F5，确保电子版图纸可见。
  *  实际拼豆仍按原色号（色板/清单/导出色号）统计，不受影响。 */
+function safeHex(id) {
+  return (id && PALETTE_BY_ID[id]) ? PALETTE_BY_ID[id].hex : '#cccccc';
+}
 function getVisibleFill(id) {
-  if (!id || state.bgMode !== 'white') return PALETTE_BY_ID[id].hex;
+  if (!id || state.bgMode !== 'white') return safeHex(id);
   const lab = LAB_BY_ID[id];
-  if (!lab) return PALETTE_BY_ID[id].hex;
-  // L 接近 1.0 的极浅色在白底上会消失，渲染时统一用浅灰显示
+  if (!lab) return safeHex(id);
   if (lab.L > 0.92) return '#F5F5F5';
-  return PALETTE_BY_ID[id].hex;
+  return safeHex(id);
 }
 
 // v128: 透明背景指示——画浅灰棋盘格表示「无豆/背景格」，与实色豆、白底明显区分。
@@ -76,8 +78,8 @@ function renderCanvas() {
   const marginSide = showCoords ? Math.round(fsCss * maxDigits * 0.62 + 8) : 0;
   const marginLeft = marginSide, marginBottom = marginSide;
 
-  // backing store：按 DPR 放大，确保每格至少 1 物理像素
-  const px = Math.max(M, Math.round(cssSize * dpr));
+  // backing store：按 DPR 放大，确保每格至少 1 物理像素。上限 8192 防大 N+高缩放+高 DPR 超浏览器 canvas 硬限
+  const px = Math.min(8192, Math.max(M, Math.round(cssSize * dpr)));
   const marginLeftPx = Math.round(marginLeft * dpr);
   const marginBottomPx = Math.round(marginBottom * dpr);
 
@@ -147,7 +149,7 @@ function renderCanvas() {
       if (id == null || isBg) {
         drawEmptyCell(ctx, pxX, pyY, cell);
       } else {
-        ctx.fillStyle = PALETTE_BY_ID[id].hex;
+        ctx.fillStyle = safeHex(id);
         ctx.fillRect(pxX, pyY, cell, cell);  // 整数尺寸 ✓ 零间隙 ✓
       }
     }
@@ -218,7 +220,7 @@ function patchMainCell(gy, gx, colorId) {
   if (colorId == null || isBg) {
     drawEmptyCell(ctx, px, py, g.cell);
   } else {
-    ctx.fillStyle = PALETTE_BY_ID[colorId].hex;
+    ctx.fillStyle = safeHex(colorId);
     ctx.fillRect(px, py, g.cell, g.cell);
   }
   // 补豆子间隔线

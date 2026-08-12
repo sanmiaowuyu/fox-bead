@@ -1,5 +1,5 @@
 // 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）
-// 版本: N/A
+// 版本: 1
 
 /* ---------- 2. 颜色空间工具 ---------- */
 function hexToRgb(hex) {
@@ -256,10 +256,21 @@ const MARD_PALETTE = [
 function fromEntries(entries) { const obj = {}; for (let i = 0; i < entries.length; i++) { obj[entries[i][0]] = entries[i][1]; } return obj; }
 
 const BRAND_LABEL = 'Mard';
-const PALETTE = MARD_PALETTE;
-const PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
-const PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
-const LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// ⑥ 多色板切换：PALETTE / PALETTE_BY_ID / PALETTE_LAB / LAB_BY_ID 改为可变，
+// setActivePalette() 可整体切换为其他品牌色板（MARD_PALETTE 本身永不被改动，满足铁律 C4）。
+var PALETTE = MARD_PALETTE;
+var PALETTE_BY_ID = fromEntries(PALETTE.map(c => [c.id, c]));
+const MARD_PALETTE_BY_ID = PALETTE_BY_ID; // 冻结的 Mard 映射，豆仓库存/补货始终按 Mard 实物统计
+var PALETTE_LAB = PALETTE.map(function(c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+var LAB_BY_ID = fromEntries(PALETTE_LAB.map(c => [c.id, c.lab])); // v123: 描边边缘检测用，避免逐格 find
+// 切换活动色板：list 为 [{id,name,hex}]，重建所有索引并刷新背景色号
+function setActivePalette(list) {
+  PALETTE = list;
+  PALETTE_BY_ID = fromEntries(list.map(function (c) { return [c.id, c]; }));
+  PALETTE_LAB = list.map(function (c) { var o = { id: c.id, name: c.name, hex: c.hex }; o.lab = rgbToOklab(hexToRgb(c.hex)); return o; });
+  LAB_BY_ID = fromEntries(PALETTE_LAB.map(function (c) { return [c.id, c.lab]; }));
+  updateBgIds();
+}
 // 背景填充专用：最接近纯黑 / 纯白的调色板色号
 let BG_BLACK_ID = null, BG_WHITE_ID = null;
 function updateBgIds() {
@@ -311,7 +322,6 @@ const state = {
   showGrid: true,
   bgMode: 'white',       // 一键切换背景：'black' 黑底 / 'white' 白底（默认白底）
   removeBg: false,        // 自动去背景：默认关，整张图都参与拼豆（白色主体正常标色号）；纯色背景图才手动开
-  brighten: false,        // 提亮一档：默认关，开后每个色号替换成同系列更亮一档的真实色号
   outline: { on: false, strength: 50, colorId: 'H7', thickness: 1 }, // v123: 像素描边（后处理）：在颜色边界描轮廓线，呈现像素插画线条感。默认关。thickness=描边宽度(格数)。
   paletteView: 'grid',   // 右侧色板清单视图：'grid' 紧凑色块 / 'list' 行列表
   showCoords: true,      // 画布预览是否显示坐标数字（左侧/底部轴）
@@ -330,14 +340,12 @@ const state = {
   prep: { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 }, // 待烘焙的预处理参数
   prepBase: null,        // 图片处理面板打开时的基准图（用于取消/重置，不修改则回退到此）
   userCrop: null,        // 预处理裁切框 {sx,sy,sw,sh}（基于旋转/翻转后的预览坐标，烘焙后清空）
-  userMask: null,        // 手动去背景遮罩 N×N：'keep'(保留主体) | 'erase'(擦除背景) | null
-  brushMode: 'erase',    // 去背景笔刷类型：'erase' 擦除背景 / 'keep' 保留主体
-  brushSize: 14,         // 笔刷半径（源像素）
   // 豆仓库存（图片处理模块同级能力）：按色号记录手头豆数，对比当前图纸用量算缺口
   inventory: {},         // {colorId: stockCount} 豆仓库存，持久化 localStorage
   inventoryOpen: false,  // 豆仓弹窗是否打开
   inventoryView: 'used', // 'used' 仅列当前图纸用到的色 / 'all' 列全部 221 色
 };
+
 /* ---------- image-prep.js：图片预处理纯函数（零 DOM，web / 小程序共用） ---------- */
 /* 仅做像素级亮度/对比度/饱和度调整。旋转/翻转/裁剪的栅格化在网页端 pipeline.js（canvas）完成，
    不进入小程序构建（小程序由 build.js §7 仅打包纯模块）。本文件不含任何 document/window/canvas 引用。
@@ -368,16 +376,177 @@ function adjustImageData(data, w, h, opt) {
     r = lum + (r - lum) * s;
     g = lum + (g - lum) * s;
     bl = lum + (bl - lum) * s;
-    data[i] = clamp255(r);
-    data[i + 1] = clamp255(g);
-    data[i + 2] = clamp255(bl);
+  data[i] = clamp255(r);
+  data[i + 1] = clamp255(g);
+  data[i + 2] = clamp255(bl);
   }
   return data;
+}
+
+/* 局部 Oklab 中位数（不依赖 pipeline-core 的 medianLab 加载顺序，避免跨文件顺序耦合） */
+function _segMedianLab(labs) {
+  if (!labs || !labs.length) return null;
+  var n = labs.length;
+  var Ls = labs.map(function (l) { return l.L; }).sort(function (a, b) { return a - b; });
+  var as = labs.map(function (l) { return l.a; }).sort(function (a, b) { return a - b; });
+  var bs = labs.map(function (l) { return l.b; }).sort(function (a, b) { return a - b; });
+  var mid = Math.floor(n / 2);
+  var pick = function (arr) { return n % 2 ? arr[mid] : (arr[mid - 1] + arr[mid]) / 2; };
+  return { L: pick(Ls), a: pick(as), b: pick(bs) };
+}
+
+// 边缘羽化（抗锯齿软边）：对主体前景边缘像素按相邻背景数降低 alpha，消除硬锯齿/白边。
+// 纯函数、零 DOM、兼容旧移动端（无 ?./spread）。返回同一 data（原地修改）。
+function featherAlpha(data, w, h, strength) {
+  if (strength == null) strength = 0.5;   // 默认=原固定强度（向后兼容）
+  if (strength <= 0) return data;         // 0 = 不羽化（硬边）
+  var k = strength * 2;                   // 0..2（1=标准 0.7/0.45/0.25，2=强，<1 更硬）
+  var has = new Uint8Array(w * h);
+  for (var i = 0; i < w * h; i++) has[i] = data[i * 4 + 3] >= 128 ? 1 : 0;
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      var p = y * w + x;
+      if (has[p] !== 1) continue;
+      var nBg = 0;
+      if (x > 0 && !has[p - 1]) nBg++;
+      if (x < w - 1 && !has[p + 1]) nBg++;
+      if (y > 0 && !has[p - w]) nBg++;
+      if (y < h - 1 && !has[p + w]) nBg++;
+      if (nBg > 0) {
+        var base = nBg === 1 ? 0.7 : (nBg === 2 ? 0.45 : 0.25);
+        var r = Math.pow(base, k);        // k=1→标准；k>1 更软；k<1 更硬
+        data[p * 4 + 3] = Math.round(data[p * 4 + 3] * r);
+      }
+    }
+  }
+  return data;
+}
+
+// 给透明底主体图四周加透明 padding 并居中（拼豆时不贴边）。纯函数、零 DOM、兼容旧移动端。
+// 返回 { data: Uint8ClampedArray, w, h }。pad<=0 原样返回。
+function padAlphaImage(data, w, h, pad) {
+  if (!pad || pad < 0) return { data: data, w: w, h: h };
+  var nw = w + pad * 2, nh = h + pad * 2;
+  var nd = new Uint8ClampedArray(nw * nh * 4);
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      var si = (y * w + x) * 4;
+      var di = ((y + pad) * nw + (x + pad)) * 4;
+      nd[di] = data[si]; nd[di + 1] = data[si + 1]; nd[di + 2] = data[si + 2]; nd[di + 3] = data[si + 3];
+    }
+  }
+  return { data: nd, w: nw, h: nh };
+}
+
+// 原图级多主体抠图（零 DOM，web / 小程序共用）：去背景 + 连通分量分离多个主体。
+// imgData: { data: Uint8ClampedArray, width, height }（ImageData 形状）
+// 返回 [{ data: Uint8ClampedArray, x, y, w, h, area }]，每张为透明背景的独立主体图（按面积降序）。
+// 无模型：背景用边界 Oklab 中位数估计，前景用 4-连通分量分离；多主体 = 多个大连通分量。
+// opts: { bgT?: number（背景距离阈值覆盖）, minAreaRatio?: number（最小主体占前景比例，默认 0.015） }
+function segmentSubjects(imgData, opts) {
+  opts = opts || {};
+  var w = imgData.width, h = imgData.height;
+  var data = imgData.data;
+  // 1) 边界像素估计背景色（Oklab 中位数，稳健于渐变/浅水印）
+  var edge = [];
+  function pushEdge(px, py) {
+    if (px < 0 || py < 0 || px >= w || py >= h) return;
+    var i = (py * w + px) * 4;
+    if (data[i + 3] < 128) return;
+    edge.push(rgbToOklab({ r: data[i], g: data[i + 1], b: data[i + 2] }));
+  }
+  for (var x = 0; x < w; x++) { pushEdge(x, 0); pushEdge(x, h - 1); }
+  for (var y = 0; y < h; y++) { pushEdge(0, y); pushEdge(w - 1, y); }
+  if (!edge.length) return [];
+  var bgLab = _segMedianLab(edge);
+  // 背景亮度方差：纯色背景收紧阈值，杂色背景放宽
+  var mL = 0; for (var k = 0; k < edge.length; k++) mL += edge[k].L; mL /= edge.length;
+  var vL = 0; for (var k2 = 0; k2 < edge.length; k2++) vL += (edge[k2].L - mL) * (edge[k2].L - mL); vL = Math.sqrt(vL / edge.length);
+  var BG_T;
+  if (bgLab.L > 0.88 || bgLab.L < 0.18) BG_T = vL < 0.05 ? 0.07 : 0.06;
+  else if (vL < 0.05) BG_T = 0.13;
+  else if (vL < 0.10) BG_T = 0.11;
+  else BG_T = 0.09;
+  if (opts.bgT) BG_T = opts.bgT;
+  // 2) 逐像素前景/背景判定（背景 → 透明）
+  var isFg = new Uint8Array(w * h);
+  var fgCount = 0;
+  for (var yy = 0; yy < h; yy++) {
+    for (var xx = 0; xx < w; xx++) {
+      var idx = (yy * w + xx) * 4;
+      if (data[idx + 3] < 128) { isFg[yy * w + xx] = 0; continue; }
+      // ④ 保护笔刷：用户标记为强制前景的像素，自动抠图绝不误删（解决白猫脸/白衣物被当背景）
+      if (opts.protect && opts.protect[yy * w + xx]) { isFg[yy * w + xx] = 1; fgCount++; continue; }
+      var lab = rgbToOklab({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+      if (oklabDist(lab, bgLab) < BG_T) isFg[yy * w + xx] = 0;
+      else { isFg[yy * w + xx] = 1; fgCount++; }
+    }
+  }
+  if (fgCount === 0) return [];
+  // 3) 4-连通分量（每个大连通分量 = 一个主体）
+  var label = new Int32Array(w * h); label.fill(-1);
+  var comps = [];
+  var stack = [];
+  var curLabel = 0;
+  function tryNb(nb) {
+    if (isFg[nb] === 1 && label[nb] === -1) { label[nb] = curLabel; stack.push(nb); }
+  }
+  for (var p = 0; p < w * h; p++) {
+    if (isFg[p] !== 1 || label[p] !== -1) continue;
+    var comp = { pixels: [], minX: w, minY: h, maxX: -1, maxY: -1, area: 0 };
+    stack.length = 0; stack.push(p); label[p] = curLabel;
+    while (stack.length) {
+      var cur = stack.pop();
+      var cy = (cur / w) | 0, cx = cur % w;
+      comp.pixels.push(cur);
+      if (cx < comp.minX) comp.minX = cx;
+      if (cx > comp.maxX) comp.maxX = cx;
+      if (cy < comp.minY) comp.minY = cy;
+      if (cy > comp.maxY) comp.maxY = cy;
+      if (cx > 0) tryNb(cur - 1);
+      if (cx < w - 1) tryNb(cur + 1);
+      if (cy > 0) tryNb(cur - w);
+      if (cy < h - 1) tryNb(cur + w);
+    }
+    comp.area = comp.pixels.length;
+    comps.push(comp);
+    curLabel++;
+  }
+  // 4) 过滤小噪点（面积 < 前景比例阈值视为杂色）
+  var minArea = Math.max(64, Math.round(fgCount * 0.015));
+  if (opts.minAreaRatio) minArea = Math.max(1, Math.round(fgCount * opts.minAreaRatio));
+  var keep = [];
+  for (var ci = 0; ci < comps.length; ci++) if (comps[ci].area >= minArea) keep.push(comps[ci]);
+  if (!keep.length && comps.length) {
+    var minC = comps[0];
+    for (var cj = 1; cj < comps.length; cj++) if (comps[cj].area < minC.area) minC = comps[cj];
+    minArea = minC.area;
+    for (var ck = 0; ck < comps.length; ck++) if (comps[ck].area >= minArea) keep.push(comps[ck]);
+  }
+  keep.sort(function (a, b) { return b.area - a.area; });
+  // 5) 输出每张主体图（透明背景）
+  var out = [];
+  for (var ki = 0; ki < keep.length; ki++) {
+    var c = keep[ki];
+    var cw = c.maxX - c.minX + 1, ch = c.maxY - c.minY + 1;
+    var cdata = new Uint8ClampedArray(cw * ch * 4);
+    for (var pi = 0; pi < c.pixels.length; pi++) {
+      var pp = c.pixels[pi];
+      var py = (pp / w) | 0, px = pp % w;
+      var si = pp * 4;
+      var di = ((py - c.minY) * cw + (px - c.minX)) * 4;
+      cdata[di] = data[si]; cdata[di + 1] = data[si + 1]; cdata[di + 2] = data[si + 2]; cdata[di + 3] = data[si + 3];
+    }
+    featherAlpha(cdata, cw, ch, opts.feather); // 边缘羽化（强度可调），消除硬锯齿/白边
+    out.push({ data: cdata, x: c.minX, y: c.minY, w: cw, h: ch, area: c.area });
+  }
+  return out;
 }
 /* ---------- 5. 图片处理管线（纯算法内核，零 DOM 依赖，web / 小程序共用） ---------- */
 /* 本文件不含任何 document / window / canvas 引用，可由 build.js 同时打入网页版与小程序版。
    平台相关的像素获取在 web 端由 src/web 的 canvas 完成，小程序端由 processImageMini 直接消费 ImageData。 */
 
+var _genActive = true; // v145: 生成取消标志（全局；processImage 开始时置 true，cancelGenerate 置 false 中止异步分批）
 function getCropRect(w, h) {
   if (!state.crop) return { sx: 0, sy: 0, sw: w, sh: h };
   var side = Math.min(w, h);
@@ -464,7 +633,8 @@ function mapCell(sd, x0, y0, x1, y1, mode) {
 
 // v140: 分帧批处理 — 把 N×N 逐格映射拆成每批 2000 格，setTimeout 之间让浏览器渲染
 var _chunkSize = 2000;
-function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone) {
+function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone, onProgress) {
+  if (!_genActive) return; // v145: 取消时中止采样分批
   var endIdx = Math.min(startIdx + _chunkSize, N * N);
   for (var idx = startIdx; idx < endIdx; idx++) {
     var y = Math.floor(idx / N);
@@ -477,8 +647,9 @@ function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone
     var rgb = sampleCellRGB(sd, x0, y0, x1, y1, state.mode);
     grid[y][x] = rgb ? mapToPalette(rgb) : null;
   }
+  if (typeof onProgress === 'function') onProgress(endIdx / (N * N));
   if (endIdx < N * N) {
-    setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone); }, 0);
+    setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone, onProgress); }, 0);
   } else {
     onDone();
   }
@@ -521,7 +692,7 @@ function applyFloydSteinberg(grid, srcRGB, N) {
 }
 
 // v140: 异步分帧 Floyd-Steinberg（大板子，逐行 setTimeout）
-function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
+function applyFloydSteinbergAsync(grid, srcRGB, N, onDone, onProgress) {
   if (!srcRGB) { onDone(); return; }
   var acc = Array.from({ length: N }, function() { return new Array(N).fill(null); });
   for (var y = 0; y < N; y++)
@@ -530,15 +701,17 @@ function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
   var row = 0;
   var batchSize = 4; // 每批处理 4 行
   function nextBatch() {
+    if (!_genActive) return; // v145: 取消时中止抖动分批
     var end = Math.min(row + batchSize, N);
     for (; row < end; row++) _fsProcessRow(grid, acc, row, N);
+    if (typeof onProgress === 'function') onProgress(row / N);
     if (row < N) { setTimeout(nextBatch, 0); }
     else { onDone(); }
   }
   nextBatch();
 }
 
-function _finishPipeline(grid, N, onDone) {
+function _finishPipeline(grid, N, onDone, onProgress) {
   // v140: Floyd-Steinberg 抖动（在降噪之前，利用原图 RGB 信息）
   if (state.dither) {
     if (N <= 78) {
@@ -549,7 +722,7 @@ function _finishPipeline(grid, N, onDone) {
       applyFloydSteinbergAsync(grid, state.srcRGB, N, function() {
         _finishAfter(grid, N);
         if (onDone) onDone();
-      });
+      }, onProgress);
       return; // async, _finishAfter 稍后调用
     }
   }
@@ -572,10 +745,8 @@ function _finishAfter(grid, N) {
   }
   // 颜色数量上限：合并肉眼难分的相近色
   reduceColors(grid, state.maxColors);
-  // 提亮一档
-  applyBrighten(grid);
   // v123: 像素描边（后处理）
-  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId);
+  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);
   state.grid = grid;
   // 图片实际覆盖的有效格子数
   let eminX = N, eminY = N, emaxX = -1, emaxY = -1;
@@ -869,7 +1040,7 @@ function removeBackground(grid = state.grid) {
       }
     }
   }
-  if (!mainGate && !cornerGate && !manualBg && !state.userMask) {
+  if (!mainGate && !cornerGate && !manualBg) {
     state.bgStatus = 'no_bg';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -878,7 +1049,7 @@ function removeBackground(grid = state.grid) {
     }
     return;
   }
-  if (N <= 52 && !state.userMask) {
+  if (N <= 52) {
     state.bgStatus = 'small';
     for (let y = minY; y <= maxY; y++) {
       for (let x = minX; x <= maxX; x++) {
@@ -913,17 +1084,6 @@ function removeBackground(grid = state.grid) {
         isBgArr[y][x] = true;
       } else {
         cover[y][x] = true;
-      }
-    }
-  }
-  // 手动遮罩（userMask，由图片处理模块的笔刷生成）：'keep' 强制保留主体、'erase' 强制当背景。
-  // 在色彩距离判定之上叠加，使洪水填充尊重用户笔触，无需改动种子/安全逻辑。
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) {
-      for (let x = 0; x < N; x++) {
-        var _um = state.userMask[y][x];
-        if (_um === 'keep') { cover[y][x] = true; isBgArr[y][x] = false; }
-        else if (_um === 'erase') { isBgArr[y][x] = true; if (grid[y][x] == null) grid[y][x] = bgColorId; }
       }
     }
   }
@@ -968,10 +1128,6 @@ function removeBackground(grid = state.grid) {
   };
   for (let x = 0; x < N; x++) { seed(x, 0); seed(x, N - 1); }
   for (let y = 0; y < N; y++) { seed(0, y); seed(N - 1, y); }
-  // 手动 erase 笔触也作为种子，使没有背景边界的主体贴边区域也能被抠掉
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (state.userMask[y][x] === 'erase') seed(x, y);
-  }
   while (queue.length) {
     const [x, y] = queue.pop();
     toFill.push([x, y]);
@@ -981,14 +1137,8 @@ function removeBackground(grid = state.grid) {
   var gateConfident = (mL > 0.95 && vL < 0.05) || (mL < 0.08 && vL < 0.05) ||
                       (midL > 0.95 && vL < 0.06) || (midL < 0.06 && vL < 0.06);
   var safetyLimit = gateConfident ? 0.98 : 0.85;
-  if (nonNull && toFill.length / nonNull > safetyLimit && !state.userMask) { state.bgStatus = 'full'; return; }
+  if (nonNull && toFill.length / nonNull > safetyLimit) { state.bgStatus = 'full'; return; }
   for (const [x, y] of toFill) { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
-  // 强制应用 erase 笔触（即便未被洪水覆盖，用户明确要抠掉的区域也置为背景）
-  if (state.userMask) {
-    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      if (state.userMask[y][x] === 'erase') { grid[y][x] = bgColorId; state.bgMask[y][x] = true; }
-    }
-  }
   {
     const visited2 = Array.from({ length: N }, () => new Array(N).fill(false));
     for (let y = minY; y <= maxY; y++) {
@@ -1232,21 +1382,6 @@ function reduceColors(grid, maxColors) {
     }
   }
 }
-function applyBrighten(grid) {
-  if (!state.brighten) return;
-  var N = grid.length;
-  for (var y = 0; y < N; y++) {
-    for (var x = 0; x < N; x++) {
-      var id = grid[y][x];
-      if (!id) continue;
-      if (state.bgMask && state.bgMask[y][x]) continue;
-      var brighter = BRIGHTEN_MAP[id];
-      if (brighter && brighter !== id && !state.excluded.has(brighter)) {
-        grid[y][x] = brighter;
-      }
-    }
-  }
-}
 
 // ========== 小程序适配层 ==========
 function computeCropRect(w, h) {
@@ -1262,7 +1397,6 @@ function processImageMini(imgData, N, opts) {
   state.cleanup = (opts.cleanup != null) ? opts.cleanup : 5;
   state.maxColors = (opts.maxColors != null) ? opts.maxColors : 24;
   state.removeBg = !!opts.removeBg;
-  state.brighten = !!opts.brighten;
   state.outline = opts.outline || { on: false, strength: 50, colorId: 'H7', thickness: 1 };
   state.excluded = opts.excluded || new Set();
   var cr = computeCropRect(imgData.width, imgData.height);
@@ -1291,7 +1425,6 @@ function processImageMini(imgData, N, opts) {
   if (state.removeBg) { state.bgStatus = 'ok'; removeBackground(grid); }
   else { state.bgMask = Array.from({ length: N }, function () { return new Array(N).fill(false); }); state.bgStatus = ''; }
   reduceColors(grid, state.maxColors);
-  applyBrighten(grid);
   if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);
   state.grid = grid;
   var counts = {}; var total = 0;
@@ -1308,6 +1441,6 @@ module.exports = {
   mapToPalette: mapToPalette, mapCell: mapCell, sampleCellRGB: sampleCellRGB, reduceColors: reduceColors,
   buildBrightenMap: buildBrightenMap, updateBgIds: updateBgIds,
   applyFloydSteinberg: applyFloydSteinberg, cleanupNoise: cleanupNoise,
-  removeBackground: removeBackground, applyOutline: applyOutline, applyBrighten: applyBrighten,
+  removeBackground: removeBackground, applyOutline: applyOutline,
   computeMaxRegion: computeMaxRegion, processImageMini: processImageMini
 };

@@ -1,8 +1,10 @@
 # 狐狸爱拼豆 · 双 Agent 协作日志（AGENT_CHANGELOG）
 
 > 协作方：① SeniorDeveloper（WorkBuddy / Hy3）② ClaudeCode（deepseek-v4-pro）
-> 维护人：余莎莎 ｜ 最后更新：2026-08-07（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色）
+> 维护人：余莎莎 ｜ 最后更新：2026-08-12（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换 / v144 分块多板补跨板对齐标记·CC复核意见②核查no-op / iframe预览下载修复 / 下载修复v2-clipboard逃生通道 / 下载修复v3-统一保存对话框消除静默下载）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
+
+> ⚠️ **版本号纪律更新（2026-08-12 余总）**：版本号已从 v145 重置为 **v1**；今后任何升版（bump）都必须先经余总明确同意，AI 不再自主升版。详见 §1 约束表。
 
 ---
 
@@ -135,6 +137,8 @@ fox-bead/
 | 2026-08-07 | **豆仓库存模块（用量统计 + 缺口提醒）**：左栏新增「📦 豆仓库存」按钮→弹窗按当前图纸统计每色「需要/库存/缺口」，缺口色号标红；`state.inventory` 持久化 `localStorage`（key `foxbead-inventory-v1`）；工具栏「按用量一键填 / 全部+100 / 清空库存 / 视图切换(仅用到的·全部221)」；`computeUsage()` 复用 `subject`/`excluded`/`bgMask` 排除背景统计口径；`renderAll` 末尾派发 `fb:render-done` 事件，弹窗打开时自动重算 | 竞品调研（pindouwuxian 豆仓管理）启发；用户要「图片处理模块」同时选了「做豆仓」+「写竞品对比清单」 | src/core/state.js、src/web/render.js、src/web/template.html、src/web/events.js、src/web/css/style.css | ✅ |
 | 2026-08-07 | **竞品分析文档**：新增 `竞品分析_可借鉴清单.md`，对比 pindouwuxian/Zippland/PixelBead/Jett-Wu 等 8 个项目，给出 P0(豆仓+分块多板PDF)/P1(多色板+补货清单)/P2(3D预览·多图层，需降级) 路线；结论：狐狸去背景算法/移动端/离线单文件已领先，AI 类不建议接（破铁律） | 用户问「Gitee/论坛有什么好的可学习」+ 明确要「做豆仓 + 写对比清单」 | 竞品分析_可借鉴清单.md | ✅ |
 | 2026-08-07 | **修复三处体验问题（用户反馈）**：①**下载修复**——`downloadCanvasPNG` 改用 `genPNGSource`（带 5s 超时回退 dataURL）；顶层页面走 `a.download` 直接下载，iframe/沙箱环境（预览面板、CloudStudio）改弹窗让用户右键/长按保存，`showMobileSaveOverlay` 文案按设备区分（桌面「右键另存为」/移动「长按存相册」）；②**图片处理预览放大**——`renderPrepPreview` 去掉 `scale>1` 上限（允许放大填充预览框，上限 4x 防内存爆），笔刷在显示坐标作画、`prepScale` 已正确处理放大映射；`.prep-card` 宽度 460→520、`.prep-preview-wrap` max-height 360→460；③**调色注释**——亮度/对比度/饱和度滑块下加 `.slider-hint` 说明高低影响；④**默认深色**——内联 head 脚本首次访问默认 `dark` | 用户反馈「下载不了 / 示例图太小笔刷看不清 / 默认暗色」 | src/web/exporter.js、src/web/events.js、src/web/template.html、src/web/css/style.css | ✅ |
+| 2026-08-10 | **修复 iframe 下载失效（CloudStudio 预览面板·纯 bug 修复·不 bump）**：根因——应用运行在预览 iframe 内，`downloadCanvasPNG`/`downloadBlob`/`downloadSVG` 检测到 `window.self!==window.top` 后**跳过真实下载**、只弹「右键另存」覆盖层，而预览沙箱右键常被宿主 UI 拦截 → 用户「一直无法下载图纸」。高度钳制修复(v141)早已在线、生成无问题，是保存这步在 iframe 里被废。修复——iframe 下新增 `tryRealDownload`（页内 `<a download>` 真实点击，不被宿主 UI 拦截）+ 统一保存对话框（`下载图片`主按钮 + `新窗口打开`次按钮 + 右键/长按兜底），PDF/SVG 同步走该对话框；顶层窗口逻辑不变。Gitee Pages 实测 404（未启用），确认用户走 CloudStudio 预览路径 | 用户「先排查一直无法下载图纸的原因」 | src/web/exporter.js、src/web/events.js | ✅ |
+| 2026-08-11 | **下载修复 v3（统一保存对话框·不 bump）**：用户反馈在 CloudStudio 顶层窗口打开仍「没有弹窗」——根因是顶层窗口下 `downloadCanvasPNG`/`downloadBlob`/`downloadSVG` 仍走静默 `<a download>`（文件默默进 Downloads，用户看不到任何反馈以为没下载）。修复——三条下载路径全部统一为**始终弹保存对话框**：①`downloadCanvasPNG` 不再区分顶层/iframe，直接 `showMobileSaveOverlay`；②`downloadBlob`（PDF）同理，去掉 `inIframe` 分支；③`downloadSVG` 桌面端去掉静默 `<a download>` 分支，统一走对话框。对话框内「复制图片」(剪贴板) / 「下载图片」(`<a download>`) / 「新窗口打开」三按钮覆盖所有环境。线上已验证含全部修复标记 | 用户「仍然无法下载，网页没有弹窗」 | src/web/exporter.js | ✅ |
 
 ### 4.2 余莎莎 直接改动（部分可能经 ClaudeCode 协助 — 待认领）
 
@@ -224,3 +228,220 @@ fox-bead/
 - 验证：`node tools/smoke-mini.js` 全 PASS（含去背景/描边新增回归）；`docs/index.html` ?.=0、`miniapp/utils/core.js` DOM=0
 
 > 注：小程序真机手感（pinch 缩放/轻点取样）需余总本机验收。完整自由平移(pan)已于 **#21** 实现（主预览画布单指 CSS transform 平移 + `clampMainPan` 边界夹取，与 pinch 缩放协同）。
+
+**v141**（2026-08-07，SeniorDeveloper）：图片处理模块重构——自动抠图 + 多主体分张 + 像素图转换；移除手动笔刷与「提亮一档」。
+
+需求背景：用户实际图片常杂乱无章，需要自动抠出主体并转为拼豆像素图；原「手动笔刷 + 提亮一档」方案不符使用场景。
+
+- 抠图（需求1）：新增 `segmentSubjects`（image-prep.js，零 DOM，web/小程序共用）。边界 Oklab 中位数估背景 + 4-连通分量分离多主体，**无 ML 模型**（守住离线/旧移动端铁律）。一张图多个主体 → 各生成一张透明底独立图。
+- 像素图（需求2）：弹窗新增「自动抠图」按钮，运行后列出抠出的主体缩略图，每张配「转为像素图」→ 设为 `state.sourceImage`（透明底）并 `processImage()`，即拼豆化。
+- 去笔刷（需求3）：彻底移除手动去背景笔刷——`state.js` 删 `userMask/brushMode/brushSize`、`pipeline-core.js` 的 `removeBackground` 删 `userMask` 分支、`events.js` 删 `prepPaintAt` 及笔刷 UI、`template.html` 删笔刷区块；预览仅保留「拖动裁切」。
+- 拖拽条（需求4）：对比度/饱和度本就是 range 拖拽条（与亮度一致），沿用无需改动。
+- 删提亮（需求5）：删除 `brighten` 状态与 `applyBrighten`（`state.js`/`pipeline-core.js`/`build.js` 适配器/`events.js` 同步清理）。
+- UI：新增 `prep-auto-seg` / `prep-results` / `subject-thumb`（透明棋盘格）/「转为像素图」按钮，浅/深主题可读；`prep-tool-seg` 工具栏与笔刷样式移除。
+- 验证：`node --check` 全过；`docs/index.html` `?.`=0 / `Object.fromEntries`=0；`miniapp/utils/core.js` DOM=0；`node tools/smoke-mini.js` 全 PASS（导出清单去掉 `applyBrighten`）；合成双主体图实测 `segmentSubjects` 返回 2 个主体。
+> 注：真实照片抠图精度受限于无模型算法（浅色主体/杂乱背景可能需多试旋转+调色/裁切）；彻底 AI 分割见文档 §9 生图模块（需后端+付费）。
+
+## v141 补丁 · 下载"生成失败"修复（2026-08-07，SeniorDeveloper）
+- **根因**：`buildExportCanvas` 只按宽度把每格像素 `cell` 钳到 ≤16384，但总高度 `H=标题栏+图案区+色板区` 里色板区随色卡数增长，导致 `N≥80`（真实照片拼豆常见）时 `H` 突破浏览器 canvas 硬上限 → `toBlob`/`toDataURL` 静默失败 → 回调空 → 弹"生成失败，请重试"。与抠图无关；历史"修复下载"只修了 iframe 拦截未修此坑。
+- **修复**：① 导出加总高度钳制（按 H 比例缩 `cell` 并完整重算布局，桌面/移动/微信单边上限统一覆盖）；② `PALETTE_BY_ID[tid]` 越界保护（两处 `_pngGetCell`）；③ `buildExportCanvas` 入口空 grid/displayRect 保护。
+- **验证**：node 模拟 N=40~221 × 色卡30/60 全部 H≤16384（旧逻辑 N≥80 及大色卡全超限）；`node --check`/smoke-mini 全过；铁律 `?.=0`、mini DOM=0。未 bump 版本（修 bug），保持 v141。
+
+## v141 图片模块再优化（抠图质量/体验/批量导出，未 bump）
+- 余总「继续优化」→ 三项，仍不 bump（APP_VERSION=141）：
+  1. **抠图边缘羽化** `featherAlpha`（image-prep.js 纯函数，零 DOM）：主体前景边缘像素按相邻背景数降 alpha（1邻→0.7 / 2邻→0.45 / 3+→0.25），消除硬锯齿/白边；已进小程序 core.js
+  2. **自动抠图 loading 态**：`runAutoSeg` 先显「正在分离主体…」再 setTimeout 跑重计算，大图不再卡死无反馈
+  3. **批量分张导出** `exportAllSubjects`：弹窗「逐个导出 N 张」→ 串行给每个主体 processImage(onDone)+下载 PNG（文件名带主体序号+时间戳），结束恢复主图；`processImage` 加可选 onDone 回调（向后兼容）；浏览器可能拦截多次下载，已提示用户允许
+- 验证：featherAlpha node 单测通过（中心255/边角115/边缘179/背景0）；语法+构建+smoke 全过；铁律精确 `?.`=0 / 字面 `document.`=0；featherAlpha 进 mini core 无 DOM
+- 部署：CloudStudio 同沙箱；Gitee main `7e92877..0db4077`
+
+## ⚠️ 后续部署注意
+- v141 已推 Gitee main；Gitee Pages 部署目录 `/docs`，改代码后需在 Pages 页点「更新」重新部署（免费版仅公开仓库）
+- 分支陷阱仍在：本地 `master` → 远端 `main`，推送 `git push origin master:main`
+
+## 图片处理模块体验补强（v141 补强，未 bump；2026-08-07 15:16）
+- 用户指令「继续优化吧」→ 聚焦刚交付的 v141 图片模块，三项低风险体验增强。按版本纪律**不 bump**（APP_VERSION 保持 141，仅记此条）。
+- ① **抠图强度滑块**：暴露 `segmentSubjects` 的 `bgT` 容差（默认 `null`=算法自适应最稳；用户可调 0.04~0.22，解决真实照片「扣不净留边」往右调、「抠过头缺角」往左调）。`runAutoSeg` 传 `opts.bgT`；弹窗加 `prep-seg-strength` 滑块 + `prep-seg-val` 显示「自动」或数值。
+- ② **主体缩略图标注**：每个主体显示 `序号 · 宽×高`（如 `① 120×80`），多主体一眼分清谁是谁。
+- ③ **「全部拼成一张」按钮**：所有主体按原构图 `drawImage` 合成一张透明底大图 → `processImage()` 一次出含全部主体的拼豆总稿；分张仍用逐个「转为像素图」。`applyAllAsOne` 复用 `prepSegSubs` 缓存。
+- 改动文件：`src/web/template.html`（滑块+结果区标题栏+全部按钮）、`src/web/events.js`（变量/重置/传参/标注/滑块+全部绑定/合成函数）、`src/web/css/style.css`（head/all/label 样式）。
+- 验证：node --check 过；docs ?.=0 / Object.fromEntries=0 / mini DOM=0；smoke-mini 全 PASS；新控件已进产物。
+
+## v141 优化（图片模块交互/下载体验，未 bump；2026-08-10）
+- 用户指令「继续优化吧」→ 在 v141 图片模块基础上再加三项低风险优化，按版本纪律**不 bump**（APP_VERSION 保持 141）。
+- ① **抠图强度滑块实时重抠**：拖动滑块 250ms 防抖后自动 `runAutoSeg()` 重新分离主体，所见即所得（原需手动点「自动抠图」）；未抠过时提示先点抠图。新增模块级 `prepSegTimer` 防抖变量。
+- ② **导出文件名带时间戳**：图纸 `狐狸爱拼豆_i喵绘工坊_${N}x${N}_MARD_${时间戳}.png`、分享图同步加时间戳，避免多次下载互相覆盖（原固定名无时间戳）。新增 `timeStamp()` helper（YYYYMMDD_HHMMSS）。
+- ③ **主体缩略图点击放大**：抠完点缩略图弹 lightbox 大图（透明棋盘格背景），确认抠图效果再「转为像素图」。新增全局 `seg-lightbox` 遮罩 + `openSegLightbox`/`closeSegLightbox` + `template.html` 节点 + `style.css` 棋盘格样式。
+- 改动文件：`src/web/events.js`、`src/web/template.html`、`src/web/css/style.css`。
+- 验证：node --check 过；build 成功（v141 未 bump）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / mini DOM=0；新控件（seg-lightbox/openSegLightbox/timeStamp/prepSegTimer/实时重抠文案）已进 docs/index.html 产物。已部署 CloudStudio 预览 + 推送 Gitee main（de58edf..7e92877）。
+
+## v142 图片模块精修 + 分块多板导出（2026-08-07，SeniorDeveloper）
+- 用户指令「好的，都做了」→ 在 v141 图片模块基础上落地 A 档四件套 + B6 分块多板导出，按版本纪律 **bump 到 v142**（B6 是新增对外功能；B7/BOM 经核查前版已交付，本次 no-op）。
+- **A1 羽化强度可调**：`featherAlpha(data,w,h,strength)` 新增 `strength`（默认 0.5=标准；0=硬边；1=羽化最强）。`Math.pow(base, strength*2)`，`strength=0.5` 与原行为完全一致（向后兼容）。抠图弹窗加「羽化强度」滑块（0=硬边/50=标准/100=最强），250ms 防抖实时重抠。
+- **A2 灯箱内直接转像素图**：抠图 lightbox 加「就此转像素图」按钮 → `applySubjectAsPixel(prepSegSubs[idx])` 直接把当前主体转像素图，省去关弹窗再点缩略图的步骤。
+- **A3 主体 trim 透明边 + 居中留边距**：新增纯函数 `padAlphaImage(data,w,h,pad)`，给主体四周加透明留边（最小 2 格，约 8% 边长）再合成，避免拼大图时主体贴边/缺角；`setSubjectSource` 与 `applyAllAsOne` 均接入，后者加全局留白保留原构图比例。
+- **A4 批量导出改合成对照长图**：`exportAllSubjects` 重写——收集各主体 canvas → `composeSubjectSheet()` 统一缩放到宽 1100 竖向堆叠（间距留白 + 序号标题标注），单张 PNG 一次下载，规避浏览器「允许多文件下载」拦截；高度封顶 HARD（16384 桌面 / 4096 移动+微信）。导出按钮文案改为「导出对照长图 (N张)」。
+- **B6 分块多板导出**：导出弹窗加「分块多板导出」开关 + 每块尺寸滑块（15~40 格，默认 29）。勾选后 `buildExportCanvas(opts)` 改走新独立函数 `buildBlockExportCanvas(opts)`：把 M×M 整图按 bs×bs 切块，每块独立对照图 + 该块色号清单，网格（cols×rows）排列，超 HARD 上限时 `cellB` 16→4 降采样；与稳定版 `buildExportCanvas` 零耦合、零回归。三个调用点（m-confirm / mobileQuickExport / 预览导出）均透传 `blocks` + `blockSize`。
+- **B7（坐标标注）/ BOM（采购清单）核查结论**：`exporter.js` 已存在 `opts.coords` / `opts.bom` 及 export 弹窗 `m-coords`/`m-bom` 开关（前版已实现），本次确认为 no-op，未重复实现。
+- 改动文件：`src/core/image-prep.js`（featherAlpha strength + padAlphaImage）、`src/core/init.js`（APP_VERSION 141→142）、`src/web/template.html`（羽化滑块/灯箱按钮/分块导出开关/批量按钮文案）、`src/web/events.js`（变量/重置/实时羽化重抠/灯箱转像素/主体留边/A4 长图/分块监听/opts 透传）、`src/web/exporter.js`（buildBlockExportCanvas）。
+- 验证：node --check 过；build 成功（v142）；smoke-mini 全 PASS；铁律 `?.=0`（仅注释文本提及，无真实调用）/ `fromEntries=0`（同上）/ mini DOM=0；新控件已进 docs/index.html 产物。待部署 CloudStudio 预览 + 推送 Gitee main。
+
+## v143 P0 三件套 + 体验增强（2026-08-07，SeniorDeveloper）
+- 用户指令「按你的方案」→ P0（补货清单/分块多板PDF/小程序发版就绪）+ P1（保护笔刷/设置持久化/多色板切换）六件套，按版本纪律 **bump 到 v143**（均含新增对外功能）。
+- **① 补货清单导出（含拼货型号）**：豆仓面板加「复制补货清单」「导出补货图」按钮。基于豆仓库存缺口（`need - stock`，未填不计）列出 `拼豆型号(MARD221-色号) / 色号 / 缺口 / 现有`。复制为 TSV 文本（可直接发供应商/分销商），导出为 PNG 对照图。型号默认派生 `MARD221-色号`（如 A1→MARD221-A1），不依赖外部数据。
+- **② 分块多板导出补 PDF**：导出弹窗分块子面板加「PNG / PDF」格式选择。`exportBlocksPDF(opts)` 复用 `buildBlockExportCanvas` 拼图 → 按固定页宽（≤1400）切片成多页 → 每页 JPEG 内嵌（`/DCTDecode`，零依赖手写最小 PDF，不破单文件铁律）。桌面/移动端均触发下载。
+- **③ 小程序发版就绪**：`build.js §7` 修复版本注入（此前因 `CORE` 未定义导致小程序核心包显示 `N/A`，改为 `CORE` 定义后读 `APP_VERSION` → 现显示真实版本）；产出 `小程序真机验收清单.md`（appid 填写 / 基础链路 / 管线开关 / 性能兼容 / 已知非阻塞项 / 结论签名）。小程序核心零 DOM 已确认。
+- **④ 去背景保护笔刷**：`segmentSubjects` 新增 `opts.protect`（Uint8Array 强制前景），自动抠图绝不误删浅色主体（白猫脸/白衣物）。抠图弹窗加「🛡 保护笔刷」开关 + 笔刷大小 + 清除；预览叠加层源分辨率遮罩（绿色半透明），指针拖动涂抹；仅整图模式生效（裁切改变坐标空间，保护不映射）。纯算法、零 DOM。
+- **⑤ 用户设置持久化（localStorage）**：`foxbead-settings-v1` 保存羽化强度/分块尺寸/分块开关，抠图弹窗重开自动恢复（reset 时清除）。沿用既有 localStorage 模式，零新增依赖。
+- **⑥ 多色板切换**：`palette.js` 中 `PALETTE` / `PALETTE_BY_ID` / `PALETTE_LAB` / `LAB_BY_ID` 由 `const` 改 `var`，新增 `setActivePalette(list)` + `MARD_PALETTE_BY_ID`（冻结 Mard 映射，豆仓库存/补货仍按 Mard 实物统计）。顶栏加「色板」下拉 + 导入按钮：默认 Mard 221（C4 永不改动），可导入品牌色板 JSON（`[{id,name,hex}]`）并持久化（`foxbead-palettes-v1` / `foxbead-active-palette-v1`）。**不编造任何色值**——无导入数据则仅 Mard 221 可选。
+- 改动文件：`src/core/image-prep.js`（opts.protect）、`src/core/palette.js`（可变色板 + setActivePalette）、`src/core/init.js`（142→143）、`src/web/template.html`（补货按钮/分块PDF格式/保护笔刷栏/色板下拉）、`src/web/events.js`（补货导出/分块PDF分发/保护笔刷/设置持久化/色板绑定/豆仓改 MARD_PALETTE_BY_ID）、`src/web/exporter.js`（exportBlocksPDF + downloadBlob）、`src/web/css/style.css`（保护栏+色板样式）、`build.js`（§7 版本注入修复）、新增 `小程序真机验收清单.md`。
+- 验证：node --check 过；build 成功（v143，581KB）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / core+pipeline+mini DOM=0 全绿；小程序核心包版本头正确显示 `版本: 143`。已部署 CloudStudio 预览 + 推送 Gitee main（71efaa7..59bdc3f）。
+
+## v144 分块多板导出补跨板对齐标记（2026-08-10，SeniorDeveloper）
+- 背景：CC 复核意见两条 → ① 跨板衔接处要对齐标记（拼豆实际制作板与板要边对边拼）；② 保护笔刷 vs 手动去背景笔刷别搞混。
+- 核查结论：② 不成立——手动去背景笔刷早在前版已移除（`pipeline.js:137` 空实现 + `events.js:525`「交互仅保留拖动裁切」），现存 `protect` 是唯一笔刷，逻辑仅「涂=强制前景」，无擦除/保留二义性，**无重叠、no-op**。
+- 落地 ①：在 `buildBlockExportCanvas` 复合画布上加三类对齐标记（PNG/PDF 同源，PDF 切片自该画布自动受益）：
+  1. 顶部**拼装示意图**：N×N 编号网格，定拼合顺序（防打印页打乱后无法复原）；
+  2. 每块**四角 + 定位点**：打印后边对边对齐参考；
+  3. 每块标题下**邻接方向行**（↑↓←→接第几块）：消除板间对齐歧义。
+- titleH 46→64 容纳两行块头（主标题 + 邻接行）；assembleH/ovW/ovH 计入 HARD 上限，cellB 降采样逻辑不变。
+- 改动文件：`src/web/exporter.js`（buildBlockExportCanvas 对齐标记）、`src/core/init.js`（143→144）。
+- 验证：node --check 过；build 成功（v144，583KB）；smoke-mini 全 PASS；铁律 `?.=0` / `fromEntries=0` / core+pipeline+mini DOM=0 全绿。已部署 CloudStudio 预览 + 推送 Gitee main（64df4f5..d08dde2）。
+
+---
+
+## 交接任务：GitHub Pages 发布（cc 执行，2026-08-11 由 SeniorDeveloper 整理）
+
+**背景**：CloudStudio 预览面板是 sandboxed iframe（无 allow-downloads / allow-popups 令牌），`<a download>` 与 `window.open` 被静默拦截，下载在沙箱内始终无法正常落文件。Gitee Pages 已确认不可用（账号服务菜单无 Pages 选项、`/pages` URL 404，Gitee 已收紧免费 Pages）。故改用 **GitHub Pages**——它是顶层窗口托管，`<a download>` 真实生效，下载能真正落文件。
+
+**当前状态（已 ready，cc 直接推即可，无需改代码）**：
+- 本地分支 `master`，最新提交 `cc6ec28`（v3 下载修复：PDF / SVG / PNG 三条下载路径统一弹保存对话框）
+- 构建产物 `docs/index.html` 已在 git 跟踪中（未被 .gitignore 忽略），含全部修复
+- 仅 `origin` 指向 Gitee，尚无 GitHub remote
+
+**cc 执行步骤**：
+1. 进目录 `C:\Users\余莎莎\WorkBuddy\2026-08-05-17-47-02\fox-bead`
+2. 加 GitHub remote：`git remote add github https://github.com/<用户名>/fox-bead.git`
+3. 推代码 + 构建产物（本地 `master` → 远程 `main`，与 Gitee 一致）：`git push github master:main`
+4. **不要重新 build**——`docs/index.html` 已在 git 中，会一起推上去
+5. GitHub 仓库 **Settings → Pages** → Source 选 **main** 分支、目录选 **/docs** → Save
+6. 等约 1 分钟，访问 `https://<用户名>.github.io/fox-bead/` 验证
+
+**关键配置点（务必核对）**：
+- 部署目录必须是 **`/docs`**（不是根目录）——`index.html` 构建在此
+- 分支用 **`main`**（我们一直 push `master:main`）
+- 仓库设**公开**最省事（私有也能用 Pages，但公开免额外配置）
+
+**验证标准**：网页 200 打开；顶层窗口下点「下载图纸」→ 弹保存对话框 → 点「下载图片」按钮真实落文件（GitHub Pages 是顶层窗口，`<a download>` 不被 sandbox 拦截，这点 CloudStudio 沙箱做不到）。
+
+**版本纪律**：本次仍为「下载」bug 延续修复，保持 v144 未 bump。
+
+---
+
+## 5. v145 优化四件套（feat·bump）
+
+> 日期：2026-08-12｜commit `4c1e665`（177b2c7..4c1e665）｜push Gitee main｜CloudStudio 重新部署
+
+**背景**：下载问题经 GitHub Pages 从根上解决后，用户全选 4 个优化方向（大图进度反馈 / 首次引导+示例图 / 导出图质量 / 移动端适配），统一 bump v145。
+
+**① 大图生成进度反馈（#61）**
+- 根因：N≥80 大图 `applyFloydSteinbergAsync` 分批渲染无进度回调，用户误以为卡死（与早期下载「点了没反应」同类痛点）。
+- 修复：`pipeline-core.js` 加零 DOM 的 `onProgress` 回调 + `_genActive` 取消标志（铁律 C6 合规，无 document/window 引用）；`pipeline.js` 的 `processImage` 串联进度（采样 0-50% + 抖动 50-100%）并暴露 `cancelGenerate()`；`exporter.js` 的 `showGeneratingOverlay` 升级为带进度条 + 取消按钮（点取消置 `_genActive=false` 中断分批）。
+
+**② 首次使用引导浮层（#62）**
+- `template.html` 加 `#onboard-mask` 浮层（3 步引导 + 「载入示例图体验」按钮 + 「我知道了」）。
+- `events.js` 初始化段加 `showFirstRunGuide()`：首次打开且 `!state.grid` 时显示，`localStorage['foxbead-onboard-v1']` 记忆不再弹；「载入示例图体验」复用既有 `loadSamplePhoto()`（v133 已就绪，Blob+ObjectURL 载入 sample.jpg，不重写）。
+- `css/style.css` 加 `.onboard-mask` 等样式（适配浅/深主题变量）；onboard-sub 文案含「手机可双指缩放查看细节」提示。
+
+**③ 导出图质量增强（#63）**
+- `exporter.js` 新增 `drawBeadTexture()`：每颗豆圆角描边 `rgba(0,0,0,0.12)`（导出专属，不影响 render.js 实时预览），在 `buildExportCanvas`(替换 drawBeadBorders) 与 `buildBlockExportCanvas`(格子循环后) 调用，呈珠子轮廓质感。
+- 图例字号放大：标签 18k→22k、色号 20k→26k、数量 16k→18k；坐标数字字号 `cell*0.35`→`cell*0.5` 加粗、`#999`→`#666`。未改 C4 色板。
+
+**④ 移动端/小程序真机适配（#64·审计结论：已基本齐全，未重复造轮子）**
+- 审计确认：`events.js:196-295` 主预览双指缩放(`_pinch`+rAF节流)+单指平移(`clampMainPan`)+单指取样(`{passive:false}`+`preventDefault` 齐全)；`editor.js:533-607` 编辑器双指缩放+单指拖动/轻点选格；移动端保存对话框(复制图片)先前已就绪。
+- 交付：`小程序真机验收清单.md` 标题 v143→v145，新增「3.5 移动端网页交互」验收章节标注上述能力已就绪；onboard 文案补双指缩放提示。
+
+**验证**：`node --check`(init/pipeline-core/pipeline/exporter/events 全 OK) / `node build.js`(CSS 693行·JS 4924行) / `smoke-mini` 全 PASS。铁律——C1 `?.` 仅 image-prep.js **注释文字**(非代码) / C2 fromEntries 同注释 / C3 spread=0 / C6 pipeline-core 零 DOM=0；产物 v145=在线。
+
+**部署**：commit `4c1e665` push Gitee main；CloudStudio 重新部署（同 sandboxId）。GitHub Pages 仍显示 v144——需 cc 重新 `git pull`+`git push github master:main`（我方无 github remote 与认证，不能代推）。
+
+---
+
+## 2026-08-12（续）· 下载逃生通道加固（V1 基线，不 bump）
+
+**背景**：用户在受限预览框（CloudStudio iframe + 沙箱，无 `allow-downloads`/`allow-clipboard-write`/`allow-popups`）内测试，浏览器静默拦截 `<a download>`、剪贴板、弹窗与右键「另存为」——任何 JS 都无法直接落文件。v3 统一对话框虽给了复制/下载/新窗口按钮，但在此环境下仍全部失效，用户感知为「无法下载」。
+
+**修复**（`src/web/exporter.js` `showMobileSaveOverlay`）：
+- 新增 iframe 检测 `isIframe = window.self !== window.top`。
+- 受限环境下顶部插入醒目提示 + **「在浏览器打开此页」**按钮：`window.open(location.href,'_blank')` 跳出沙箱到顶层窗口（那里下载不受限）；若弹窗被拦截，退化显示 `location.href` 可复制链接，兜底让用户手动在浏览器打开。
+- 复制按钮：检测 `navigator.clipboard`/`ClipboardItem` 可用性，受限时标签改「复制图片（受限）」，失败提示引导用上方逃生按钮。
+- 底部提示按环境区分（iframe 内指引先跳出再保存）。
+- 铁律：零 DOM 约束仅限 `pipeline-core.js`；`exporter.js` 为 web 层，无 `?.`/spread/fromEntries，合规。
+
+**验证**：`node --check` OK / `node build.js` OK（JS 4949 行）/ 「在浏览器打开此页」文案已打进 `docs/index.html`。
+
+**部署（2026-08-12 用户要求重部署）**：commit `f846673` 已提交并推 Gitee（`git push origin master:main`）；CloudStudio 重新部署成功（curl 确认线上 `APP_VERSION='1'` + 「在浏览器打开此页」文案）。GitHub Pages 仍 v144——当前环境连不上 github.com 无法代推，**交由 cc 处理（见下方「待 cc 处理」章节）**。用户用夸克浏览器；若从 WorkBuddy/CloudStudio 预览面板（iframe 套壳）打开则沙箱必拦下载，须点对话框「在浏览器打开此页」跳出到顶层窗口再保存。
+
+---
+
+## 待 cc 处理 · 发布 V1 到 GitHub Pages（2026-08-12 余总交办）
+
+**任务**：把最新 commit `f846673`（V1 + 下载逃生通道加固）发布到 GitHub Pages，使 `https://sanmiaowuyu.github.io/fox-bead/` 从 v144 升到 V1。
+
+**步骤**：
+1. 先 `git pull` 拿到 `f846673`（已推到 Gitee `origin/main`；若你侧 remote 指向 github，请先从 Gitee 或本机同步该 commit 再推）。
+2. `git push github master:main` 触发 GitHub Pages 重新部署。
+3. 验证线上 `APP_VERSION='1'`、含「在浏览器打开此页」按钮。
+
+**版本纪律（务必遵守，见上方 ⚠️）**：当前基线 **V1**。今后任何升版（bump `APP_VERSION`）都必须先经余总明确同意，AI 不再自主升版。本次只是发布已有的 V1，不要顺手 bump 版本号。
+
+**记录要求（余总明确要求）**：本次及今后你做的每一次调整，都必须在本文档 §4 追加一条记录（格式见 §4 表头：commit / 版本 / 改动摘要 / 验证），追加后 `git add AGENT_CHANGELOG.md && git commit -m "chore: 更新协作日志" && git push` 同步，方便 SeniorDeveloper 查阅。不要攒、不要漏。
+
+**已知冲突区**：`src/core/pipeline-core.js` 零 DOM 铁律（C6）、`docs/index.html` 禁手改（C5）、Mard 221 色板禁改（C4）——改前先看 §1。
+
+---
+
+## 2026-08-12 · ClaudeCode（cc）修复记录
+
+### 第一轮：下载按钮修复（71779b6）
+- **问题**：手机端「下载图片」按钮走 `<a download>`，手机浏览器普遍忽略该属性 → 点了没反应
+- **修复**：`exporter.js` `showMobileSaveOverlay`——手机端按钮改名为「打开图片（长按保存）」，走 `window.open` 在新标签页打开；桌面端保持 `<a download>` 并加按钮文字反馈
+- **影响**：所有下载路径（PNG/SVG/PDF/分享图/补货清单）共享同一对话框，一处修复全覆盖
+- **验证**：build + smoke-mini 全 PASS；铁律 `?.`=0 / `fromEntries`=0 / mini DOM=0
+
+### 第二轮：Canvas 生成失败修复（3c3a707）
+- **问题**：手机端 N=104 默认板子，canvas 约 2644×4038，`toDataURL` 需 ~43MB 内存，夸克等低配浏览器爆内存 → `genPNGSource` 返回 null → 弹「生成失败，请重试」
+- **修复**：① `MAX_MOBILE` 4096→3200、cell 60→50，canvas 降至 ~2000×3000；② `downloadCanvasPNG` 加降级重试——失败自动缩半 canvas 再试，再败才弹提示
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第三轮：全面排查 11 处 bug（8e0ed39）
+- **P0×3**：① `listPad` 未定义→BOM 导出 canvas NaN；② PALETTE_BY_ID 全链路加守卫（render/editor/exporter 共 10+ 处）；③ 预览 canvas 上限 8192 防高 DPI+大 N OOM
+- **P1×4**：④ web 端描边补传 `thickness` 参数；⑤ SVG BOM 关闭时补 `</svg>` 闭合标签；⑥ `genPNGSource` 加 null 守卫；⑦ 「全部恢复」按钮绑定清除排除列表
+- **P2×4**：⑧ 背景取样改用 backing store 坐标补偿边距偏移；⑨ 非图片拖放、预处理无图时给错误提示；⑩ `clearUndoHistory()` 新图加载清撤销栈；⑪ 分块+SVG 自动切回 PNG
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第四轮：3crash + 3静默 + 3清理 + 3体验（当前 commit）
+- **Crash×3**：① `runAutoSeg` 大图 `getImageData` 加 try-catch + 8Mpx 上限自动缩放；② `applyAllAsOne` 画布上限 8192；③ `composeSubjectSheet` `rs` 防负数
+- **静默×3**：④ `exportAllSubjects` 导出失败改输出 `console.warn` 不再吞错；⑤ `renderPrepSubjects` 渲染失败标注 ⚠；⑥ 勾选分块时自动把 SVG 格式切回 PNG
+- **清理×3**：⑦ 删 `isPanBtn` 死代码；⑧ `scaleX` 死变量（已在第三轮随背景取样修复消除）；⑨ 字体变量清理
+- **体验×3**：⑩ 桌面端导出加 loading 遮罩；⑪ 去掉 Google Fonts 外链改系统字体栈；⑫ `m-confirm` 桌面端用 `genPNGSource` 回调（与手机构造一致，不再静默下载）
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第五轮：手机下载深度修复（d5d6b28 → 7ab280c）
+- **问题**：夸克 WebView 的 `toBlob` 有 bug（超时白等 5s），且 `toDataURL` 对大 canvas 内存敏感
+- **修复**：① 手机端跳过 `toBlob`，直走 `toDataURL`，加长度检测 + JPEG 兜底；② `MAX_MOBILE` 2800→2400、cell→40，canvas ~4Mpx；③ 重试阈值 2000→1200（~1Mpx）
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第六轮：5 项小优化（4db9413）
+- ① 粘贴非图片 → setUploadError 提示；② SVG 导出去 Google Fonts 改系统字体；③ 库存面板 innerHTML 转义；④ viewport 放开 user-scalable+max-scale=3；⑤ 下载失败提示缩小板子+换浏览器
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第七轮：快捷键 + 几何示例 + 页面瘦身（c1ec7d2）
+- ① Ctrl+Z/Ctrl+Shift+Z 撤销重做；② 「几何图案示例」canvas 桃心；③ minifier 增强（去缩进+CSS 压缩）→ 598→578KB，CSS 693→1 行，JS -555 行
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第八轮：canvas 上限根治（1ea3846 → 9dbe5dc）
+- **问题**：桌面 N=104 默认板 canvas 13826×16327（225MP），toBlob 超时/toDataURL 需 900MB→崩
+- **修复**：MAX_CANVAS 16384→10000→6000（23MP），toBlob 超时 5s→12s，桌面 m-confirm 回退原简路径
+- **最终参数**：桌面 6000(23MP) / 手机 2400(4MP) 重试 1200(1MP) / 手机跳过 toBlob+JPEG 兜底
+- **验证**：build + smoke-mini 全 PASS；铁律全绿
