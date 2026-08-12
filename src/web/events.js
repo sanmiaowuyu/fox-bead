@@ -488,8 +488,6 @@ function bindEvents() {
   bindInventory();
   // ⑥ 多色板切换
   bindPalette();
-  // 首次使用引导浮层
-  showFirstRunGuide();
 }
 
 /* ========== 首次使用引导浮层（onboarding） ==========
