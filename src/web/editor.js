@@ -175,7 +175,7 @@ function renderEditCanvas() {
       if (id == null || isBgCell(dr.srcMinY + (gy - dr.offY), dr.srcMinX + (gx - dr.offX))) {
         drawEmptyCell(ctx, px, py, cell);
       } else {
-        ctx.fillStyle = PALETTE_BY_ID[id].hex;
+        ctx.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
         ctx.fillRect(px, py, cell, cell);
       }
     }
@@ -283,7 +283,7 @@ function _patchEditCell(gx, gy, colorId) {
   if (colorId == null) {
     drawEmptyCell(editOctx, px, py, cell);
   } else {
-    editOctx.fillStyle = PALETTE_BY_ID[colorId].hex;
+    editOctx.fillStyle = (PALETTE_BY_ID[colorId] || {}).hex || '#cccccc';
     editOctx.fillRect(px, py, cell, cell);
   }
   // 补画豆子间隔线（四周像素边界）
@@ -308,6 +308,7 @@ function undoEdit() {
   state.bgMask = snap.bgMask;
   renderEditCanvas(); renderCanvas(); renderStats();
 }
+function clearUndoHistory() { _undoStack = []; _redoStack = []; }
 function redoEdit() {
   if (!_redoStack.length || !state.grid) return;
   _undoStack.push({ grid: state.grid.map(function(r) { return r.slice(); }), bgMask: state.bgMask ? state.bgMask.map(function(r) { return r.slice(); }) : null });
@@ -660,7 +661,7 @@ function renderPalette() {
 
   if (state.paletteView === 'grid') {
     for (const [id, cnt] of sorted) {
-      const c = PALETTE_BY_ID[id];
+      const c = PALETTE_BY_ID[id]; if (!c) continue;
       const chip = document.createElement('div');
       chip.className = 'palette-chip' + (state.selectedColor === id ? ' selected' : '');
       chip.title = `${c.id} ${c.name} · ${cnt} 颗`;
@@ -676,7 +677,7 @@ function renderPalette() {
     }
   } else {
     for (const [id, cnt] of sorted) {
-      const c = PALETTE_BY_ID[id];
+      const c = PALETTE_BY_ID[id]; if (!c) continue;
       const row = document.createElement('div');
       row.className = 'color-row' + (state.selectedColor === id ? ' selected' : '');
       row.innerHTML = `

@@ -48,6 +48,7 @@ function buildSrcRGB(img, N) {
 }
 function processImage(onDone) {
   if (!state.sourceImage) return;
+  if (typeof clearUndoHistory === 'function') clearUndoHistory(); // 新图加载 → 清空撤销栈
   var _wrapEl = document.getElementById('canvas-wrap');
   if (_wrapEl) _wrapEl.classList.add('processing');
   _genActive = true; // 开始新生成：置 true，中止上一轮可能未完成的异步分批

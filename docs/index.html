@@ -2030,7 +2030,7 @@ function _finishAfter(grid, N) {
     state.bgStatus = '';
   }
   reduceColors(grid, state.maxColors);
-  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId);
+  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);
   state.grid = grid;
   let eminX = N, eminY = N, emaxX = -1, emaxY = -1;
   for (let y = 0; y < N; y++) {
@@ -2727,6 +2727,7 @@ function buildSrcRGB(img, N) {
 }
 function processImage(onDone) {
   if (!state.sourceImage) return;
+  if (typeof clearUndoHistory === 'function') clearUndoHistory(); // 新图加载 → 清空撤销栈
   var _wrapEl = document.getElementById('canvas-wrap');
   if (_wrapEl) _wrapEl.classList.add('processing');
   _genActive = true; // 开始新生成：置 true，中止上一轮可能未完成的异步分批
@@ -2861,12 +2862,15 @@ function drawBeadBorders(c, ox, oy, cols, rows, cell, color) {
 }
 
 
+function safeHex(id) {
+  return (id && PALETTE_BY_ID[id]) ? PALETTE_BY_ID[id].hex : '#cccccc';
+}
 function getVisibleFill(id) {
-  if (!id || state.bgMode !== 'white') return PALETTE_BY_ID[id].hex;
+  if (!id || state.bgMode !== 'white') return safeHex(id);
   const lab = LAB_BY_ID[id];
-  if (!lab) return PALETTE_BY_ID[id].hex;
+  if (!lab) return safeHex(id);
   if (lab.L > 0.92) return '#F5F5F5';
-  return PALETTE_BY_ID[id].hex;
+  return safeHex(id);
 }
 function drawEmptyCell(ctx, px, py, cell) {
   const h = Math.max(1, Math.floor(cell / 2));
@@ -2895,7 +2899,7 @@ function renderCanvas() {
   const maxDigits = (M - 1).toString().length;
   const marginSide = showCoords ? Math.round(fsCss * maxDigits * 0.62 + 8) : 0;
   const marginLeft = marginSide, marginBottom = marginSide;
-  const px = Math.max(M, Math.round(cssSize * dpr));
+  const px = Math.min(8192, Math.max(M, Math.round(cssSize * dpr)));
   const marginLeftPx = Math.round(marginLeft * dpr);
   const marginBottomPx = Math.round(marginBottom * dpr);
 
@@ -2949,7 +2953,7 @@ function renderCanvas() {
       if (id == null || isBg) {
         drawEmptyCell(ctx, pxX, pyY, cell);
       } else {
-        ctx.fillStyle = PALETTE_BY_ID[id].hex;
+        ctx.fillStyle = safeHex(id);
         ctx.fillRect(pxX, pyY, cell, cell);  // 整数尺寸 ✓ 零间隙 ✓
       }
     }
@@ -3009,7 +3013,7 @@ function patchMainCell(gy, gx, colorId) {
   if (colorId == null || isBg) {
     drawEmptyCell(ctx, px, py, g.cell);
   } else {
-    ctx.fillStyle = PALETTE_BY_ID[colorId].hex;
+    ctx.fillStyle = safeHex(colorId);
     ctx.fillRect(px, py, g.cell, g.cell);
   }
   ctx.strokeStyle = state.bgMode === 'black' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
@@ -3196,7 +3200,7 @@ function renderEditCanvas() {
       if (id == null || isBgCell(dr.srcMinY + (gy - dr.offY), dr.srcMinX + (gx - dr.offX))) {
         drawEmptyCell(ctx, px, py, cell);
       } else {
-        ctx.fillStyle = PALETTE_BY_ID[id].hex;
+        ctx.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
         ctx.fillRect(px, py, cell, cell);
       }
     }
@@ -3293,7 +3297,7 @@ function _patchEditCell(gx, gy, colorId) {
   if (colorId == null) {
     drawEmptyCell(editOctx, px, py, cell);
   } else {
-    editOctx.fillStyle = PALETTE_BY_ID[colorId].hex;
+    editOctx.fillStyle = (PALETTE_BY_ID[colorId] || {}).hex || '#cccccc';
     editOctx.fillRect(px, py, cell, cell);
   }
   editOctx.strokeStyle = state.bgMode === 'black' ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.08)';
@@ -3316,6 +3320,7 @@ function undoEdit() {
   state.bgMask = snap.bgMask;
   renderEditCanvas(); renderCanvas(); renderStats();
 }
+function clearUndoHistory() { _undoStack = []; _redoStack = []; }
 function redoEdit() {
   if (!_redoStack.length || !state.grid) return;
   _undoStack.push({ grid: state.grid.map(function(r) { return r.slice(); }), bgMask: state.bgMask ? state.bgMask.map(function(r) { return r.slice(); }) : null });
@@ -3632,7 +3637,7 @@ function renderPalette() {
 
   if (state.paletteView === 'grid') {
     for (const [id, cnt] of sorted) {
-      const c = PALETTE_BY_ID[id];
+      const c = PALETTE_BY_ID[id]; if (!c) continue;
       const chip = document.createElement('div');
       chip.className = 'palette-chip' + (state.selectedColor === id ? ' selected' : '');
       chip.title = `${c.id} ${c.name} · ${cnt} 颗`;
@@ -3648,7 +3653,7 @@ function renderPalette() {
     }
   } else {
     for (const [id, cnt] of sorted) {
-      const c = PALETTE_BY_ID[id];
+      const c = PALETTE_BY_ID[id]; if (!c) continue;
       const row = document.createElement('div');
       row.className = 'color-row' + (state.selectedColor === id ? ' selected' : '');
       row.innerHTML = `
@@ -3775,6 +3780,7 @@ function showGeneratingOverlay(text, cancellable) {
 
 
 function genPNGSource(cv, cb) {
+  if (!cv) { cb(null); return; }
   if (typeof cv.toBlob === 'function') {
     try {
       let done = false;
@@ -4057,7 +4063,7 @@ async function buildShareCanvas() {
     const dx = state.mirror ? N - 1 - x : x;       // 镜像：水平翻转列，与工作图纸一致
     const px = Math.round(artX + dx * cell);
     const py = Math.round(artY + y * cell);
-    c.fillStyle = PALETTE_BY_ID[id].hex;
+    c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
     c.fillRect(px, py, Math.ceil(cell), Math.ceil(cell));
   }
   c.fillStyle = '#6A4C93';
@@ -4257,7 +4263,7 @@ function buildExportCanvas(opts) {
       const swatchSize = Math.round(28 * k);
       const sx = gx + 2;
       const sy = gy + (palCellH - swatchSize) / 2;
-      c.fillStyle = PALETTE_BY_ID[id].hex;
+      c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
       roundRect(c, sx, sy, swatchSize, swatchSize, Math.max(3, 3 * k));
       c.fill();
       c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(26 * k)}px sans-serif`;
@@ -4290,7 +4296,7 @@ function buildExportCanvas(opts) {
     for (const s of seriesOrder) {
       listTotalH += listSeriesGap + Math.ceil(bySeries[s].items.length / 2) * listLineH;
     }
-    listTotalH += listPad * 3;
+    listTotalH += palPad * 3;
 
     const listTop = titleH + patternH + gap + palH;
     const finalH = listTop + listTotalH;
@@ -4326,7 +4332,7 @@ function buildExportCanvas(opts) {
           const item = items[idx];
           const cx = col === 0 ? palPad + 6 : palPad + listColW + 6;
           const sw = Math.round(20 * k);
-          ctx2.fillStyle = PALETTE_BY_ID[item.id].hex;
+          ctx2.fillStyle = (PALETTE_BY_ID[item.id] || {}).hex || '#cccccc';
           ctx2.fillRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
           ctx2.strokeStyle = '#E2D8F2'; ctx2.lineWidth = 0.5;
           ctx2.strokeRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
@@ -4522,7 +4528,8 @@ function buildExportSVG(opts) {
       const gy = gridStartY + palPad + row * entryH;
       const sw = 78;                   // v138 色块大小3倍(26→78)
       const sx = gx, sy = gy + (entryH - sw) / 2;
-      p.push('<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sw + '" rx="3" fill="' + PALETTE_BY_ID[id].hex + '" stroke="#E2D8F2" stroke-width="0.5"/>');
+      var _svgh = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
+      p.push('<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sw + '" rx="3" fill="' + _svgh + '" stroke="#E2D8F2" stroke-width="0.5"/>');
       const tx = sx + sw + 7;
       p.push('<text x="' + tx + '" y="' + (gy + entryH / 2 - 14) + '" font-size="54" font-weight="700" fill="#211E2B" dominant-baseline="middle">' + id + '</text>');   // v138 色号3倍(18→54)
       p.push('<text x="' + tx + '" y="' + (gy + entryH / 2 + 26) + '" font-size="45" fill="#6B6675" dominant-baseline="middle">' + cnt + '</text>');   // v138 数量3倍(15→45)
@@ -4565,7 +4572,8 @@ function buildExportSVG(opts) {
           if (idx >= items.length) break;
           const item = items[idx];
           const cx = col === 0 ? palPad + 6 : palPad + svgColW + 6;
-          p.push('<rect x="' + cx + '" y="' + (syPos + (svgLineH - 24) / 2) + '" width="24" height="24" fill="' + PALETTE_BY_ID[item.id].hex + '" stroke="#E2D8F2" stroke-width="0.5"/>');
+          var _svgh2 = (PALETTE_BY_ID[item.id] || {}).hex || '#cccccc';
+          p.push('<rect x="' + cx + '" y="' + (syPos + (svgLineH - 24) / 2) + '" width="24" height="24" fill="' + _svgh2 + '" stroke="#E2D8F2" stroke-width="0.5"/>');
           p.push('<text x="' + (cx + 34) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" font-weight="700" font-family="monospace" fill="#211E2B" dominant-baseline="middle">' + item.id + '</text>');
           p.push('<text x="' + (cx + 90) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" fill="#6B6675" dominant-baseline="middle">' + item.cnt.toLocaleString() + ' 颗</text>');
         }
@@ -4586,7 +4594,7 @@ function buildExportSVG(opts) {
     p.push('<rect x="0" y="0" width="' + W + '" height="' + svgNewH + '" fill="url(#wm)"/>');
     p.push('</svg>');
   }
-  var _hasList = (showStats && sorted.length > 0);
+  var _hasList = (showStats && sorted.length > 0 && opts.bom !== false);
   if (_hasList) {
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + p.join('');
   }
@@ -4786,7 +4794,7 @@ function buildBlockExportCanvas(opts) {
       const col = i % pcols, row = Math.floor(i / pcols);
       const gx = ox + pad + palPad + col * palEntryW;
       const gy = palTop + labelH + row * palCellH;
-      c.fillStyle = PALETTE_BY_ID[id].hex; c.fillRect(gx, gy, 18, 18);
+      c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc'; c.fillRect(gx, gy, 18, 18);
       c.fillStyle = '#211E2B'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText(id, gx + 22, gy + 9);
       c.fillStyle = '#6B6675'; c.font = '12px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
@@ -4938,7 +4946,7 @@ function bindEvents() {
   ['dragover', 'dragenter'].forEach(ev => uz.addEventListener(ev, e => { e.preventDefault(); uz.classList.add('drag'); }));
   ['dragleave', 'drop'].forEach(ev => uz.addEventListener(ev, e => { e.preventDefault(); uz.classList.remove('drag'); }));
   uz.addEventListener('drop', e => {
-    const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
+    const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) { setUploadError('请拖入图片文件（支持 JPG/PNG/WebP/SVG）'); return; }
     const reader = new FileReader();
     reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.originalImage = img; state.sourceImage = img; clearUserMask(); processImage(); }; img.src = ev.target.result; };
     reader.readAsDataURL(f);
@@ -5045,10 +5053,11 @@ function bindEvents() {
     if (!_samplingBg || !state.srcRGB || !renderGeom) return;
     var rect = canvas.getBoundingClientRect();
     var dr = state.displayRect;
-    var M = dr ? dr.M : state.N;
-    var scaleX = M / (rect.width / renderGeom.cell);
-    var gx = Math.floor((e.clientX - rect.left) / rect.width * M);
-    var gy = Math.floor((e.clientY - rect.top) / rect.height * M);
+    var M = dr ? dr.M : state.N;
+    var backingX = (e.clientX - rect.left) / rect.width * canvas.width;
+    var backingY = (e.clientY - rect.top) / rect.height * canvas.height;
+    var gx = Math.floor((backingX - renderGeom.ox) / renderGeom.cell);
+    var gy = Math.floor((backingY - renderGeom.oy) / renderGeom.cell);
     if (gx < 0 || gx >= M || gy < 0 || gy >= M) return;
     var srcX = gx, srcY = gy;
     if (dr && gx >= dr.offX && gx < dr.offX + dr.drawCols && gy >= dr.offY && gy < dr.offY + dr.drawRows) {
@@ -5266,6 +5275,14 @@ function bindEvents() {
     renderAll();
     $('canvas-hint').textContent = '预览：请上传图片或载入示例，图片将自动映射到 Mard 官方色板';
   });
+  var elRestoreAll = $('ex-restore-all');
+  if (elRestoreAll) elRestoreAll.addEventListener('click', () => {
+    if (!state.sourceImage) return;
+    state.excluded.clear();
+    $('excluded').hidden = true;
+    $('palette-list').innerHTML = '';
+    processImage();
+  });
   document.querySelectorAll('.block.collapsible .block-label').forEach(label => {
     label.addEventListener('click', () => {
       label.closest('.block').classList.toggle('collapsed');
@@ -5404,7 +5421,7 @@ function timeStamp() {
 }
 
 function openPrepModal() {
-  if (!state.sourceImage) return;
+  if (!state.sourceImage) { setUploadError('请先上传图片或载入示例，再使用图片处理'); return; }
   state.prepBase = state.sourceImage;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;

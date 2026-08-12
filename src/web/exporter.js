@@ -57,6 +57,7 @@ function showGeneratingOverlay(text, cancellable) {
 /* 生成 PNG 源：优先 toBlob（体积小、加载快），失败或超时回退 toDataURL。
    关键：回调【一定】会被调用，避免手机浏览器对大图 toBlob 静默失败导致「点了没反应」。 */
 function genPNGSource(cv, cb) {
+  if (!cv) { cb(null); return; }
   if (typeof cv.toBlob === 'function') {
     try {
       let done = false;
@@ -386,7 +387,7 @@ async function buildShareCanvas() {
     const dx = state.mirror ? N - 1 - x : x;       // 镜像：水平翻转列，与工作图纸一致
     const px = Math.round(artX + dx * cell);
     const py = Math.round(artY + y * cell);
-    c.fillStyle = PALETTE_BY_ID[id].hex;
+    c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
     c.fillRect(px, py, Math.ceil(cell), Math.ceil(cell));
   }
 
@@ -631,7 +632,7 @@ function buildExportCanvas(opts) {
       const swatchSize = Math.round(28 * k);
       const sx = gx + 2;
       const sy = gy + (palCellH - swatchSize) / 2;
-      c.fillStyle = PALETTE_BY_ID[id].hex;
+      c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
       roundRect(c, sx, sy, swatchSize, swatchSize, Math.max(3, 3 * k));
       c.fill();
 
@@ -670,7 +671,7 @@ function buildExportCanvas(opts) {
     for (const s of seriesOrder) {
       listTotalH += listSeriesGap + Math.ceil(bySeries[s].items.length / 2) * listLineH;
     }
-    listTotalH += listPad * 3;
+    listTotalH += palPad * 3;
 
     const listTop = titleH + patternH + gap + palH;
     const finalH = listTop + listTotalH;
@@ -712,7 +713,7 @@ function buildExportCanvas(opts) {
           const item = items[idx];
           const cx = col === 0 ? palPad + 6 : palPad + listColW + 6;
           const sw = Math.round(20 * k);
-          ctx2.fillStyle = PALETTE_BY_ID[item.id].hex;
+          ctx2.fillStyle = (PALETTE_BY_ID[item.id] || {}).hex || '#cccccc';
           ctx2.fillRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
           ctx2.strokeStyle = '#E2D8F2'; ctx2.lineWidth = 0.5;
           ctx2.strokeRect(cx, yPos + (listLineH - sw) / 2, sw, sw);
@@ -926,7 +927,8 @@ function buildExportSVG(opts) {
       const gy = gridStartY + palPad + row * entryH;
       const sw = 78;                   // v138 色块大小3倍(26→78)
       const sx = gx, sy = gy + (entryH - sw) / 2;
-      p.push('<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sw + '" rx="3" fill="' + PALETTE_BY_ID[id].hex + '" stroke="#E2D8F2" stroke-width="0.5"/>');
+      var _svgh = (PALETTE_BY_ID[id] || {}).hex || '#cccccc';
+      p.push('<rect x="' + sx + '" y="' + sy + '" width="' + sw + '" height="' + sw + '" rx="3" fill="' + _svgh + '" stroke="#E2D8F2" stroke-width="0.5"/>');
       const tx = sx + sw + 7;
       p.push('<text x="' + tx + '" y="' + (gy + entryH / 2 - 14) + '" font-size="54" font-weight="700" fill="#211E2B" dominant-baseline="middle">' + id + '</text>');   // v138 色号3倍(18→54)
       p.push('<text x="' + tx + '" y="' + (gy + entryH / 2 + 26) + '" font-size="45" fill="#6B6675" dominant-baseline="middle">' + cnt + '</text>');   // v138 数量3倍(15→45)
@@ -976,7 +978,8 @@ function buildExportSVG(opts) {
           if (idx >= items.length) break;
           const item = items[idx];
           const cx = col === 0 ? palPad + 6 : palPad + svgColW + 6;
-          p.push('<rect x="' + cx + '" y="' + (syPos + (svgLineH - 24) / 2) + '" width="24" height="24" fill="' + PALETTE_BY_ID[item.id].hex + '" stroke="#E2D8F2" stroke-width="0.5"/>');
+          var _svgh2 = (PALETTE_BY_ID[item.id] || {}).hex || '#cccccc';
+          p.push('<rect x="' + cx + '" y="' + (syPos + (svgLineH - 24) / 2) + '" width="24" height="24" fill="' + _svgh2 + '" stroke="#E2D8F2" stroke-width="0.5"/>');
           p.push('<text x="' + (cx + 34) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" font-weight="700" font-family="monospace" fill="#211E2B" dominant-baseline="middle">' + item.id + '</text>');
           p.push('<text x="' + (cx + 90) + '" y="' + (syPos + svgLineH / 2) + '" font-size="24" fill="#6B6675" dominant-baseline="middle">' + item.cnt.toLocaleString() + ' 颗</text>');
         }
@@ -1014,7 +1017,7 @@ function buildExportSVG(opts) {
 
   // 水印：斜向平铺 SVG pattern
   // If采购清单 was already added, it handled watermark + </svg> + return
-  var _hasList = (showStats && sorted.length > 0);
+  var _hasList = (showStats && sorted.length > 0 && opts.bom !== false);
   if (_hasList) {
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + p.join('');
   }
@@ -1221,7 +1224,7 @@ function buildBlockExportCanvas(opts) {
       const col = i % pcols, row = Math.floor(i / pcols);
       const gx = ox + pad + palPad + col * palEntryW;
       const gy = palTop + labelH + row * palCellH;
-      c.fillStyle = PALETTE_BY_ID[id].hex; c.fillRect(gx, gy, 18, 18);
+      c.fillStyle = (PALETTE_BY_ID[id] || {}).hex || '#cccccc'; c.fillRect(gx, gy, 18, 18);
       c.fillStyle = '#211E2B'; c.font = 'bold 13px monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText(id, gx + 22, gy + 9);
       c.fillStyle = '#6B6675'; c.font = '12px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';

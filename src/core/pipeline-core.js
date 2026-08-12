@@ -202,7 +202,7 @@ function _finishAfter(grid, N) {
   // 颜色数量上限：合并肉眼难分的相近色
   reduceColors(grid, state.maxColors);
   // v123: 像素描边（后处理）
-  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId);
+  if (state.outline.on) applyOutline(grid, state.outline.strength, state.outline.colorId, state.outline.thickness);
   state.grid = grid;
   // 图片实际覆盖的有效格子数
   let eminX = N, eminY = N, emaxX = -1, emaxY = -1;

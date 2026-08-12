@@ -37,7 +37,7 @@ function bindEvents() {
   ['dragover', 'dragenter'].forEach(ev => uz.addEventListener(ev, e => { e.preventDefault(); uz.classList.add('drag'); }));
   ['dragleave', 'drop'].forEach(ev => uz.addEventListener(ev, e => { e.preventDefault(); uz.classList.remove('drag'); }));
   uz.addEventListener('drop', e => {
-    const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) return;
+    const f = e.dataTransfer.files[0]; if (!f || !f.type.startsWith('image/')) { setUploadError('请拖入图片文件（支持 JPG/PNG/WebP/SVG）'); return; }
     const reader = new FileReader();
     reader.onload = ev => { const img = new Image(); img.onload = () => { resetMainPan(); state.originalImage = img; state.sourceImage = img; clearUserMask(); processImage(); }; img.src = ev.target.result; };
     reader.readAsDataURL(f);
@@ -169,10 +169,11 @@ function bindEvents() {
     var rect = canvas.getBoundingClientRect();
     var dr = state.displayRect;
     var M = dr ? dr.M : state.N;
-    var scaleX = M / (rect.width / renderGeom.cell);
-    // Actually compute grid position from click
-    var gx = Math.floor((e.clientX - rect.left) / rect.width * M);
-    var gy = Math.floor((e.clientY - rect.top) / rect.height * M);
+    // 用 backing store 坐标映射，补偿坐标轴边距（旧算法直接用 CSS 比例，边距导致偏移数格）
+    var backingX = (e.clientX - rect.left) / rect.width * canvas.width;
+    var backingY = (e.clientY - rect.top) / rect.height * canvas.height;
+    var gx = Math.floor((backingX - renderGeom.ox) / renderGeom.cell);
+    var gy = Math.floor((backingY - renderGeom.oy) / renderGeom.cell);
     if (gx < 0 || gx >= M || gy < 0 || gy >= M) return;
     // Translate display coords to grid coords
     var srcX = gx, srcY = gy;
@@ -411,6 +412,16 @@ function bindEvents() {
     $('canvas-hint').textContent = '预览：请上传图片或载入示例，图片将自动映射到 Mard 官方色板';
   });
 
+  // 全部恢复：清除排除列表，重新处理当前图
+  var elRestoreAll = $('ex-restore-all');
+  if (elRestoreAll) elRestoreAll.addEventListener('click', () => {
+    if (!state.sourceImage) return;
+    state.excluded.clear();
+    $('excluded').hidden = true;
+    $('palette-list').innerHTML = '';
+    processImage();
+  });
+
   // 左侧边栏折叠/展开
   document.querySelectorAll('.block.collapsible .block-label').forEach(label => {
     label.addEventListener('click', () => {
@@ -570,7 +581,7 @@ function timeStamp() {
 }
 
 function openPrepModal() {
-  if (!state.sourceImage) return;
+  if (!state.sourceImage) { setUploadError('请先上传图片或载入示例，再使用图片处理'); return; }
   state.prepBase = state.sourceImage;
   state.prep = { rotate: 0, flipH: false, flipV: false, brightness: 0, contrast: 0, saturation: 0 };
   state.userCrop = null;
