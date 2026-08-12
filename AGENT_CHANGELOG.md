@@ -333,3 +333,32 @@ fox-bead/
 **验证标准**：网页 200 打开；顶层窗口下点「下载图纸」→ 弹保存对话框 → 点「下载图片」按钮真实落文件（GitHub Pages 是顶层窗口，`<a download>` 不被 sandbox 拦截，这点 CloudStudio 沙箱做不到）。
 
 **版本纪律**：本次仍为「下载」bug 延续修复，保持 v144 未 bump。
+
+---
+
+## 5. v145 优化四件套（feat·bump）
+
+> 日期：2026-08-12｜commit `4c1e665`（177b2c7..4c1e665）｜push Gitee main｜CloudStudio 重新部署
+
+**背景**：下载问题经 GitHub Pages 从根上解决后，用户全选 4 个优化方向（大图进度反馈 / 首次引导+示例图 / 导出图质量 / 移动端适配），统一 bump v145。
+
+**① 大图生成进度反馈（#61）**
+- 根因：N≥80 大图 `applyFloydSteinbergAsync` 分批渲染无进度回调，用户误以为卡死（与早期下载「点了没反应」同类痛点）。
+- 修复：`pipeline-core.js` 加零 DOM 的 `onProgress` 回调 + `_genActive` 取消标志（铁律 C6 合规，无 document/window 引用）；`pipeline.js` 的 `processImage` 串联进度（采样 0-50% + 抖动 50-100%）并暴露 `cancelGenerate()`；`exporter.js` 的 `showGeneratingOverlay` 升级为带进度条 + 取消按钮（点取消置 `_genActive=false` 中断分批）。
+
+**② 首次使用引导浮层（#62）**
+- `template.html` 加 `#onboard-mask` 浮层（3 步引导 + 「载入示例图体验」按钮 + 「我知道了」）。
+- `events.js` 初始化段加 `showFirstRunGuide()`：首次打开且 `!state.grid` 时显示，`localStorage['foxbead-onboard-v1']` 记忆不再弹；「载入示例图体验」复用既有 `loadSamplePhoto()`（v133 已就绪，Blob+ObjectURL 载入 sample.jpg，不重写）。
+- `css/style.css` 加 `.onboard-mask` 等样式（适配浅/深主题变量）；onboard-sub 文案含「手机可双指缩放查看细节」提示。
+
+**③ 导出图质量增强（#63）**
+- `exporter.js` 新增 `drawBeadTexture()`：每颗豆圆角描边 `rgba(0,0,0,0.12)`（导出专属，不影响 render.js 实时预览），在 `buildExportCanvas`(替换 drawBeadBorders) 与 `buildBlockExportCanvas`(格子循环后) 调用，呈珠子轮廓质感。
+- 图例字号放大：标签 18k→22k、色号 20k→26k、数量 16k→18k；坐标数字字号 `cell*0.35`→`cell*0.5` 加粗、`#999`→`#666`。未改 C4 色板。
+
+**④ 移动端/小程序真机适配（#64·审计结论：已基本齐全，未重复造轮子）**
+- 审计确认：`events.js:196-295` 主预览双指缩放(`_pinch`+rAF节流)+单指平移(`clampMainPan`)+单指取样(`{passive:false}`+`preventDefault` 齐全)；`editor.js:533-607` 编辑器双指缩放+单指拖动/轻点选格；移动端保存对话框(复制图片)先前已就绪。
+- 交付：`小程序真机验收清单.md` 标题 v143→v145，新增「3.5 移动端网页交互」验收章节标注上述能力已就绪；onboard 文案补双指缩放提示。
+
+**验证**：`node --check`(init/pipeline-core/pipeline/exporter/events 全 OK) / `node build.js`(CSS 693行·JS 4924行) / `smoke-mini` 全 PASS。铁律——C1 `?.` 仅 image-prep.js **注释文字**(非代码) / C2 fromEntries 同注释 / C3 spread=0 / C6 pipeline-core 零 DOM=0；产物 v145=在线。
+
+**部署**：commit `4c1e665` push Gitee main；CloudStudio 重新部署（同 sandboxId）。GitHub Pages 仍显示 v144——需 cc 重新 `git pull`+`git push github master:main`（我方无 github remote 与认证，不能代推）。
