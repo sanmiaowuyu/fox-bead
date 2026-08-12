@@ -445,3 +445,11 @@ fox-bead/
 - **修复**：MAX_CANVAS 16384→10000→6000（23MP），toBlob 超时 5s→12s，桌面 m-confirm 回退原简路径
 - **最终参数**：桌面 6000(23MP) / 手机 2400(4MP) 重试 1200(1MP) / 手机跳过 toBlob+JPEG 兜底
 - **验证**：build + smoke-mini 全 PASS；铁律全绿
+
+### 第九轮：下载图纸失败 — listPad 补漏（b569db7）
+- **问题**：桌面端点「下载图纸」无反应，点「下载分享图」正常。排查发现 `buildExportCanvas()` 采购清单（BOM）区块引用 `listPad` 变量但从未定义，抛出 ReferenceError 导致整条导出路径崩溃
+- **修复**：`src/web/exporter.js` BOM 变量定义处补 `const listPad = Math.round(22 * k);`
+- **为何分享图不受影响**：`buildShareCanvas()` 不含采购清单区块，不走 BOM 分支
+- **合并**：拉取 WB 最新提交（v141-v144 重构系列）→ 合并冲突仅 `docs/index.html`（构建产物）→ 以远程版本为准后重建 → 源码修复保留
+- **推送**：origin（GitHub）✅，gitee 已推但余总指示后续不再推 gitee（免费 Pages 已取消）
+- **验证**：build + smoke-mini 全 PASS；铁律 ?.=0 全绿
