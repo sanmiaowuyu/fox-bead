@@ -279,7 +279,7 @@ function downloadCanvasPNG(cv, name) {
         hctx.imageSmoothingEnabled = true;
         hctx.drawImage(cv, 0, 0, half.width, half.height);
         genPNGSource(half, function (src2) {
-          if (!src2) { alert('生成失败，请尝试缩小板子尺寸后重试'); return; }
+          if (!src2) { alert('生成失败\n\n请尝试：\n1. 缩小板子尺寸（当前 ' + state.N + '×' + state.N + ' → 试试 58×58）\n2. 换用系统自带浏览器打开\n3. 桌面端访问 sanmiaowuyu.github.io/fox-bead/'); return; }
           showMobileSaveOverlay(src2, name);
         });
         return;
@@ -826,8 +826,7 @@ function buildExportSVG(opts) {
   const patOY = titleH + pad;
 
   const p = [];
-  p.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Noto Sans SC, PingFang SC, Microsoft YaHei, sans-serif">');
-  p.push('<style>@import url("https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&amp;family=Ma+Shan+Zheng&amp;display=swap");</style>');
+  p.push('<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="system-ui, PingFang SC, Microsoft YaHei, sans-serif">');
   // v136: 白底背景矩形（v128 透明底在手机/部分查看器中显示为黑色）
   p.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="#FFFFFF"/>');
   // 标题栏：品牌名 + 豆板/模式/规格/总豆数/总色卡

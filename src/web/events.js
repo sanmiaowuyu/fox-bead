@@ -56,6 +56,8 @@ function bindEvents() {
         return;
       }
     }
+    // 有剪贴板数据但没有图片 → 给用户提示
+    if (items.length > 0) setUploadError('未检测到图片，请复制一张图片后再粘贴');
   });
 
   // 网格尺寸
@@ -1247,7 +1249,7 @@ function buildInvRow(id, need) {
   var c = (typeof MARD_PALETTE_BY_ID !== 'undefined' && MARD_PALETTE_BY_ID[id]) ? MARD_PALETTE_BY_ID[id] : { hex: '#cccccc', name: '' };
   var stock = state.inventory[id];
   var isSet = (stock !== undefined && stock !== null && stock !== '');
-  var stockVal = isSet ? stock : '';
+  var stockVal = isSet ? String(stock).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
   var gapHtml, deficitCls = '';
   if (!isSet) {
     gapHtml = '<span class="inv-gap na">未填</span>';
