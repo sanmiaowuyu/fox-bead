@@ -3922,9 +3922,17 @@ function showMobileSaveOverlay(src, name, failMsg) {
     mask.appendChild(copyBtn);
   }
   var dlBtn = document.createElement('button');
-  dlBtn.textContent = isPdf ? '下载 PDF' : '下载图片';
+  dlBtn.textContent = isPdf ? '下载 PDF' : (isMobileDevice() ? '打开图片（长按保存）' : '下载图片');
   dlBtn.style.cssText = 'margin-top:10px;padding:10px 32px;border:none;border-radius:22px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.4);';
-  dlBtn.onclick = function () { tryRealDownload(src, name || (isPdf ? 'fox-bead.pdf' : 'fox-bead.png')); };
+  dlBtn.onclick = function () {
+    if (isMobileDevice() && !isPdf) {
+      try { var w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; }
+      dlBtn.textContent = '已打开，长按图片保存';
+    } else {
+      tryRealDownload(src, name || (isPdf ? 'fox-bead.pdf' : 'fox-bead.png'));
+      dlBtn.textContent = '已下载（如无反应请右键/长按图片另存）';
+    }
+  };
   mask.appendChild(dlBtn);
   var openBtn = document.createElement('button');
   openBtn.textContent = '新窗口打开';

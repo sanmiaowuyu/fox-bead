@@ -213,11 +213,20 @@ function showMobileSaveOverlay(src, name, failMsg) {
     mask.appendChild(copyBtn);
   }
 
-  // 下载按钮
+  // 下载按钮：手机端 <a download> 普遍被浏览器忽略，改用新窗口打开（长按/右键可保存）
   var dlBtn = document.createElement('button');
-  dlBtn.textContent = isPdf ? '下载 PDF' : '下载图片';
+  dlBtn.textContent = isPdf ? '下载 PDF' : (isMobileDevice() ? '打开图片（长按保存）' : '下载图片');
   dlBtn.style.cssText = 'margin-top:10px;padding:10px 32px;border:none;border-radius:22px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.4);';
-  dlBtn.onclick = function () { tryRealDownload(src, name || (isPdf ? 'fox-bead.pdf' : 'fox-bead.png')); };
+  dlBtn.onclick = function () {
+    if (isMobileDevice() && !isPdf) {
+      // 手机端：打开图片到新标签页，用户长按即可保存（浏览器拦截 download 属性时仍可用）
+      try { var w = window.open(url, '_blank'); if (!w) location.href = url; } catch (e) { location.href = url; }
+      dlBtn.textContent = '已打开，长按图片保存';
+    } else {
+      tryRealDownload(src, name || (isPdf ? 'fox-bead.pdf' : 'fox-bead.png'));
+      dlBtn.textContent = '已下载（如无反应请右键/长按图片另存）';
+    }
+  };
   mask.appendChild(dlBtn);
 
   // 新窗口打开（沙箱允许弹窗时）
