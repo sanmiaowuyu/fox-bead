@@ -442,8 +442,8 @@ function buildExportCanvas(opts) {
   const dr = state.displayRect;
   const M = dr.M;
   // v91: 导出超高清尺寸，每格 140 像素（桌面），放大后色号仍清晰
-  const MAX_CANVAS = 6000;         // 桌面导出单边上限（6600×10000 的 66MP canvas toBlob 在部分环境仍超时）
-  const CANVAS_RESERVE = 1600;     // 标题栏+色号卡预留空间
+  const MAX_CANVAS = 4000;         // 桌面导出单边上限（分享图 1440 工作正常，下载图对齐到 7MP 级别）
+  const CANVAS_RESERVE = 1200;     // 标题栏+色号卡预留空间
   const MAX_MOBILE = 2400;         // 手机端导出单边上限（夸克等 WebView 的 toDataURL 对大 canvas 兼容性极差）
   const MAX_WEIXIN = 2400;         // 微信端导入上限
   let cell = 140;                  // 桌面超高清 140px/格（v91: 80→140，放大空间+75%）
@@ -1116,7 +1116,7 @@ function buildBlockExportCanvas(opts) {
   if (!state.displayRect || !state.grid) return null;
   const dr = state.displayRect;
   const M = dr.M;
-  const MAX_CANVAS = 6000, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
+  const MAX_CANVAS = 4000, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
   const HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
   const bs = (opts && opts.blockSize) ? opts.blockSize : 29;
   const cols = Math.ceil(M / bs), rows = Math.ceil(M / bs);
