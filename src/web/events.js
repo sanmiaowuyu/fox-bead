@@ -423,30 +423,15 @@ function bindEvents() {
     const fmt = (activeFmt && activeFmt.dataset.format) || 'png';
     const blockFmt = (function () { const s = document.querySelector('#m-blocks-fmt-seg .seg-item.active'); return s ? s.dataset.fmt : 'png'; })();
     closeModal();
-    var loading = showGeneratingOverlay('正在生成图纸…', true);
-    setTimeout(function () {
-      try {
-        if (opts.blocks && blockFmt === 'pdf') {
-          const pdf = exportBlocksPDF(opts);
-          loading.close();
-          if (pdf) downloadBlob(pdf, base + '.pdf');
-          else downloadCanvasPNG(buildBlockExportCanvas(opts), base + '.png');
-        } else if (fmt === 'svg') {
-          loading.close();
-          downloadSVG(buildExportSVG(opts), base + '.svg');
-        } else {
-          var cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
-          genPNGSource(cv, function (src) {
-            loading.close();
-            if (!src) { alert('生成失败，请重试'); return; }
-            showMobileSaveOverlay(src, base + '.png');
-          });
-        }
-      } catch (e) {
-        loading.close();
-        alert('生成失败，请重试');
-      }
-    }, 30);
+    if (opts.blocks && blockFmt === 'pdf') {
+      const pdf = exportBlocksPDF(opts);
+      if (pdf) downloadBlob(pdf, base + '.pdf');
+      else downloadCanvasPNG(buildBlockExportCanvas(opts), base + '.png');
+    } else if (fmt === 'svg') {
+      downloadSVG(buildExportSVG(opts), base + '.svg');
+    } else {
+      downloadCanvasPNG(opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts), base + '.png');
+    }
   });
 
   // 重置

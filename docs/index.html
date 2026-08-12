@@ -3413,8 +3413,8 @@ const N = state.N;
 if (!state.displayRect || !state.grid) return null;
 const dr = state.displayRect;
 const M = dr.M;
-const MAX_CANVAS = 10000;        // 桌面导出单边上限（16384 理论值但 225MP 的 toBlob/toDataURL 实测会崩）
-const CANVAS_RESERVE = 2000;     // 标题栏+色号卡预留空间，确保总 canvas 不超限
+const MAX_CANVAS = 6000;         // 桌面导出单边上限（6600×10000 的 66MP canvas toBlob 在部分环境仍超时）
+const CANVAS_RESERVE = 1600;     // 标题栏+色号卡预留空间
 const MAX_MOBILE = 2400;         // 手机端导出单边上限（夸克等 WebView 的 toDataURL 对大 canvas 兼容性极差）
 const MAX_WEIXIN = 2400;         // 微信端导入上限
 let cell = 140;                  // 桌面超高清 140px/格（v91: 80→140，放大空间+75%）
@@ -3989,7 +3989,7 @@ const N = state.N;
 if (!state.displayRect || !state.grid) return null;
 const dr = state.displayRect;
 const M = dr.M;
-const MAX_CANVAS = 10000, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
+const MAX_CANVAS = 6000, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
 const HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
 const bs = (opts && opts.blockSize) ? opts.blockSize : 29;
 const cols = Math.ceil(M / bs), rows = Math.ceil(M / bs);
@@ -4598,30 +4598,15 @@ const activeFmt = document.querySelector('#format-seg .seg-item.active');
 const fmt = (activeFmt && activeFmt.dataset.format) || 'png';
 const blockFmt = (function () { const s = document.querySelector('#m-blocks-fmt-seg .seg-item.active'); return s ? s.dataset.fmt : 'png'; })();
 closeModal();
-var loading = showGeneratingOverlay('正在生成图纸…', true);
-setTimeout(function () {
-try {
 if (opts.blocks && blockFmt === 'pdf') {
 const pdf = exportBlocksPDF(opts);
-loading.close();
 if (pdf) downloadBlob(pdf, base + '.pdf');
 else downloadCanvasPNG(buildBlockExportCanvas(opts), base + '.png');
 } else if (fmt === 'svg') {
-loading.close();
 downloadSVG(buildExportSVG(opts), base + '.svg');
 } else {
-var cv = opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts);
-genPNGSource(cv, function (src) {
-loading.close();
-if (!src) { alert('生成失败，请重试'); return; }
-showMobileSaveOverlay(src, base + '.png');
-});
+downloadCanvasPNG(opts.blocks ? buildBlockExportCanvas(opts) : buildExportCanvas(opts), base + '.png');
 }
-} catch (e) {
-loading.close();
-alert('生成失败，请重试');
-}
-}, 30);
 });
 $('btn-reset').addEventListener('click', () => {
 state.sourceImage = null; state.grid = null; state.excluded.clear();
