@@ -3101,7 +3101,7 @@ let done = false;
 const timer = setTimeout(() => {
 if (done) return; done = true;
 try { cb(cv.toDataURL('image/png')); } catch (e2) { cb(null); }
-}, 5000); // 5 秒超时兜底
+}, 12000); // 12 秒超时兜底（桌面大 canvas 的 toBlob 可能需要较长时间）
 cv.toBlob(blob => {
 if (done) return; done = true; clearTimeout(timer);
 if (blob && blob.size > 0) cb(blob);
@@ -3413,7 +3413,7 @@ const N = state.N;
 if (!state.displayRect || !state.grid) return null;
 const dr = state.displayRect;
 const M = dr.M;
-const MAX_CANVAS = 16384;        // 浏览器画布单边上限
+const MAX_CANVAS = 10000;        // 桌面导出单边上限（16384 理论值但 225MP 的 toBlob/toDataURL 实测会崩）
 const CANVAS_RESERVE = 2000;     // 标题栏+色号卡预留空间，确保总 canvas 不超限
 const MAX_MOBILE = 2400;         // 手机端导出单边上限（夸克等 WebView 的 toDataURL 对大 canvas 兼容性极差）
 const MAX_WEIXIN = 2400;         // 微信端导入上限
@@ -3989,7 +3989,7 @@ const N = state.N;
 if (!state.displayRect || !state.grid) return null;
 const dr = state.displayRect;
 const M = dr.M;
-const MAX_CANVAS = 16384, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
+const MAX_CANVAS = 10000, MAX_MOBILE = 4096, MAX_WEIXIN = 4096;
 const HARD = isWeixin() ? MAX_WEIXIN : (isMobileDevice() ? MAX_MOBILE : MAX_CANVAS);
 const bs = (opts && opts.blockSize) ? opts.blockSize : 29;
 const cols = Math.ceil(M / bs), rows = Math.ceil(M / bs);
