@@ -60,6 +60,13 @@ function bindEvents() {
     if (items.length > 0) setUploadError('未检测到图片，请复制一张图片后再粘贴');
   });
 
+  // Ctrl+Z 撤销 / Ctrl+Shift+Z 或 Ctrl+Y 重做
+  window.addEventListener('keydown', function (e) {
+    if (!state.grid) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key === 'z' && !e.shiftKey) { e.preventDefault(); if (typeof undoEdit === 'function') undoEdit(); }
+    else if ((e.ctrlKey || e.metaKey) && !e.altKey && ((e.key === 'z' && e.shiftKey) || e.key === 'y')) { e.preventDefault(); if (typeof redoEdit === 'function') redoEdit(); }
+  });
+
   // 网格尺寸
   $('grid-size').addEventListener('input', e => {
     state.N = +e.target.value;
@@ -118,6 +125,27 @@ function bindEvents() {
   // $('btn-preview').addEventListener('click', openPreview);
   // 示例（载入用户真实小猫照片）
   $('btn-sample').addEventListener('click', loadSamplePhoto);
+  // 几何图案示例：桃心，无须外部图片
+  var geoBtn = $('btn-sample-geo');
+  if (geoBtn) geoBtn.addEventListener('click', function () {
+    var cv = document.createElement('canvas'); cv.width = 200; cv.height = 200;
+    var c = cv.getContext('2d');
+    c.fillStyle = '#FFFFFF'; c.fillRect(0, 0, 200, 200);
+    c.fillStyle = '#E85D75';
+    c.beginPath();
+    var cx = 100, cy = 90, s = 60;
+    c.moveTo(cx, cy + s * 0.6);
+    c.bezierCurveTo(cx, cy - s * 0.3, cx - s, cy - s * 0.6, cx - s, cy - s * 0.1);
+    c.bezierCurveTo(cx - s, cy + s * 0.4, cx, cy + s * 0.8, cx, cy + s);
+    c.bezierCurveTo(cx, cy + s * 0.8, cx + s, cy + s * 0.4, cx + s, cy - s * 0.1);
+    c.bezierCurveTo(cx + s, cy - s * 0.6, cx, cy - s * 0.3, cx, cy + s * 0.6);
+    c.fill();
+    c.fillStyle = '#FFFFFF'; c.beginPath(); c.arc(cx - 18, cy - 10, 8, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(cx + 18, cy - 10, 8, 0, Math.PI * 2); c.fill();
+    var img = new Image();
+    img.onload = function () { resetMainPan(); state.originalImage = img; state.sourceImage = img; clearUserMask(); processImage(); };
+    img.src = cv.toDataURL('image/png');
+  });
 
   // v101: 品牌切换已下线（只做 Mard），brand-pills UI 与监听一并移除
   // 处理模式

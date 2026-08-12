@@ -117,27 +117,25 @@ var jsContent = jsParts.join('\n\n');
 
 // ========== 4. 基础压缩 ==========
 function minifyJS(code) {
-  // 去掉多行注释（保留的不去：/*! ... */ 这类 license 注释本项目没有）
   code = code.replace(/\/\*[\s\S]*?\*\//g, '');
-  // 去掉单行注释（整行以 // 开头的）
   code = code.replace(/^\s*\/\/.*$/gm, '');
-  // 去掉多余空行（连续空行合并为一行）
-  code = code.replace(/\n{3,}/g, '\n\n');
-  // 去掉行尾空格
   code = code.replace(/[ \t]+$/gm, '');
-  // 去掉行首空格（保留缩进结构不做处理，安全性优先）
+  code = code.replace(/^[ \t]+/gm, '');  // 去行首缩进（JS 语义无关）
+  code = code.replace(/\n{3,}/g, '\n');
   return code.trim();
 }
 
 function minifyCSS(code) {
-  // 去掉多行注释
   code = code.replace(/\/\*[\s\S]*?\*\//g, '');
-  // 去掉单行注释
-  code = code.replace(/\/\/.*$/gm, '');
-  // 去掉多余空行
-  code = code.replace(/\n{3,}/g, '\n\n');
-  // 去掉行尾空格
   code = code.replace(/[ \t]+$/gm, '');
+  code = code.replace(/^[ \t]+/gm, '');  // 去行首缩进
+  code = code.replace(/\n{3,}/g, '\n');
+  // 合并 { 前和 } 后的空格
+  code = code.replace(/\s*\{\s*/g, '{');
+  code = code.replace(/\s*\}\s*/g, '}');
+  code = code.replace(/;\s*/g, ';');
+  code = code.replace(/:\s*/g, ':');
+  code = code.replace(/,\s*/g, ',');
   return code.trim();
 }
 
