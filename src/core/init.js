@@ -1,5 +1,5 @@
-/* 应用版本号：每次发版 +1 */
-const APP_VERSION = '145';
+/* 应用版本号：v1 起，单一递增整数；每次升版须经余总同意 */
+const APP_VERSION = '1';
 
 /* 防呆：样式表缓存戳永远跟随 APP_VERSION。
    历史上曾出现 HTML 里 style.v5.css?v=NNN 漏升、导致老用户加载到旧 CSS。

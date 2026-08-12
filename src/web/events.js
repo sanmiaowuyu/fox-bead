@@ -431,13 +431,13 @@ function bindEvents() {
     if (isOnline) {
       vb.style.display = 'none';
     } else {
-      vb.textContent = 'v' + APP_VERSION;
+      vb.textContent = 'V' + APP_VERSION;
       vb.style.display = 'inline-block';
     }
   }
   document.title = isOnline
     ? '狐狸爱拼豆 ｜ i 喵绘工坊 · 一键生成拼豆图纸'
-    : '狐狸爱拼豆 v' + APP_VERSION + ' ｜ i 喵绘工坊 · 一键生成拼豆图纸';
+    : '狐狸爱拼豆 V' + APP_VERSION + ' ｜ i 喵绘工坊 · 一键生成拼豆图纸';
 
   // 主题切换（浅/深/跟随系统）
   bindTheme();

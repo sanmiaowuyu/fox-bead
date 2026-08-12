@@ -158,6 +158,31 @@ function showMobileSaveOverlay(src, name, failMsg) {
   sub.style.cssText = 'color:#bbb;font-size:13px;margin-bottom:12px;text-align:center;';
   mask.appendChild(title); mask.appendChild(sub);
 
+  var isIframe = (window.self !== window.top);
+  // 受限预览框（iframe/沙箱）专用逃生通道：跳出到顶层浏览器窗口，那里下载不受限
+  if (isIframe) {
+    var warn = document.createElement('div');
+    warn.textContent = '检测到你在预览框内打开，下载 / 复制可能被拦截。点下方按钮在真实浏览器打开本页，即可正常保存。';
+    warn.style.cssText = 'color:#ffd479;font-size:13px;line-height:1.5;margin-bottom:10px;text-align:center;max-width:320px;background:rgba(255,212,121,.12);border:1px solid rgba(255,212,121,.35);border-radius:10px;padding:10px 12px;';
+    mask.appendChild(warn);
+
+    var escapeBtn = document.createElement('button');
+    escapeBtn.textContent = '在浏览器打开此页';
+    escapeBtn.style.cssText = 'margin-bottom:14px;padding:12px 40px;border:none;border-radius:24px;background:#ffd479;color:#3a2c00;font-size:15px;font-weight:700;';
+    escapeBtn.onclick = function () {
+      var ok = false;
+      try { var w = window.open(location.href, '_blank'); ok = !!w; } catch (e) {}
+      if (ok) { escapeBtn.textContent = '已在新窗口打开，去那里保存'; return; }
+      warn.textContent = '弹窗被拦截，请手动复制下面链接到浏览器打开：';
+      var linkBox = document.createElement('div');
+      linkBox.textContent = location.href;
+      linkBox.style.cssText = 'color:#fff;font-size:12px;word-break:break-all;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px 10px;max-width:320px;margin-top:8px;text-align:left;';
+      mask.appendChild(linkBox);
+      escapeBtn.textContent = '已显示链接，请复制';
+    };
+    mask.appendChild(escapeBtn);
+  }
+
   if (!isPdf) {
     var img = document.createElement('img');
     img.src = url;
@@ -171,17 +196,18 @@ function showMobileSaveOverlay(src, name, failMsg) {
     mask.appendChild(box);
   }
 
-  // 主按钮：复制图片到剪贴板（沙箱里最可靠，绕过 download/popup 限制）
+  // 主按钮：复制图片到剪贴板（顶层窗口/部分沙箱可用，绕过 download/popup 限制）
   if (!isPdf) {
+    var canClip = !!(navigator.clipboard && (navigator.clipboard.write || navigator.clipboard.writeText) && window.ClipboardItem);
     var copyBtn = document.createElement('button');
-    copyBtn.textContent = '复制图片';
+    copyBtn.textContent = canClip ? '复制图片' : '复制图片（受限）';
     copyBtn.style.cssText = 'margin-top:14px;padding:11px 38px;border:none;border-radius:24px;background:#fff;color:#222;font-size:15px;font-weight:600;';
     copyBtn.onclick = function () {
       copyImageToClipboard(pngBlob, dataUrl).then(function (kind) {
         if (kind === 'image') copyBtn.textContent = '已复制图片，去粘贴';
         else copyBtn.textContent = '已复制链接，粘到地址栏';
       }).catch(function () {
-        copyBtn.textContent = '复制失败，请右键图片另存';
+        copyBtn.textContent = isIframe ? '复制受限→用上方【在浏览器打开】' : '复制失败，请右键图片另存';
       });
     };
     mask.appendChild(copyBtn);
@@ -203,7 +229,7 @@ function showMobileSaveOverlay(src, name, failMsg) {
 
   if (!isPdf) {
     var hint = document.createElement('div');
-    hint.textContent = '提示：若按钮无效，可右键图片选择「图片另存为」';
+    hint.textContent = isIframe ? '若以上按钮都无效：请在浏览器打开本页（上方按钮）后再保存。' : '提示：若按钮无效，可右键图片选择「图片另存为」';
     hint.style.cssText = 'color:#888;font-size:12px;margin-top:12px;text-align:center;max-width:300px;';
     mask.appendChild(hint);
   }

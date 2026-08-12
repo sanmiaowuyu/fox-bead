@@ -4,6 +4,8 @@
 > 维护人：余莎莎 ｜ 最后更新：2026-08-10（#18 去背景渐变鲁棒 / #19 小程序UI / #20 手绘改色 / #21 主预览平移 / 图片处理模块 / 视觉升级三态主题 / 豆仓库存模块 / 竞品分析文档 / 修复下载·预览放大·调色注释·默认深色 / v141 图片处理重构·自动抠图多主体·去笔刷·删提亮 / v142 羽化强度可调·灯箱直转像素·主体留边·批量对照长图·分块多板导出 / v143 补货清单导出·分块多板PDF·小程序发版就绪·保护笔刷·设置持久化·多色板切换 / v144 分块多板补跨板对齐标记·CC复核意见②核查no-op / iframe预览下载修复 / 下载修复v2-clipboard逃生通道 / 下载修复v3-统一保存对话框消除静默下载）
 > 位置：`D:\余莎莎资料\fox-bead\AGENT_CHANGELOG.md`（已纳入 git，双方 checkout 共享）
 
+> ⚠️ **版本号纪律更新（2026-08-12 余总）**：版本号已从 v145 重置为 **v1**；今后任何升版（bump）都必须先经余总明确同意，AI 不再自主升版。详见 §1 约束表。
+
 ---
 
 ## 0. 这个文档是干什么的（双方必读）
@@ -362,3 +364,20 @@ fox-bead/
 **验证**：`node --check`(init/pipeline-core/pipeline/exporter/events 全 OK) / `node build.js`(CSS 693行·JS 4924行) / `smoke-mini` 全 PASS。铁律——C1 `?.` 仅 image-prep.js **注释文字**(非代码) / C2 fromEntries 同注释 / C3 spread=0 / C6 pipeline-core 零 DOM=0；产物 v145=在线。
 
 **部署**：commit `4c1e665` push Gitee main；CloudStudio 重新部署（同 sandboxId）。GitHub Pages 仍显示 v144——需 cc 重新 `git pull`+`git push github master:main`（我方无 github remote 与认证，不能代推）。
+
+---
+
+## 2026-08-12（续）· 下载逃生通道加固（V1 基线，不 bump）
+
+**背景**：用户在受限预览框（CloudStudio iframe + 沙箱，无 `allow-downloads`/`allow-clipboard-write`/`allow-popups`）内测试，浏览器静默拦截 `<a download>`、剪贴板、弹窗与右键「另存为」——任何 JS 都无法直接落文件。v3 统一对话框虽给了复制/下载/新窗口按钮，但在此环境下仍全部失效，用户感知为「无法下载」。
+
+**修复**（`src/web/exporter.js` `showMobileSaveOverlay`）：
+- 新增 iframe 检测 `isIframe = window.self !== window.top`。
+- 受限环境下顶部插入醒目提示 + **「在浏览器打开此页」**按钮：`window.open(location.href,'_blank')` 跳出沙箱到顶层窗口（那里下载不受限）；若弹窗被拦截，退化显示 `location.href` 可复制链接，兜底让用户手动在浏览器打开。
+- 复制按钮：检测 `navigator.clipboard`/`ClipboardItem` 可用性，受限时标签改「复制图片（受限）」，失败提示引导用上方逃生按钮。
+- 底部提示按环境区分（iframe 内指引先跳出再保存）。
+- 铁律：零 DOM 约束仅限 `pipeline-core.js`；`exporter.js` 为 web 层，无 `?.`/spread/fromEntries，合规。
+
+**验证**：`node --check` OK / `node build.js` OK（JS 4949 行）/ 「在浏览器打开此页」文案已打进 `docs/index.html`。
+
+**部署待办**：尚未 git commit/push；需重新部署（CloudStudio 重部署或 cc 推 GitHub Pages）后线上才生效。根因提示：若 CloudStudio 预览链接本身仍套壳，最稳路径是用 GitHub Pages 顶层链接 `https://sanmiaowuyu.github.io/fox-bead/` 直接在浏览器打开。
