@@ -1,5 +1,5 @@
 // 狐狸爱拼豆 小程序核心算法包 — 由 build.js 自动生成（单内核，与网页版共用 src/core/pipeline-core.js）
-// 版本: 144
+// 版本: 145
 
 /* ---------- 2. 颜色空间工具 ---------- */
 function hexToRgb(hex) {
@@ -547,6 +547,7 @@ function segmentSubjects(imgData, opts) {
 /* 本文件不含任何 document / window / canvas 引用，可由 build.js 同时打入网页版与小程序版。
    平台相关的像素获取在 web 端由 src/web 的 canvas 完成，小程序端由 processImageMini 直接消费 ImageData。 */
 
+var _genActive = true; // v145: 生成取消标志（全局；processImage 开始时置 true，cancelGenerate 置 false 中止异步分批）
 function getCropRect(w, h) {
   if (!state.crop) return { sx: 0, sy: 0, sw: w, sh: h };
   var side = Math.min(w, h);
@@ -633,7 +634,8 @@ function mapCell(sd, x0, y0, x1, y1, mode) {
 
 // v140: 分帧批处理 — 把 N×N 逐格映射拆成每批 2000 格，setTimeout 之间让浏览器渲染
 var _chunkSize = 2000;
-function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone) {
+function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone, onProgress) {
+  if (!_genActive) return; // v145: 取消时中止采样分批
   var endIdx = Math.min(startIdx + _chunkSize, N * N);
   for (var idx = startIdx; idx < endIdx; idx++) {
     var y = Math.floor(idx / N);
@@ -646,8 +648,9 @@ function _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, startIdx, onDone
     var rgb = sampleCellRGB(sd, x0, y0, x1, y1, state.mode);
     grid[y][x] = rgb ? mapToPalette(rgb) : null;
   }
+  if (typeof onProgress === 'function') onProgress(endIdx / (N * N));
   if (endIdx < N * N) {
-    setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone); }, 0);
+    setTimeout(function() { _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, endIdx, onDone, onProgress); }, 0);
   } else {
     onDone();
   }
@@ -690,7 +693,7 @@ function applyFloydSteinberg(grid, srcRGB, N) {
 }
 
 // v140: 异步分帧 Floyd-Steinberg（大板子，逐行 setTimeout）
-function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
+function applyFloydSteinbergAsync(grid, srcRGB, N, onDone, onProgress) {
   if (!srcRGB) { onDone(); return; }
   var acc = Array.from({ length: N }, function() { return new Array(N).fill(null); });
   for (var y = 0; y < N; y++)
@@ -699,15 +702,17 @@ function applyFloydSteinbergAsync(grid, srcRGB, N, onDone) {
   var row = 0;
   var batchSize = 4; // 每批处理 4 行
   function nextBatch() {
+    if (!_genActive) return; // v145: 取消时中止抖动分批
     var end = Math.min(row + batchSize, N);
     for (; row < end; row++) _fsProcessRow(grid, acc, row, N);
+    if (typeof onProgress === 'function') onProgress(row / N);
     if (row < N) { setTimeout(nextBatch, 0); }
     else { onDone(); }
   }
   nextBatch();
 }
 
-function _finishPipeline(grid, N, onDone) {
+function _finishPipeline(grid, N, onDone, onProgress) {
   // v140: Floyd-Steinberg 抖动（在降噪之前，利用原图 RGB 信息）
   if (state.dither) {
     if (N <= 78) {
@@ -718,7 +723,7 @@ function _finishPipeline(grid, N, onDone) {
       applyFloydSteinbergAsync(grid, state.srcRGB, N, function() {
         _finishAfter(grid, N);
         if (onDone) onDone();
-      });
+      }, onProgress);
       return; // async, _finishAfter 稍后调用
     }
   }

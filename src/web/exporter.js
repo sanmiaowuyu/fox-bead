@@ -16,18 +16,42 @@ function ensureFoxSpinStyle() {
 }
 
 /* 生成中遮罩：点击下载后先明确反馈「生成中」，避免大图渲染时疑似卡死 */
-function showGeneratingOverlay(text) {
+function showGeneratingOverlay(text, cancellable) {
   ensureFoxSpinStyle();
   const mask = document.createElement('div');
-  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;';
+  mask.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;';
   const sp = document.createElement('div');
   sp.style.cssText = 'width:42px;height:42px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:fox-spin .8s linear infinite;';
   const tip = document.createElement('div');
   tip.textContent = text || '正在生成图纸…';
-  tip.style.cssText = 'color:#fff;font-size:15px;margin-top:16px;';
-  mask.appendChild(sp); mask.appendChild(tip);
+  tip.style.cssText = 'color:#fff;font-size:15px;margin-top:16px;text-align:center;';
+  const barWrap = document.createElement('div');
+  barWrap.style.cssText = 'width:min(280px,72vw);height:8px;background:rgba(255,255,255,.18);border-radius:5px;margin-top:14px;overflow:hidden;';
+  const bar = document.createElement('div');
+  bar.style.cssText = 'height:100%;width:0%;background:#fff;border-radius:5px;transition:width .15s linear;';
+  barWrap.appendChild(bar);
+  const pct = document.createElement('div');
+  pct.textContent = '';
+  pct.style.cssText = 'color:rgba(255,255,255,.8);font-size:12px;margin-top:6px;';
+  mask.appendChild(sp); mask.appendChild(tip); mask.appendChild(barWrap); mask.appendChild(pct);
+  let cancelBtn = null;
+  if (cancellable) {
+    cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '取消';
+    cancelBtn.style.cssText = 'margin-top:16px;padding:8px 28px;border:none;border-radius:22px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;border:1px solid rgba(255,255,255,.4);';
+    cancelBtn.onclick = function () { if (typeof cancelGenerate === 'function') cancelGenerate(); };
+    mask.appendChild(cancelBtn);
+  }
   document.body.appendChild(mask);
-  return { close: () => mask.remove() };
+  return {
+    close: function () { mask.remove(); },
+    setProgress: function (p, label) {
+      const v = Math.max(0, Math.min(100, Math.round(p || 0)));
+      bar.style.width = v + '%';
+      pct.textContent = v + '%';
+      if (label) tip.textContent = label;
+    }
+  };
 }
 
 /* 生成 PNG 源：优先 toBlob（体积小、加载快），失败或超时回退 toDataURL。
@@ -498,7 +522,7 @@ function buildExportCanvas(opts) {
   }
 
   // 豆子间隔线（始终显示，极淡）：让白色/浅色豆在白底上也有边界
-  drawBeadBorders(c, patOX, patOY, M, M, cell, '#F0F0F0');
+  drawBeadTexture(c, patOX, patOY, M, M, cell);
 
   // 网格线：每 1 格细线(极浅，作辅助参考) + 每 10 格计数线(深色加粗，作分组标识，醒目清晰)
   if (opts.gridlines) {
@@ -523,7 +547,7 @@ function buildExportCanvas(opts) {
 
   // 坐标数字
   if (opts.coords) {
-    c.fillStyle = '#999'; c.font = `${Math.max(7, cell * 0.35)}px monospace`;
+    c.fillStyle = '#666'; c.font = `bold ${Math.max(8, Math.round(cell * 0.5))}px monospace`;
     c.textAlign = 'center'; c.textBaseline = 'top';
     for (let i = 0; i < M; i++) c.fillText(i.toString(), patOX + i * cell + cell / 2, patOY + M * cell + 2);
     c.textAlign = 'right'; c.textBaseline = 'middle';
@@ -539,7 +563,7 @@ function buildExportCanvas(opts) {
     c.beginPath(); c.moveTo(0, palTop); c.lineTo(W, palTop); c.stroke();
 
     // "用料详情" 标签 — v90 放大
-    c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(18 * k)}px sans-serif`;
+    c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(22 * k)}px sans-serif`;
     c.textAlign = 'left'; c.textBaseline = 'top';
     c.fillText('用料详情', palPad, palTop + 4);
 
@@ -561,12 +585,12 @@ function buildExportCanvas(opts) {
       c.fill();
 
       // 色号（粗体、加大）— v90 放大
-      c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(20 * k)}px sans-serif`;
+      c.fillStyle = '#211E2B'; c.font = `bold ${Math.round(26 * k)}px sans-serif`;
       c.textAlign = 'left'; c.textBaseline = 'middle';
       c.fillText(id, sx + swatchSize + 6, sy + swatchSize / 2 - 8 * k);
 
       // 数量 — v90 放大
-      c.fillStyle = '#6B6675'; c.font = `${Math.round(16 * k)}px sans-serif`;
+      c.fillStyle = '#6B6675'; c.font = `${Math.round(18 * k)}px sans-serif`;
       c.fillText(cnt.toString(), sx + swatchSize + 6, sy + swatchSize / 2 + 9 * k);
     }
   }
@@ -984,6 +1008,22 @@ function downloadSVG(svgStr, name) {
   showMobileSaveOverlay(blob, name);
 }
 
+/** 导出图拼豆质感：每颗豆加圆角描边，呈现珠子轮廓（仅导出使用，不影响实时预览渲染） */
+function drawBeadTexture(c, ox, oy, cols, rows, cell) {
+  c.save();
+  c.strokeStyle = 'rgba(0,0,0,0.12)';
+  c.lineWidth = Math.max(1, cell * 0.045);
+  const r = Math.max(1, cell * 0.14);
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const px = ox + x * cell, py = oy + y * cell;
+      roundRect(c, px + 0.5, py + 0.5, cell - 1, cell - 1, r);
+      c.stroke();
+    }
+  }
+  c.restore();
+}
+
 /** 圆角矩形辅助 */
 function roundRect(ctx, x, y, w, h, r) {
   r = Math.min(r, w / 2, h / 2);
@@ -1117,6 +1157,7 @@ function buildBlockExportCanvas(opts) {
       const py = patOY + (gy2 - r0) * cellB;
       c.fillStyle = info.hex; c.fillRect(px, py, cellB, cellB);
     }
+    if (cellB >= 6) drawBeadTexture(c, patOX, patOY, c1 - c0, r1 - r0, cellB);
     const cc2 = blockColors(bx, by);
     const ids = Object.keys(cc2.counts).sort();
     const palW = fullPatW - palPad * 2;

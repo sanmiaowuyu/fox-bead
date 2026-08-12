@@ -447,6 +447,29 @@ function bindEvents() {
   bindInventory();
   // ⑥ 多色板切换
   bindPalette();
+  // 首次使用引导浮层
+  showFirstRunGuide();
+}
+
+/* ========== 首次使用引导浮层（onboarding） ==========
+ * 首次打开（localStorage 无标记）且尚未生成过图纸时显示，引导 3 步；
+ * 提供「载入示例图体验」直接复用 loadSamplePhoto 一键生成示例图纸。
+ * 关闭/体验后即记 localStorage，以后不再自动弹（想重看可清除 foxbead-onboard-v1）。 */
+var ONBOARD_KEY = 'foxbead-onboard-v1';
+function showFirstRunGuide() {
+  try { if (localStorage.getItem(ONBOARD_KEY)) return; } catch (e) {}
+  if (state.grid) return; // 已有图纸则不打扰
+  var mask = document.getElementById('onboard-mask');
+  if (!mask) return;
+  mask.classList.add('show');
+  var close = function () {
+    mask.classList.remove('show');
+    try { localStorage.setItem(ONBOARD_KEY, '1'); } catch (e) {}
+  };
+  var sb = document.getElementById('onboard-sample');
+  if (sb) sb.onclick = function () { close(); if (typeof loadSamplePhoto === 'function') loadSamplePhoto(); };
+  var sk = document.getElementById('onboard-skip');
+  if (sk) sk.onclick = close;
 }
 
 /* ========== ⑥ 多色板切换 ==========

@@ -3,6 +3,11 @@
    注意：getSourceData / pixelateToGrid / buildSrcRGB 使用 document.createElement('canvas')，仅浏览器可用，
    不会进入小程序构建（小程序由 build.js §7 生成 miniapp/utils/core.js，仅包含 pipeline-core.js 等纯模块）。 */
 
+var _genLoading = null; // v145: 当前生成遮罩引用（供 cancelGenerate 关闭）
+function cancelGenerate() {
+  _genActive = false;
+  if (_genLoading) { _genLoading.close(); _genLoading = null; }
+}
 function getSourceData(img) {
   // 取裁剪后的全分辨率像素，供逐格主导色统计
   const cr = getCropRect(img.width, img.height);
@@ -45,7 +50,16 @@ function processImage(onDone) {
   if (!state.sourceImage) return;
   var _wrapEl = document.getElementById('canvas-wrap');
   if (_wrapEl) _wrapEl.classList.add('processing');
+  _genActive = true; // 开始新生成：置 true，中止上一轮可能未完成的异步分批
+  if (_genLoading) { _genLoading.close(); _genLoading = null; } // 关闭上一轮遮罩，避免叠加
   var N = state.N;
+  // v145: 中/大图异步分批，显示带进度条+取消的遮罩，消除「点了没反应」
+  var genLoading = null;
+  if (N >= 60 && typeof showGeneratingOverlay === 'function') {
+    genLoading = showGeneratingOverlay('正在生成图纸…', true);
+    _genLoading = genLoading;
+  }
+  function prog(p, label) { if (genLoading) genLoading.setProgress(p, label); }
   state.srcRGB = buildSrcRGB(state.sourceImage, N);
   var cr = getCropRect(state.sourceImage.width, state.sourceImage.height);
   var sd = getSourceData(state.sourceImage);
@@ -57,13 +71,18 @@ function processImage(onDone) {
   var cw = cr.sw / dw, ch = cr.sh / dh;
   var grid = Array.from({ length: N }, function() { return new Array(N).fill(null); });
 
-  // v140: 分帧处理（小板子一步完成，大板子分批异步）
-  var onFinish = function() { _finishPipeline(grid, N, function() { renderAll(); if (onDone) onDone(); }); };
+  // v140+v145: 分帧处理；进度分两段：采样 0~50% + 抖动/优化 50~100%
+  var onFinish = function() {
+    _finishPipeline(grid, N, function() {
+      if (_genLoading) { _genLoading.close(); _genLoading = null; }
+      renderAll(); if (onDone) onDone();
+    }, function(p) { prog(50 + p * 50, '优化中（抖动）…'); });
+  };
   if (N <= 78) {
-    _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish);
+    _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish, function(p){ prog(p * 50, '采样像素…'); });
   } else {
     setTimeout(function() {
-      _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish);
+      _processChunk(N, grid, sd, cr, dx, dy, dw, dh, cw, ch, 0, onFinish, function(p){ prog(p * 50, '采样像素…'); });
     }, 0);
   }
 }
